@@ -2,20 +2,6 @@ package seeding
 
 import "fmt"
 
-const (
-	jobTypeBroadcast = "broadcast"
-	jobTypeSync      = "sync"
-)
-
-type JobState struct {
-	Id             string `json:"id"`
-	ArId           string `json:"arid"`
-	CountSuccessed int64  `json:"count_successed"`
-	CountFailed    int64  `json:"count_failed"`
-	TotalNodes     int64  `json:"total_nodes"`
-	NumOfProcessed int64  `json:"num_processed"`
-}
-
 func (s *Server) startJobs(jobType, arid string) (err error) {
 	switch jobType {
 	case jobTypeBroadcast:
