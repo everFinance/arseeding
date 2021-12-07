@@ -15,7 +15,7 @@ import (
 const (
 	boltAllocSize = 8 * 1024 * 1024
 
-	dirPath  = "./store"
+	dirPath  = "./bolt"
 	boltName = "seed.db"
 )
 
@@ -33,12 +33,12 @@ type Store struct {
 	BoltDb *bolt.DB
 }
 
-func NewStore(bucketNames ...[]byte) (*Store, error) {
+func NewStore() (*Store, error) {
 	if err := os.MkdirAll(dirPath, os.ModePerm); err != nil {
 		return nil, err
 	}
 
-	boltDB, err := bolt.Open(path.Join(dirPath, boltName), 0660, &bolt.Options{Timeout: 1 * time.Second, InitialMmapSize: 10e6})
+	boltDB, err := bolt.Open(path.Join(dirPath, boltName), 0660, &bolt.Options{Timeout: 2 * time.Second, InitialMmapSize: 10e6})
 	if err != nil {
 		if err == bolt.ErrTimeout {
 			return nil, errors.New("cannot obtain database lock, database may be in use by another process")
@@ -53,6 +53,7 @@ func NewStore(bucketNames ...[]byte) (*Store, error) {
 
 	// create bucket
 	if err := kv.BoltDb.Update(func(tx *bolt.Tx) error {
+		bucketNames := [][]byte{ChunkBucket, TxDataEndOffSetBucket, TxMetaBucket, ConstantsBucket}
 		return createBuckets(tx, bucketNames...)
 	}); err != nil {
 		return nil, err
@@ -74,13 +75,22 @@ func createBuckets(tx *bolt.Tx, buckets ...[]byte) error {
 	return nil
 }
 
-func (s *Store) SaveAllDataEndOffset(allDataEndOffset uint64) error {
+func (s *Store) SaveAllDataEndOffset(allDataEndOffset uint64, dbTx *bolt.Tx) (err error) {
+	if dbTx == nil {
+		dbTx, err = s.BoltDb.Begin(true)
+		if err != nil {
+			return
+		}
+		defer dbTx.Commit()
+	}
 	key := []byte("allDataEndOffset")
 	val := itob(allDataEndOffset)
-	return s.BoltDb.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(ConstantsBucket)
-		return bkt.Put(key, val)
-	})
+
+	bkt, err := dbTx.CreateBucketIfNotExists(ConstantsBucket)
+	if err != nil {
+		return err
+	}
+	return bkt.Put(key, val)
 }
 
 func (s *Store) LoadAllDataEndOffset() (offset uint64) {
@@ -112,12 +122,14 @@ func (s *Store) SaveTxMeta(arTx types.Transaction) error {
 
 func (s *Store) LoadTxMeta(arId string) (arTx *types.Transaction, err error) {
 	key := []byte(arId)
+	arTx = &types.Transaction{}
 	err = s.BoltDb.View(func(tx *bolt.Tx) error {
 		val := tx.Bucket(TxMetaBucket).Get(key)
 		if val == nil {
 			return ErrNotExist
 		} else {
-			return json.Unmarshal(val, arTx)
+			err = json.Unmarshal(val, arTx)
+			return err
 		}
 	})
 	return
@@ -126,16 +138,25 @@ func (s *Store) LoadTxMeta(arId string) (arTx *types.Transaction, err error) {
 func (s *Store) IsExistTxMeta(arId string) bool {
 	_, err := s.LoadTxMeta(arId)
 	if err == ErrNotExist {
-		return true
+		return false
 	}
-	return false
+	return true
 }
 
-func (s *Store) SaveTxDataEndOffSet(dataRoot, dataSize string, txDataEndOffset uint64) error {
-	return s.BoltDb.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(TxDataEndOffSetBucket)
-		return bkt.Put(generateOffSetKey(dataRoot, dataSize), itob(txDataEndOffset))
-	})
+func (s *Store) SaveTxDataEndOffSet(dataRoot, dataSize string, txDataEndOffset uint64, dbTx *bolt.Tx) (err error) {
+	if dbTx == nil {
+		dbTx, err = s.BoltDb.Begin(true)
+		if err != nil {
+			return
+		}
+		defer dbTx.Commit()
+	}
+
+	bkt, err := dbTx.CreateBucketIfNotExists(TxDataEndOffSetBucket)
+	if err != nil {
+		return err
+	}
+	return bkt.Put(generateOffSetKey(dataRoot, dataSize), itob(txDataEndOffset))
 }
 
 func (s *Store) LoadTxDataEndOffSet(dataRoot, dataSize string) (txDataEndOffset uint64, err error) {
@@ -155,9 +176,9 @@ func (s *Store) LoadTxDataEndOffSet(dataRoot, dataSize string) (txDataEndOffset 
 func (s *Store) IsExistTxDataEndOffset(dataRoot, dataSize string) bool {
 	_, err := s.LoadTxDataEndOffSet(dataRoot, dataSize)
 	if err == ErrNotExist {
-		return true
+		return false
 	}
-	return false
+	return true
 }
 
 func (s *Store) SaveChunk(chunkStartOffset uint64, chunk types.GetChunk) error {
@@ -194,9 +215,9 @@ func (s *Store) LoadChunk(chunkStartOffset uint64) (chunk *types.GetChunk, err e
 func (s *Store) IsExistChunk(chunkStartOffset uint64) bool {
 	_, err := s.LoadChunk(chunkStartOffset)
 	if err == ErrNotExist {
-		return true
+		return false
 	}
-	return false
+	return true
 }
 
 // itob returns an 64-byte big endian representation of v.

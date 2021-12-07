@@ -2,18 +2,26 @@ package seeding
 
 import (
 	"github.com/gin-gonic/gin"
+	"sync"
 )
 
-type Server struct {
-	store *Store
+var log = NewLog("seeding")
 
-	engine *gin.Engine
+type Server struct {
+	store        *Store
+	engine       *gin.Engine
+	submitLocker sync.Mutex
 }
 
 func New() *Server {
+	boltDb, err := NewStore()
+	if err != nil {
+		panic(err)
+	}
 	return &Server{
-		store:  &Store{},
-		engine: gin.Default(),
+		store:        boltDb,
+		engine:       gin.Default(),
+		submitLocker: sync.Mutex{},
 	}
 }
 

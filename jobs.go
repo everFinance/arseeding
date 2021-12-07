@@ -16,7 +16,7 @@ func (s *Server) startJobs(jobType, arid string) (err error) {
 }
 
 func (s *Server) startBroadcastJob(arid string) (err error) {
-	if !s.store.IsExist(arid) {
+	if !s.store.IsExistTxMeta(arid) {
 		return fmt.Errorf("not found")
 	}
 
