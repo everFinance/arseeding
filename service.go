@@ -122,7 +122,7 @@ func storeChunk(chunk types.GetChunk, db *Store) error {
 	if err != nil {
 		return err
 	}
-	chunkStartOffset := chunkEndOffset - uint64(len(chunkDataBy))
+	chunkStartOffset := chunkEndOffset - uint64(len(chunkDataBy)) + 1
 	// save
 	if err := db.SaveChunk(chunkStartOffset, chunk); err != nil {
 		log.Error("s.store.SaveChunk(chunkStartOffset, *chunk)", "err", err)

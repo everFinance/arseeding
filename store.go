@@ -198,18 +198,20 @@ func (s *Store) SaveChunk(chunkStartOffset uint64, chunk types.GetChunk) error {
 }
 
 func (s *Store) LoadChunk(chunkStartOffset uint64) (chunk *types.GetChunk, err error) {
+	chunk = &types.GetChunk{}
 	err = s.BoltDb.View(func(tx *bolt.Tx) error {
 		chunkBkt := tx.Bucket(ChunkBucket)
 		val := chunkBkt.Get(itob(chunkStartOffset))
 		if val == nil {
 			err = ErrNotExist
+			return err
 		} else {
 			err = json.Unmarshal(val, chunk)
+			return err
 		}
-		return nil
 	})
 
-	return
+	return chunk, err
 }
 
 func (s *Store) IsExistChunk(chunkStartOffset uint64) bool {
