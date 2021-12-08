@@ -20,7 +20,7 @@ func (s *Server) runAPI(port string) {
 		v1.GET("tx/:arid/offset", s.getTxOffset)
 		v1.GET("/tx/:arid", s.getTx)
 		v1.GET("chunk/:offset", s.getChunk)
-		v1.GET("tx/:arid/data", s.getTxData)
+		v1.GET("tx/:arid/:field", s.getTxField)
 
 		// broadcast & sync jobs
 		v1.GET("/job/broadcast/:arid", s.broadcast)
@@ -112,29 +112,56 @@ func (s *Server) getTx(c *gin.Context) {
 	c.JSON(http.StatusOK, arTx)
 }
 
-func (s *Server) getTxData(c *gin.Context) {
+func (s *Server) getTxField(c *gin.Context) {
 	arid := c.Param("arid")
+	field := c.Param("field")
 	txMeta, err := s.store.LoadTxMeta(arid)
 	if err != nil {
 		c.JSON(404, err.Error()) // not found
 		return
 	}
-	size, err := strconv.ParseUint(txMeta.DataSize, 10, 64)
-	if err != nil {
-		c.JSON(502, err.Error())
-		return
+
+	switch field {
+	case "id":
+		c.JSON(http.StatusOK, txMeta.ID)
+	case "last_tx":
+		c.JSON(http.StatusOK, txMeta.LastTx)
+	case "owner":
+		c.JSON(http.StatusOK, txMeta.Owner)
+	case "tags":
+		c.JSON(http.StatusOK, txMeta.Tags)
+	case "target":
+		c.JSON(http.StatusOK, txMeta.Target)
+	case "quantity":
+		c.JSON(http.StatusOK, txMeta.Quantity)
+	case "data":
+		size, err := strconv.ParseUint(txMeta.DataSize, 10, 64)
+		if err != nil {
+			c.JSON(502, err.Error())
+			return
+		}
+		// When data is bigger than 12MiB return statusCode == 400, use chunk
+		if size > 12*128*1024 {
+			c.JSON(400, "tx_data_too_big")
+			return
+		}
+		data, err := getData(txMeta.DataRoot, txMeta.DataSize, s.store)
+		if err != nil {
+			c.JSON(502, err.Error())
+			return
+		}
+		c.JSON(http.StatusOK, data)
+	case "data_root":
+		c.JSON(http.StatusOK, txMeta.DataRoot)
+	case "data_size":
+		c.JSON(http.StatusOK, txMeta.DataSize)
+	case "reward":
+		c.JSON(http.StatusOK, txMeta.Reward)
+	case "signature":
+		c.JSON(http.StatusOK, txMeta.Signature)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_field"})
 	}
-	// When data is bigger than 12MiB return statusCode == 400, use chunk
-	if size > 12*128*1024 {
-		c.JSON(400, "tx_data_too_big")
-		return
-	}
-	data, err := getData(txMeta.DataRoot, txMeta.DataSize, s.store)
-	if err != nil {
-		c.JSON(502, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, data)
 }
 
 func getData(dataRoot, dataSize string, db *Store) ([]byte, error) {
