@@ -34,8 +34,8 @@ func (s *Server) processSubmitTx(arTx types.Transaction) error {
 		return nil
 	}
 	// add txDataEndOffset
-	if err := addTxDataEndOffset(s.store, arTx.DataRoot, arTx.DataSize); err != nil {
-		log.Error("addTxDataEndOffset(s.store,arTx.DataRoot,arTx.DataSize)", "err", err, "arTx", arTx.ID)
+	if err := s.syncAddTxDataEndOffset(arTx.DataRoot, arTx.DataSize); err != nil {
+		log.Error("syncAddTxDataEndOffset(s.store,arTx.DataRoot,arTx.DataSize)", "err", err, "arTx", arTx.ID)
 		return err
 	}
 
@@ -51,16 +51,15 @@ func (s *Server) processSubmitTx(arTx types.Transaction) error {
 			log.Error("utils.Base64Decode(arTx.Data)", "err", err, "data", arTx.Data)
 			return err
 		}
-		utils.PrepareChunks(&arTx, dataBy)
-		// only one chunk
-		if len(arTx.Chunks.Chunks) != 1 {
-			return fmt.Errorf("arTx must only one chunk, arTx:%s", arTx.ID)
-		}
-		chunk, err := utils.GetChunk(arTx, 0, dataBy)
+		chunks, err := generateChunks(arTx, dataBy)
 		if err != nil {
-			log.Error("utils.GetChunk(arTx,0,dataBy)", "err", err, "arTx", arTx.ID)
+			log.Error("generateChunks(arTx, dataBy)", "err", err, "data", arTx.Data, "arTx", arTx.ID)
 			return err
 		}
+		if len(chunks) != 1 {
+			return fmt.Errorf("arTx must only one chunk, arTx:%s", arTx.ID)
+		}
+		chunk := chunks[0]
 		// store chunk
 		if err := storeChunk(*chunk, s.store); err != nil {
 			log.Error("storeChunk(*chunk,s.store)", "err", err, "chunk", *chunk)
@@ -85,8 +84,8 @@ func (s *Server) processSubmitChunk(chunk types.GetChunk) error {
 	// 2. check TxDataEndOffset exist
 	if !s.store.IsExistTxDataEndOffset(chunk.DataRoot, chunk.DataSize) {
 		// add TxDataEndOffset
-		if err := addTxDataEndOffset(s.store, chunk.DataRoot, chunk.DataSize); err != nil {
-			log.Error("addTxDataEndOffset(s.store,chunk.DataRoot,chunk.DataSize)", "err", err, "chunk", chunk)
+		if err := s.syncAddTxDataEndOffset(chunk.DataRoot, chunk.DataSize); err != nil {
+			log.Error("syncAddTxDataEndOffset(s.store,chunk.DataRoot,chunk.DataSize)", "err", err, "chunk", chunk)
 			return err
 		}
 	}
@@ -98,6 +97,24 @@ func (s *Server) processSubmitChunk(chunk types.GetChunk) error {
 	}
 
 	return nil
+}
+
+func generateChunks(arTxMeta types.Transaction, data []byte) ([]*types.GetChunk, error) {
+	if len(data) == 0 {
+		return nil, errors.New("data can not null")
+	}
+	utils.PrepareChunks(&arTxMeta, data)
+
+	chunks := make([]*types.GetChunk, 0, len(arTxMeta.Chunks.Chunks))
+	for i := 0; i < len(arTxMeta.Chunks.Chunks); i++ {
+		chunk, err := utils.GetChunk(arTxMeta, i, data)
+		if err != nil {
+			log.Error("utils.GetChunk(arTxMeta,i,data)", "err", err, "i", i, "arId", arTxMeta.ID)
+			return nil, err
+		}
+		chunks = append(chunks, chunk)
+	}
+	return chunks, nil
 }
 
 func storeChunk(chunk types.GetChunk, db *Store) error {
@@ -131,29 +148,36 @@ func storeChunk(chunk types.GetChunk, db *Store) error {
 	return nil
 }
 
-func addTxDataEndOffset(db *Store, dataRoot, dataSize string) error {
+func (s *Server) syncAddTxDataEndOffset(dataRoot, dataSize string) error {
+	s.endOffsetLocker.Lock()
+	defer s.endOffsetLocker.Unlock()
+
+	if s.store.IsExistTxDataEndOffset(dataRoot, dataSize) {
+		return nil
+	}
+
 	// update allDataEndOffset
 	txSize, err := strconv.ParseUint(dataSize, 10, 64)
 	if err != nil {
 		log.Error("strconv.ParseUint(arTx.DataSize,10,64)", "err", err)
 		return err
 	}
-	curEndOffset := db.LoadAllDataEndOffset()
+	curEndOffset := s.store.LoadAllDataEndOffset()
 	newEndOffset := curEndOffset + txSize
 
 	// must use tx db
-	boltTx, err := db.BoltDb.Begin(true)
+	boltTx, err := s.store.BoltDb.Begin(true)
 	if err != nil {
 		log.Error("s.store.BoltDb.Begin(true)", "err", err)
 		return err
 	}
-	if err := db.SaveAllDataEndOffset(newEndOffset, boltTx); err != nil {
+	if err := s.store.SaveAllDataEndOffset(newEndOffset, boltTx); err != nil {
 		boltTx.Rollback()
 		log.Error("s.store.SaveAllDataEndOffset(newEndOffset)", "err", err)
 		return err
 	}
 	// SaveTxDataEndOffSet
-	if err := db.SaveTxDataEndOffSet(dataRoot, dataSize, newEndOffset, boltTx); err != nil {
+	if err := s.store.SaveTxDataEndOffSet(dataRoot, dataSize, newEndOffset, boltTx); err != nil {
 		boltTx.Rollback()
 		return err
 	}

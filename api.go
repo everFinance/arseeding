@@ -22,10 +22,11 @@ func (s *Server) runAPI(port string) {
 		v1.GET("chunk/:offset", s.getChunk)
 		v1.GET("tx/:arid/:field", s.getTxField)
 
-		// broadcast & sync jobs
+		// broadcast && sync jobs
 		v1.GET("/job/broadcast/:arid", s.broadcast)
 		v1.GET("/job/sync/:arid", s.sync)
-		v1.GET("/job/kill/:arid", s.sync)
+		v1.GET("/job/kill/:arid", s.killJob)
+		v1.GET("/job/:arid", s.getJob)
 		v1.GET("/jobs", s.getJobs)
 	}
 
