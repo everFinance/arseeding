@@ -1,10 +1,15 @@
 package seeding
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
+	"io/ioutil"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -21,6 +26,28 @@ func (s *Server) runAPI(port string) {
 		v1.GET("/tx/:arid", s.getTx)
 		v1.GET("chunk/:offset", s.getChunk)
 		v1.GET("tx/:arid/:field", s.getTxField)
+		// proxy
+		v2 := r.Group("/")
+		{
+			v2.Use(proxyArweaveGateway)
+
+			v2.GET("/info")
+			v2.GET("/tx/:arid/status")
+			v2.GET("/:arid")
+			v2.GET("/price/:size")
+			v2.GET("/price/:size/:target")
+			v2.GET("/block/hash/:hash")
+			v2.GET("/block/height/:height")
+			v2.GET("/current_block")
+			v2.GET("/wallet/:address/balance")
+			v2.GET("/wallet/:address/last_tx")
+			v2.GET("/peers")
+			v2.GET("/tx_anchor")
+			v2.POST("/arql")
+			v2.POST("/graphql")
+			v2.GET("/tx/pending")
+			v2.GET("/unconfirmed_tx/:arId")
+		}
 
 		// broadcast && sync jobs
 		v1.GET("/job/broadcast/:arid", s.broadcast)
@@ -37,21 +64,46 @@ func (s *Server) runAPI(port string) {
 
 func (s *Server) submitTx(c *gin.Context) {
 	arTx := types.Transaction{}
-	if err := c.ShouldBindJSON(&arTx); err != nil {
+	if c.Request.Body == nil {
+		c.JSON(http.StatusBadRequest, "chunk data can not be null")
+		return
+	}
+	by, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
+	defer c.Request.Body.Close()
 
+	if err := json.Unmarshal(by, &arTx); err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
 	if err := s.processSubmitTx(arTx); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, "OK")
+
+	// proxy to arweave
+	c.Request.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(by)))
+	proxyArweaveGateway(c)
 }
 
 func (s *Server) submitChunk(c *gin.Context) {
 	chunk := types.GetChunk{}
-	if err := c.ShouldBindJSON(&chunk); err != nil {
+	if c.Request.Body == nil {
+		c.JSON(http.StatusBadRequest, "chunk data can not be null")
+		return
+	}
+
+	by, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+	defer c.Request.Body.Close()
+
+	if err := json.Unmarshal(by, &chunk); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -60,7 +112,10 @@ func (s *Server) submitChunk(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, "OK")
+
+	// proxy to arweave
+	c.Request.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(by)))
+	proxyArweaveGateway(c)
 }
 
 func (s *Server) getTxOffset(c *gin.Context) {
@@ -188,4 +243,14 @@ func getData(dataRoot, dataSize string, db *Store) ([]byte, error) {
 		i += len(chunkData)
 	}
 	return data, nil
+}
+
+func proxyArweaveGateway(c *gin.Context) {
+	var proxyUrl = new(url.URL)
+	proxyUrl.Scheme = "https"
+	proxyUrl.Host = "arweave.net"
+
+	proxy := httputil.NewSingleHostReverseProxy(proxyUrl)
+	proxy.ServeHTTP(c.Writer, c.Request)
+	c.Abort()
 }
