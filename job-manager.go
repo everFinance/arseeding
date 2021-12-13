@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 )
 
 const (
@@ -22,10 +23,11 @@ type JobStatus struct {
 }
 
 type JobManager struct {
-	cap    int
-	status map[string]*JobStatus
-	JobCh  chan string
-	locker sync.RWMutex
+	cap        int
+	status     map[string]*JobStatus
+	JobCh      chan string
+	pendingNum int32
+	locker     sync.RWMutex
 }
 
 func NewJobManager(cap int) *JobManager {
@@ -45,7 +47,7 @@ func (m *JobManager) RegisterJob(arid, jobType string, totalNodes int64) (err er
 	m.locker.Lock()
 	defer m.locker.Unlock()
 
-	if len(m.JobCh) >= m.cap {
+	if atomic.LoadInt32(&m.pendingNum) >= int32(m.cap) {
 		err = fmt.Errorf("fully loaded")
 		return
 	}
@@ -95,24 +97,28 @@ func (m *JobManager) UnregisterJob(id string) {
 	delete(m.status, id)
 }
 
-func (m *JobManager) GetJob(id string) JobStatus {
+func (m *JobManager) GetJob(id string) *JobStatus {
 	m.locker.RLock()
 	defer m.locker.RUnlock()
 	job := JobStatus{}
 	j, ok := m.status[id]
 	if ok {
 		job = *j
+		return &job
 	}
-	return job
+	return nil
 }
 
-func (m *JobManager) CloseJob(arId string) {
+func (m *JobManager) CloseJob(arId string) error {
 	m.locker.RLock()
 	defer m.locker.RUnlock()
 	job, ok := m.status[arId]
 	if ok {
 		job.Close = true
+	} else {
+		return errors.New("not found")
 	}
+	return nil
 }
 func (m *JobManager) IsClosed(arId string) bool {
 	job, ok := m.status[arId]

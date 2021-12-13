@@ -6,6 +6,7 @@ import (
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"math/big"
+	"sync/atomic"
 )
 
 func (s *Server) runJobs() {
@@ -16,10 +17,16 @@ func (s *Server) runJobs() {
 				continue
 			}
 
-			jobType := s.jobManager.GetJob(arId).JobType
-			switch jobType {
+			job := s.jobManager.GetJob(arId)
+			if job == nil {
+				continue
+			}
+			switch job.JobType {
 			case jobTypeBroadcast:
 				go func() {
+					atomic.AddInt32(&s.jobManager.pendingNum, 1)
+					defer atomic.AddInt32(&s.jobManager.pendingNum, -1)
+
 					if err := s.processBroadcastJob(arId); err != nil {
 						log.Error("processBroadcastJob", "err", err, "arId", arId)
 					}
@@ -27,6 +34,9 @@ func (s *Server) runJobs() {
 
 			case jobTypeSync:
 				go func() {
+					atomic.AddInt32(&s.jobManager.pendingNum, 1)
+					defer atomic.AddInt32(&s.jobManager.pendingNum, -1)
+
 					if err := s.processSyncJob(arId); err != nil {
 						log.Error("processSyncJob", "err", err, "arId", arId)
 						s.jobManager.IncFailed(arId)
@@ -36,7 +46,7 @@ func (s *Server) runJobs() {
 				}()
 
 			default:
-				log.Error("not support job type", "type", jobType)
+				log.Error("not support job type", "type", job.JobType)
 			}
 		}
 	}

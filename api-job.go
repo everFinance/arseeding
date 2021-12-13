@@ -47,8 +47,12 @@ func (s *Server) killJob(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, "arId incorrect")
 		return
 	}
-	s.jobManager.CloseJob(arid)
-	c.JSON(http.StatusOK, "ok")
+	err = s.jobManager.CloseJob(arid)
+	if err != nil {
+		c.JSON(http.StatusNotFound, err.Error())
+	} else {
+		c.JSON(http.StatusOK, "ok")
+	}
 }
 
 func (s *Server) getJob(c *gin.Context) {
@@ -58,10 +62,14 @@ func (s *Server) getJob(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, "arId incorrect")
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{"job": s.jobManager.GetJob(arid)})
+	job := s.jobManager.GetJob(arid)
+	if job == nil {
+		c.JSON(http.StatusNotFound, "not found")
+	} else {
+		c.JSON(http.StatusOK, job)
+	}
 }
 
 func (s *Server) getJobs(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"jobs": s.jobManager.GetJobs()})
+	c.JSON(http.StatusOK, s.jobManager.GetJobs())
 }
