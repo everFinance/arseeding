@@ -64,7 +64,15 @@ func NewStore() (*Store, error) {
 
 	// create bucket
 	if err := kv.BoltDb.Update(func(tx *bolt.Tx) error {
-		bucketNames := [][]byte{ChunkBucket, TxDataEndOffSetBucket, TxMetaBucket, ConstantsBucket}
+		bucketNames := [][]byte{
+			ChunkBucket,
+			TxDataEndOffSetBucket,
+			TxMetaBucket,
+			ConstantsBucket,
+			BroadcastJobsPendingPool,
+			SyncJobsPendingPool,
+			BroadcastJobStatus,
+			SyncJobStatus}
 		return createBuckets(tx, bucketNames...)
 	}); err != nil {
 		return nil, err
