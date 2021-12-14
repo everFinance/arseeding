@@ -17,7 +17,7 @@ import (
 const (
 	boltAllocSize = 8 * 1024 * 1024
 
-	dirPath  = "./bolt"
+	dirPath  = "./data/bolt"
 	boltName = "seed.db"
 )
 

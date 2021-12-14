@@ -1,0 +1,103 @@
+kind: pipeline
+name: default
+
+image_pull_secrets:
+  - image-registry-secret
+
+platform:
+  os: linux
+  arch: amd64
+
+steps:
+  - name: build
+    image: golang:1.15-buster
+    environment:
+      SSH_KEY:
+        from_secret: ssh_key_github
+    commands:
+      - apt update
+      - apt install -y git openssh-client build-essential
+      - mkdir /root/.ssh
+      - echo -n "$SSH_KEY" > /root/.ssh/id_rsa
+      - chmod 600 /root/.ssh/id_rsa
+      - touch /root/.ssh/known_hosts
+      - chmod 600 /root/.ssh/known_hosts
+      - ssh-keyscan -H github.com >> /root/.ssh/known_hosts 2> /dev/null
+      - go env -w CGO_ENABLED=0
+      - go mod tidy
+      - cd cmd
+      - go build -o arseeding
+    depends_on:
+      - clone
+  - name: publish-dev-arseeding
+    image: plugins/docker
+    daemon_off: true
+    privileged: true
+    settings:
+      username:
+        from_secret: docker_dev_username
+      password:
+        from_secret: docker_dev_password
+      registry:
+        from_secret: docker_dev_registry
+      repo:
+        from_secret: docker_dev_repo
+      build_args:
+        - MILLET_BUILD_ARG=dev
+      tags:
+        - ${DRONE_COMMIT_SHA}
+        - ${DRONE_COMMIT_BRANCH/\//-}
+        - dev
+      dockerfile: Dockerfile
+    depends_on:
+        - build
+    when:
+      branch: [ feature/*,fix/*,develop ]
+
+  - name: deploy-dev-arseeding
+    image: quay.io/honestbee/drone-kubernetes
+    daemon_off: true
+    privileged: true
+    settings:
+      kubernetes_server:
+        from_secret: kube_dev_api
+      kubernetes_token:
+        from_secret: kube_dev_token
+      kubernetes_cert:
+        from_secret: kube_dev_cert
+      repo:
+        from_secret: docker_dev_repo
+      namespace: biz
+      deployment: arseeding-dev
+      container: server
+      tag: ${DRONE_COMMIT_SHA}
+    depends_on:
+      - publish-dev-arseeding
+    when:
+      branch: [ feature/*,fix/*,develop ]
+
+  - name: publish-prod-arseeding
+    image: plugins/docker
+    daemon_off: true
+    privileged: true
+    settings:
+      username:
+        from_secret: docker_production_username
+      password:
+        from_secret: docker_production_password
+      registry:
+        from_secret: docker_production_registry
+      repo:
+        from_secret: docker_production_repo
+      build_args:
+        - MILLET_BUILD_ARG=prod
+      tags:
+        - main
+        - ${DRONE_TAG=latest}
+        - ${DRONE_COMMIT_SHA}
+      dockerfile: Dockerfile
+    depends_on:
+      - build
+    when:
+      event:
+        - tag
