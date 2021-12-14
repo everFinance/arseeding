@@ -1,4 +1,4 @@
-package seeding
+package arseeding
 
 import (
 	"github.com/stretchr/testify/assert"

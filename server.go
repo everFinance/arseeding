@@ -1,4 +1,4 @@
-package seeding
+package arseeding
 
 import (
 	"github.com/everFinance/goar"
@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var log = NewLog("seeding")
+var log = NewLog("arseeding")
 
 type Server struct {
 	store           *Store
