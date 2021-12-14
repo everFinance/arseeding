@@ -5,10 +5,12 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/everFinance/goar/types"
 	bolt "go.etcd.io/bbolt"
 	"os"
 	"path"
+	"strings"
 	"time"
 )
 
@@ -27,6 +29,15 @@ var (
 	TxDataEndOffSetBucket = []byte("tx-data-end-offset-bucket") // key: dataRoot+dataSize; val: txDataEndOffSet
 	TxMetaBucket          = []byte("tx-meta-bucket")            // key: txId, val: arTx; not include data
 	ConstantsBucket       = []byte("constants-bucket")
+
+	// pending pool
+
+	BroadcastJobsPendingPool = []byte("broadcast-pending-pool") // key: arId, value: "0x01"
+	SyncJobsPendingPool      = []byte("sync-pending-pool")      // key: arId,value: "0x01"
+
+	// save jobStatus
+	BroadcastJobStatus = []byte("broadcast-job-status") // key: arId, value jobStatus
+	SyncJobStatus      = []byte("sync-job-status")      // key: arId, value jobStatus
 )
 
 type Store struct {
@@ -74,6 +85,8 @@ func createBuckets(tx *bolt.Tx, buckets ...[]byte) error {
 	}
 	return nil
 }
+
+// about tx
 
 func (s *Store) SaveAllDataEndOffset(allDataEndOffset uint64, dbTx *bolt.Tx) (err error) {
 	if dbTx == nil {
@@ -236,4 +249,113 @@ func btoi(b []byte) uint64 {
 func generateOffSetKey(dataRoot, dataSize string) []byte {
 	hash := sha256.Sum256([]byte(dataRoot + dataSize))
 	return hash[:]
+}
+
+// about jobs
+
+func (s *Store) PutPendingPool(jobType string, arId string) error {
+	bktName, err := pendingPoolBktName(jobType)
+	if err != nil {
+		return err
+	}
+	return s.BoltDb.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(bktName).Put([]byte(arId), []byte("0x01"))
+	})
+}
+
+func (s *Store) LoadPendingPool(jobType string, num int) ([]string, error) {
+	bktName, err := pendingPoolBktName(jobType)
+	if err != nil {
+		return nil, err
+	}
+
+	arIds := make([]string, 0, num)
+	err = s.BoltDb.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(bktName)
+
+		c := bkt.Cursor()
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			if len(arIds) == num {
+				return nil
+			}
+			arIds = append(arIds, string(k))
+		}
+		return nil
+	})
+	return arIds, err
+}
+
+func (s *Store) BatchDeletePendingPool(jobType string, arIds []string) error {
+	bktName, err := pendingPoolBktName(jobType)
+	if err != nil {
+		return err
+	}
+	return s.BoltDb.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(bktName)
+		for _, arId := range arIds {
+			if err := bkt.Delete([]byte(arId)); err != nil {
+				log.Error("delete PendingPool error", "err", err, "arId", arId)
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func pendingPoolBktName(jobType string) ([]byte, error) {
+	var bktName []byte
+	switch strings.ToLower(jobType) {
+	case jobTypeSync:
+		bktName = SyncJobsPendingPool
+	case jobTypeBroadcast:
+		bktName = BroadcastJobsPendingPool
+	default:
+		return nil, fmt.Errorf("not support this jobType: %s", jobType)
+	}
+	return bktName, nil
+}
+
+func jobStatusBktName(jobType string) ([]byte, error) {
+	var bktName []byte
+	switch strings.ToLower(jobType) {
+	case jobTypeSync:
+		bktName = BroadcastJobStatus
+	case jobTypeBroadcast:
+		bktName = SyncJobStatus
+	default:
+		return nil, fmt.Errorf("not support this jobType: %s", jobType)
+	}
+	return bktName, nil
+}
+
+func (s *Store) SaveJobStatus(jobType string, arId string, jobStatus JobStatus) error {
+	bktName, err := jobStatusBktName(jobType)
+	if err != nil {
+		return err
+	}
+	val, err := json.Marshal(&jobStatus)
+	if err != nil {
+		return err
+	}
+	return s.BoltDb.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(bktName).Put([]byte(arId), val)
+	})
+}
+
+func (s *Store) LoadJobStatus(jobType, arId string) (*JobStatus, error) {
+	bktName, err := jobStatusBktName(jobType)
+	if err != nil {
+		return nil, err
+	}
+	js := &JobStatus{}
+	err = s.BoltDb.View(func(tx *bolt.Tx) error {
+		val := tx.Bucket(bktName).Get([]byte(arId))
+		if val == nil {
+			return ErrNotExist
+		} else {
+			err = json.Unmarshal(val, js)
+			return err
+		}
+	})
+	return js, err
 }

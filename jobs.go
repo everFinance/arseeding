@@ -2,54 +2,145 @@ package seeding
 
 import (
 	"fmt"
-	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
+	"github.com/panjf2000/ants/v2"
 	"math/big"
-	"sync/atomic"
+	"sync"
 )
 
 func (s *Server) runJobs() {
-	for {
-		select {
-		case arId := <-s.jobManager.JobCh:
-			if s.jobManager.IsClosed(arId) {
-				continue
-			}
+	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updatePeers)
+	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runBroadcastJobs)
+	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runSyncJobs)
 
-			job := s.jobManager.GetJob(arId)
-			if job == nil {
-				continue
-			}
-			switch job.JobType {
-			case jobTypeBroadcast:
-				go func() {
-					atomic.AddInt32(&s.jobManager.pendingNum, 1)
-					defer atomic.AddInt32(&s.jobManager.pendingNum, -1)
+	s.scheduler.StartAsync()
+}
 
-					if err := s.processBroadcastJob(arId); err != nil {
-						log.Error("processBroadcastJob", "err", err, "arId", arId)
-					}
-				}()
+func (s *Server) updatePeers() {
+	peers, err := s.arCli.GetPeers()
+	if err != nil {
+		return
+	}
+	if len(peers) == 0 {
+		return
+	}
+	// update
+	s.peers = peers
+}
 
-			case jobTypeSync:
-				go func() {
-					atomic.AddInt32(&s.jobManager.pendingNum, 1)
-					defer atomic.AddInt32(&s.jobManager.pendingNum, -1)
+func (s *Server) runBroadcastJobs() {
+	arIds, err := s.store.LoadPendingPool(jobTypeBroadcast, 20)
+	if err != nil {
+		log.Error("s.store.LoadPendingPool(jobTypeBroadcast, 20)", "err", err)
+		return
+	}
+	log.Debug("load jobTypeBroadcast pending pool", "number", len(arIds))
 
-					if err := s.processSyncJob(arId); err != nil {
-						log.Error("processSyncJob", "err", err, "arId", arId)
-						s.jobManager.IncFailed(arId)
-					} else {
-						s.jobManager.IncSuccessed(arId)
-					}
-				}()
+	var wg sync.WaitGroup
+	p, _ := ants.NewPoolWithFunc(10, func(i interface{}) {
+		defer wg.Done()
+		arId := i.(string)
+		if s.jobManager.IsClosed(arId, jobTypeBroadcast) {
+			return
+		}
+		job := s.jobManager.GetJob(arId, jobTypeBroadcast)
+		if job == nil {
+			return
+		}
 
-			default:
-				log.Error("not support job type", "type", job.JobType)
-			}
+		if err := s.processBroadcastJob(arId); err != nil {
+			log.Error("processBroadcastJob", "err", err, "arId", arId)
+			return
+		}
+	})
+	defer p.Release()
+
+	for _, arId := range arIds {
+		wg.Add(1)
+		_ = p.Invoke(arId)
+	}
+	wg.Wait()
+
+	// save jobStatus to db and unregister job
+	for _, arId := range arIds {
+		js := s.jobManager.GetJob(arId, jobTypeBroadcast)
+		if js == nil {
+			panic(err)
+		}
+		if err := s.store.SaveJobStatus(jobTypeBroadcast, arId, *js); err != nil {
+			log.Error("s.store.SaveJobStatus(jobTypeBroadcast,arId,*js)", "err", err, "arId", arId)
+			panic(err)
+		} else {
+			// unregister job
+			s.jobManager.UnregisterJob(arId, jobTypeBroadcast)
 		}
 	}
+
+	// remove pending pool
+	if err := s.store.BatchDeletePendingPool(jobTypeBroadcast, arIds); err != nil {
+		log.Error("s.store.BatchDeletePendingPool(jobTypeBroadcast,arIds)", "err", err, "arIds", arIds)
+		log.Debug("run broadcast jobs failed", "broadcastJobs number", len(arIds))
+		return
+	}
+	log.Debug("run broadcast jobs success", "broadcastJobs number", len(arIds))
+}
+
+func (s *Server) runSyncJobs() {
+	arIds, err := s.store.LoadPendingPool(jobTypeSync, 50)
+	if err != nil {
+		log.Error("s.store.LoadPendingPool(jobTypeSync, 50)", "err", err)
+		return
+	}
+	log.Debug("load jobTypeSync pending pool", "number", len(arIds))
+
+	var wg sync.WaitGroup
+	p, _ := ants.NewPoolWithFunc(20, func(i interface{}) {
+		defer wg.Done()
+		arId := i.(string)
+		if s.jobManager.IsClosed(arId, jobTypeSync) {
+			return
+		}
+		job := s.jobManager.GetJob(arId, jobTypeSync)
+		if job == nil {
+			return
+		}
+
+		if err := s.processSyncJob(arId); err != nil {
+			log.Error("processSyncJob", "err", err, "arId", arId)
+			return
+		}
+	})
+	defer p.Release()
+
+	for _, arId := range arIds {
+		wg.Add(1)
+		_ = p.Invoke(arId)
+	}
+	wg.Wait()
+
+	// save jobStatus to db and unregister job
+	for _, arId := range arIds {
+		js := s.jobManager.GetJob(arId, jobTypeSync)
+		if js == nil {
+			panic(err)
+		}
+		if err := s.store.SaveJobStatus(jobTypeSync, arId, *js); err != nil {
+			log.Error("s.store.SaveJobStatus(jobTypeSync,arId,*js)", "err", err, "arId", arId)
+			panic(err)
+		} else {
+			// unregister job
+			s.jobManager.UnregisterJob(arId, jobTypeSync)
+		}
+	}
+
+	// remove pending pool
+	if err := s.store.BatchDeletePendingPool(jobTypeSync, arIds); err != nil {
+		log.Error("s.store.BatchDeletePendingPool(jobTypeSync, arIds)", "err", err)
+		log.Debug("run sync jobs failed", "syncJobs number", len(arIds))
+		return
+	}
+	log.Debug("run sync jobs success", "syncJobs number", len(arIds))
 }
 
 func (s *Server) processBroadcastJob(arId string) (err error) {
@@ -71,26 +162,9 @@ func (s *Server) processBroadcastJob(arId string) (err error) {
 	utils.PrepareChunks(txMeta, txData)
 	txMeta.Data = utils.Base64Encode(txData)
 
-	pNode := goar.NewShortConn()
-	for _, peer := range s.peers {
-		pNode.SetShortConnUrl("http://" + peer)
-		uploader, err := goar.CreateUploader(pNode, txMeta, nil)
-		if err != nil {
-			s.jobManager.IncFailed(arId)
-			continue
-		}
-
-		if err = uploader.Once(); err != nil {
-			s.jobManager.IncFailed(arId)
-			continue
-		}
-		// success send
-		s.jobManager.IncSuccessed(arId)
-
-		// listen close status
-		if s.jobManager.IsClosed(arId) {
-			return nil
-		}
+	if err := s.jobManager.BroadcastData(arId, jobTypeBroadcast, txMeta, s.peers); err != nil {
+		log.Error("s.jobManager.BroadcastData(arId,txMeta,s.peers)", "err", err)
+		return err
 	}
 	return
 }
@@ -104,7 +178,7 @@ func (s *Server) processSyncJob(arId string) (err error) {
 		arTxMeta, err = s.arCli.GetUnconfirmedTx(arId) // this api can return all tx (unconfirmed and confirmed)
 		if err != nil {
 			// get tx from peers
-			arTxMeta, err = s.arCli.GetUnconfirmedTxFromPeers(arId)
+			arTxMeta, err = s.jobManager.GetUnconfirmedTxFromPeers(arId, jobTypeSync, s.peers)
 			if err != nil {
 				return err
 			}
@@ -135,6 +209,8 @@ func (s *Server) processSyncJob(arId string) (err error) {
 	}
 
 	if size.Cmp(big.NewInt(0)) <= 0 {
+		// not need to sync tx data, so this job is success
+		s.jobManager.IncSuccessed(arId, jobTypeSync)
 		return nil
 	}
 
@@ -142,12 +218,12 @@ func (s *Server) processSyncJob(arId string) (err error) {
 	var data []byte
 	data, err = getData(arTxMeta.DataRoot, arTxMeta.DataSize, s.store) // get data from local
 	if err == nil {
-		return nil // lcoal exist data
+		return nil // local exist data
 	} else {
 		// need get tx data from arweave network
 		data, err = s.arCli.GetTransactionDataByGateway(arId)
 		if err != nil {
-			data, err = s.arCli.GetTxDataFromPeers(arId)
+			data, err = s.jobManager.GetTxDataFromPeers(arId, jobTypeSync, s.peers)
 			if err != nil {
 				log.Error("get data failed", "err", err, "arId", arId)
 				return err

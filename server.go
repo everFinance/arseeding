@@ -42,7 +42,7 @@ func New() *Server {
 
 		arCli:      arCli,
 		peers:      peers,
-		jobManager: NewJobManager(2),
+		jobManager: NewJobManager(200),
 		scheduler:  gocron.NewScheduler(time.UTC),
 	}
 }
