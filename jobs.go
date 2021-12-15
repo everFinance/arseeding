@@ -35,7 +35,9 @@ func (s *Server) runBroadcastJobs() {
 		log.Error("s.store.LoadPendingPool(jobTypeBroadcast, 20)", "err", err)
 		return
 	}
-	log.Debug("load jobTypeBroadcast pending pool", "number", len(arIds))
+	if len(arIds) > 0 {
+		log.Debug("load jobTypeBroadcast pending pool", "number", len(arIds))
+	}
 
 	var wg sync.WaitGroup
 	p, _ := ants.NewPoolWithFunc(10, func(i interface{}) {
@@ -92,7 +94,9 @@ func (s *Server) runSyncJobs() {
 		log.Error("s.store.LoadPendingPool(jobTypeSync, 50)", "err", err)
 		return
 	}
-	log.Debug("load jobTypeSync pending pool", "number", len(arIds))
+	if len(arIds) > 0 {
+		log.Debug("load jobTypeSync pending pool", "number", len(arIds))
+	}
 
 	var wg sync.WaitGroup
 	p, _ := ants.NewPoolWithFunc(20, func(i interface{}) {
@@ -228,6 +232,8 @@ func (s *Server) processSyncJob(arId string) (err error) {
 				log.Error("get data failed", "err", err, "arId", arId)
 				return err
 			}
+		} else {
+			s.jobManager.IncSuccessed(arId, jobTypeSync)
 		}
 	}
 	// store data to local

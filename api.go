@@ -52,7 +52,7 @@ func (s *Server) runAPI(port string) {
 		// broadcast && sync jobs
 		v1.GET("/job/broadcast/:arid", s.broadcast)
 		v1.GET("/job/sync/:arid", s.sync)
-		v1.GET("/job/kill/:jobType/:arid", s.killJob)
+		v1.GET("/job/kill/:arid/:jobType", s.killJob)
 		v1.GET("/job/:arid/:jobType", s.getJob)
 		v1.GET("/cache/jobs", s.getCacheJobs)
 	}
