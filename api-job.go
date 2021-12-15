@@ -15,7 +15,7 @@ func (s *Server) broadcast(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, "arId incorrect")
 		return
 	}
-
+	// todo whether can view has being processed?
 	if err := s.jobManager.RegisterJob(arid, jobTypeBroadcast, int64(len(s.peers))); err != nil {
 		c.JSON(http.StatusBadGateway, err.Error())
 		return
@@ -38,6 +38,7 @@ func (s *Server) sync(c *gin.Context) {
 		return
 	}
 
+	// todo whether can view has being processed?
 	if err := s.jobManager.RegisterJob(arid, jobTypeSync, int64(len(s.peers))); err != nil {
 		c.JSON(http.StatusBadGateway, err.Error())
 		return

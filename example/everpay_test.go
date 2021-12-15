@@ -47,9 +47,9 @@ func (w *Wdb) Insert(arIds []*RollupTxId) error {
 	return w.Db.Create(&arIds).Error
 }
 
-func (w *Wdb) GetArIds() ([]RollupTxId, error) {
+func (w *Wdb) GetArIds(rawId uint) ([]RollupTxId, error) {
 	rollupTxs := make([]RollupTxId, 0)
-	err := w.Db.Model(&RollupTxId{}).Find(&rollupTxs).Error
+	err := w.Db.Model(&RollupTxId{}).Where("id > ?", rawId).Limit(50).Find(&rollupTxs).Error
 	return rollupTxs, err
 }
 
@@ -84,14 +84,16 @@ func Test_arseeding(t *testing.T) {
 	dsn := "root@tcp(127.0.0.1:3306)/sandy_test?charset=utf8mb4&parseTime=True&loc=Local"
 	wdb := NewWdb(dsn)
 
-	rollupTxs, err := wdb.GetArIds()
+	rollupTxs, err := wdb.GetArIds(50)
 	if err != nil {
 		panic(err)
 	}
 	for _, rtx := range rollupTxs {
 		if err := postSyncJob(rtx.ArId); err != nil {
 			log.Error("postSyncJob(rtx.ArId)", "err", err, "rtx", rtx)
+			return
 		}
+		log.Debug("rtx", "id", rtx.ID, "arId", rtx.ArId)
 	}
 }
 
@@ -99,6 +101,7 @@ func postSyncJob(arId string) error {
 	cli := gentleman.New().URL("https://seed-dev.everpay.io")
 	req := cli.Request()
 	req.AddPath(fmt.Sprintf("/job/sync/%s", arId))
+	req.Method("POST")
 	resp, err := req.Send()
 	if err != nil {
 		return err
