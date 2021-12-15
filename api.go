@@ -53,7 +53,7 @@ func (s *Server) runAPI(port string) {
 		v1.GET("/job/broadcast/:arid", s.broadcast)
 		v1.GET("/job/sync/:arid", s.sync)
 		v1.GET("/job/kill/:jobType/:arid", s.killJob)
-		v1.GET("/job/:jobType/:arid", s.getJob)
+		v1.GET("/job/:arid/:jobType", s.getJob)
 		v1.GET("/cache/jobs", s.getCacheJobs)
 	}
 
