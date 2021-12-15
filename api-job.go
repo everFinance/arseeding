@@ -38,7 +38,13 @@ func (s *Server) sync(c *gin.Context) {
 		return
 	}
 
-	// todo whether can view has being processed?
+	// check whether synced
+	job, err := s.store.LoadJobStatus(jobTypeSync, arid)
+	if err == nil && job.CountSuccessed > 0 {
+		c.JSON(http.StatusBadRequest, "arId has successed synced")
+		return
+	}
+
 	if err := s.jobManager.RegisterJob(arid, jobTypeSync, int64(len(s.peers))); err != nil {
 		c.JSON(http.StatusBadGateway, err.Error())
 		return

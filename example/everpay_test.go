@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"github.com/everFinance/arseeding"
 	"github.com/everFinance/goar"
+	"github.com/panjf2000/ants/v2"
 	"gopkg.in/h2non/gentleman.v2"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"io/ioutil"
+	"sync"
 	"testing"
+	"time"
 )
 
 var (
@@ -47,7 +50,7 @@ func (w *Wdb) Insert(arIds []*RollupTxId) error {
 	return w.Db.Create(&arIds).Error
 }
 
-func (w *Wdb) GetArIds(rawId uint) ([]RollupTxId, error) {
+func (w *Wdb) GetArIds(rawId int) ([]RollupTxId, error) {
 	rollupTxs := make([]RollupTxId, 0)
 	err := w.Db.Model(&RollupTxId{}).Where("id > ?", rawId).Limit(50).Find(&rollupTxs).Error
 	return rollupTxs, err
@@ -84,21 +87,49 @@ func Test_arseeding(t *testing.T) {
 	dsn := "root@tcp(127.0.0.1:3306)/sandy_test?charset=utf8mb4&parseTime=True&loc=Local"
 	wdb := NewWdb(dsn)
 
-	rollupTxs, err := wdb.GetArIds(50)
-	if err != nil {
-		panic(err)
-	}
-	for _, rtx := range rollupTxs {
-		if err := postSyncJob(rtx.ArId); err != nil {
-			log.Error("postSyncJob(rtx.ArId)", "err", err, "rtx", rtx)
+	cli := gentleman.New().URL("https://seed-dev.everpay.io")
+	i := 2920
+	for {
+		rollupTxs, err := wdb.GetArIds(i)
+		if err != nil {
+			panic(err)
+		}
+		if len(rollupTxs) == 0 {
+			log.Info("sync finish")
 			return
 		}
-		log.Debug("rtx", "id", rtx.ID, "arId", rtx.ArId)
+
+		var wg sync.WaitGroup
+		p, _ := ants.NewPoolWithFunc(20, func(i interface{}) {
+			defer wg.Done()
+			arId := i.(string)
+			if err := postSyncJob(arId, cli); err != nil {
+				log.Error("postSyncJob(rtx.ArId)", "err", err, "arId", arId)
+				if err.Error() == "\"fully loaded\"" {
+					log.Debug("retry", "arId", arId)
+					for {
+						time.Sleep(1 * time.Second)
+						if err := postSyncJob(arId, cli); err == nil {
+							return
+						}
+					}
+				}
+				return
+			}
+		})
+
+		for _, rtx := range rollupTxs {
+			wg.Add(1)
+			_ = p.Invoke(rtx.ArId)
+		}
+		wg.Wait()
+		p.Release()
+
+		i += len(rollupTxs)
 	}
 }
 
-func postSyncJob(arId string) error {
-	cli := gentleman.New().URL("https://seed-dev.everpay.io")
+func postSyncJob(arId string, cli *gentleman.Client) error {
 	req := cli.Request()
 	req.AddPath(fmt.Sprintf("/job/sync/%s", arId))
 	req.Method("POST")
