@@ -10,8 +10,8 @@ import (
 )
 
 func (e *EverPay) runJobs() {
-	e.scheduler.Every(10).Seconds().SingletonMode().Do(e.FetchArIds)
-	e.scheduler.Every(10).Seconds().SingletonMode().Do(e.PostToArseeding)
+	e.scheduler.Every(30).Seconds().SingletonMode().Do(e.FetchArIds)
+	e.scheduler.Every(30).Seconds().SingletonMode().Do(e.PostToArseeding)
 
 	e.scheduler.StartAsync()
 }
@@ -62,7 +62,9 @@ func (e *EverPay) PostToArseeding() {
 					}
 				}
 			}
-			return
+			if err.Error() != "\"arId has successed synced\"" {
+				return
+			}
 		}
 		// update post status is true
 		if err := e.wdb.UpdatePosted(arId); err != nil {

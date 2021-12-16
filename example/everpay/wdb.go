@@ -12,12 +12,6 @@ type RollupArId struct {
 	Post bool
 }
 
-type RollupTxId struct {
-	gorm.Model
-	ArId string `gorm:"index:idx01"`
-	Post bool
-}
-
 type Wdb struct {
 	Db *gorm.DB
 }
@@ -31,7 +25,7 @@ func NewWdb(dsn string) *Wdb {
 	if err != nil {
 		panic(err)
 	}
-	db.AutoMigrate(&RollupArId{}, &RollupTxId{})
+	db.AutoMigrate(&RollupArId{})
 
 	log.Info("connect wdb success")
 	return &Wdb{Db: db}
@@ -64,10 +58,4 @@ func (w *Wdb) GetNeedPostTxs() ([]RollupArId, error) {
 	txs := make([]RollupArId, 0)
 	err := w.Db.Model(&RollupArId{}).Where("post = ?", false).Limit(100).Find(&txs).Error
 	return txs, err
-}
-
-func (w *Wdb) GetAll() ([]RollupTxId, error) {
-	rollupTxs := make([]RollupTxId, 0)
-	err := w.Db.Model(&RollupTxId{}).Find(&rollupTxs).Error
-	return rollupTxs, err
 }
