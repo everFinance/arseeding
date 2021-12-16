@@ -1,147 +1,16 @@
-package example
+package everpay
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/everFinance/arseeding"
 	"github.com/everFinance/goar"
-	"github.com/panjf2000/ants/v2"
-	"gopkg.in/h2non/gentleman.v2"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
-	"io/ioutil"
-	"sync"
-	"testing"
-	"time"
 )
 
 var (
 	ErrNotNeedSync = errors.New("not need sync")
 	log            = arseeding.NewLog("example_everpay")
 )
-
-type RollupTxId struct {
-	gorm.Model
-	ArId string
-}
-
-type Wdb struct {
-	Db *gorm.DB
-}
-
-func NewWdb(dsn string) *Wdb {
-	logLevel := logger.Info
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger:          logger.Default.LogMode(logLevel), // 日志 level 设置, prod 使用 warn
-		CreateBatchSize: 200,                              // 每次批量插入最大数量
-	})
-	if err != nil {
-		panic(err)
-	}
-	db.AutoMigrate(&RollupTxId{})
-
-	log.Info("connect wdb success")
-	return &Wdb{Db: db}
-}
-
-func (w *Wdb) Insert(arIds []*RollupTxId) error {
-	return w.Db.Create(&arIds).Error
-}
-
-func (w *Wdb) GetArIds(rawId int) ([]RollupTxId, error) {
-	rollupTxs := make([]RollupTxId, 0)
-	err := w.Db.Model(&RollupTxId{}).Where("id > ?", rawId).Limit(50).Find(&rollupTxs).Error
-	return rollupTxs, err
-}
-
-func Test_fetcher(t *testing.T) {
-	arOwner := "uGx-QfBXSwABKxjha-00dI7vvfyqIYblY6Z5L6cyTFM"
-	processedArTxId := ""
-	cli := goar.NewClient("https://arweave.net", "http://127.0.0.1:8001")
-	dsn := "root@tcp(127.0.0.1:3306)/sandy_test?charset=utf8mb4&parseTime=True&loc=Local"
-	wdb := NewWdb(dsn)
-
-	arIds, err := fetchTxIds(arOwner, processedArTxId, cli)
-	if err != nil {
-		panic(err)
-	}
-
-	byjs, err := json.Marshal(arIds)
-	if err != nil {
-		panic(err)
-	}
-	ioutil.WriteFile("./arIds", byjs, 0777)
-
-	rollupTxIds := make([]*RollupTxId, 0, len(arIds))
-	for _, arId := range arIds {
-		rollupTxIds = append(rollupTxIds, &RollupTxId{ArId: arId})
-	}
-	if err := wdb.Insert(rollupTxIds); err != nil {
-		panic(err)
-	}
-}
-
-func Test_arseeding(t *testing.T) {
-	dsn := "root@tcp(127.0.0.1:3306)/sandy_test?charset=utf8mb4&parseTime=True&loc=Local"
-	wdb := NewWdb(dsn)
-
-	cli := gentleman.New().URL("https://seed-dev.everpay.io")
-	i := 2920
-	for {
-		rollupTxs, err := wdb.GetArIds(i)
-		if err != nil {
-			panic(err)
-		}
-		if len(rollupTxs) == 0 {
-			log.Info("sync finish")
-			return
-		}
-
-		var wg sync.WaitGroup
-		p, _ := ants.NewPoolWithFunc(20, func(i interface{}) {
-			defer wg.Done()
-			arId := i.(string)
-			if err := postSyncJob(arId, cli); err != nil {
-				log.Error("postSyncJob(rtx.ArId)", "err", err, "arId", arId)
-				if err.Error() == "\"fully loaded\"" {
-					log.Debug("retry", "arId", arId)
-					for {
-						time.Sleep(1 * time.Second)
-						if err := postSyncJob(arId, cli); err == nil {
-							return
-						}
-					}
-				}
-				return
-			}
-		})
-
-		for _, rtx := range rollupTxs {
-			wg.Add(1)
-			_ = p.Invoke(rtx.ArId)
-		}
-		wg.Wait()
-		p.Release()
-
-		i += len(rollupTxs)
-	}
-}
-
-func postSyncJob(arId string, cli *gentleman.Client) error {
-	req := cli.Request()
-	req.AddPath(fmt.Sprintf("/job/sync/%s", arId))
-	req.Method("POST")
-	resp, err := req.Send()
-	if err != nil {
-		return err
-	}
-	if !resp.Ok {
-		return errors.New(resp.String())
-	}
-	return nil
-}
 
 func fetchTxIds(arOwner string, processedArTxId string, c *goar.Client) ([]string, error) {
 	// get ar tx
