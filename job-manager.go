@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
-	"math"
 	"strings"
 	"sync"
 )
@@ -43,7 +42,7 @@ func AssembleId(arid, jobType string) string {
 }
 
 func (m *JobManager) InitJobManager(boltDb *Store, peersNum int) error {
-	pendingBroadcast, err := boltDb.LoadPendingPool(jobTypeBroadcast, math.MaxInt32)
+	pendingBroadcast, err := boltDb.LoadPendingPool(jobTypeBroadcast, m.cap)
 	if err != nil {
 		return err
 	}
@@ -53,7 +52,7 @@ func (m *JobManager) InitJobManager(boltDb *Store, peersNum int) error {
 		}
 	}
 
-	pendingSync, err := boltDb.LoadPendingPool(jobTypeSync, math.MaxInt32)
+	pendingSync, err := boltDb.LoadPendingPool(jobTypeSync, m.cap)
 	if err != nil {
 		return err
 	}
