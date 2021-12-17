@@ -2,6 +2,7 @@ package arseeding
 
 import (
 	"fmt"
+	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"github.com/panjf2000/ants/v2"
@@ -165,11 +166,17 @@ func (s *Server) processBroadcastJob(arId string) (err error) {
 		return err
 	}
 
+	txMetaPosted := true
+	// check this tx whether on chain
+	_, err = s.arCli.GetTransactionStatus(arId)
+	if err == goar.ErrPendingTx || err == goar.ErrNotFound {
+		txMetaPosted = false
+	}
 	// generate tx chunks
 	utils.PrepareChunks(txMeta, txData)
 	txMeta.Data = utils.Base64Encode(txData)
 
-	if err := s.jobManager.BroadcastData(arId, jobTypeBroadcast, txMeta, s.peers); err != nil {
+	if err := s.jobManager.BroadcastData(arId, jobTypeBroadcast, txMeta, s.peers, txMetaPosted); err != nil {
 		log.Error("s.jobManager.BroadcastData(arId,txMeta,s.peers)", "err", err)
 		return err
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
+	"math"
 	"strings"
 	"sync"
 )
@@ -19,7 +20,7 @@ type JobStatus struct {
 	JobType        string `json:"jobType"`
 	CountSuccessed int64  `json:"countSuccessed"`
 	CountFailed    int64  `json:"countFailed"`
-	TotalNodes     int64  `json:"totalNodes"`
+	TotalNodes     int    `json:"totalNodes"`
 	Close          bool
 }
 
@@ -41,7 +42,30 @@ func AssembleId(arid, jobType string) string {
 	return strings.ToUpper(jobType) + "-" + arid
 }
 
-func (m *JobManager) RegisterJob(arid, jobType string, totalNodes int64) (err error) {
+func (m *JobManager) InitJobManager(boltDb *Store, peersNum int) error {
+	pendingBroadcast, err := boltDb.LoadPendingPool(jobTypeBroadcast, math.MaxInt32)
+	if err != nil {
+		return err
+	}
+	for _, id := range pendingBroadcast {
+		if err := m.RegisterJob(id, jobTypeBroadcast, peersNum); err != nil {
+			return err
+		}
+	}
+
+	pendingSync, err := boltDb.LoadPendingPool(jobTypeSync, math.MaxInt32)
+	if err != nil {
+		return err
+	}
+	for _, id := range pendingSync {
+		if err := m.RegisterJob(id, jobTypeSync, peersNum); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *JobManager) RegisterJob(arid, jobType string, totalNodes int) (err error) {
 	if m.exist(arid, jobType) {
 		return errors.New("exist job")
 	}
@@ -177,7 +201,7 @@ func (j *JobManager) GetTxDataFromPeers(arId, jobType string, peers []string) ([
 	return nil, errors.New("get tx data from peers failed")
 }
 
-func (j *JobManager) BroadcastData(arId, jobType string, tx *types.Transaction, peers []string) error {
+func (j *JobManager) BroadcastData(arId, jobType string, tx *types.Transaction, peers []string, txPosted bool) error {
 	pNode := goar.NewShortConn()
 	for _, peer := range peers {
 		pNode.SetShortConnUrl("http://" + peer)
@@ -187,7 +211,10 @@ func (j *JobManager) BroadcastData(arId, jobType string, tx *types.Transaction, 
 			continue
 		}
 
+		// Whether to broadcast txMeta
+		uploader.TxPosted = txPosted
 		if err = uploader.Once(); err != nil {
+			log.Error("uploader.Once()", "err", err)
 			j.IncFailed(arId, jobType)
 			continue
 		}

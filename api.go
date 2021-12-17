@@ -3,6 +3,7 @@ package arseeding
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
@@ -11,6 +12,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -191,22 +193,38 @@ func (s *Server) getTxField(c *gin.Context) {
 	case "quantity":
 		c.JSON(http.StatusOK, txMeta.Quantity)
 	case "data":
-		size, err := strconv.ParseUint(txMeta.DataSize, 10, 64)
+		data, err := txMetaData(txMeta, s.store)
 		if err != nil {
-			c.JSON(502, err.Error())
+			c.JSON(400, err.Error())
 			return
 		}
-		// When data is bigger than 12MiB return statusCode == 400, use chunk
-		if size > 12*128*1024 {
-			c.JSON(400, "tx_data_too_big")
-			return
-		}
-		data, err := getData(txMeta.DataRoot, txMeta.DataSize, s.store)
+		c.Data(200, "text/html; charset=utf-8", []byte(utils.Base64Encode(data)))
+
+	case "data.json", "data.txt", "data.pdf":
+		data, err := txMetaData(txMeta, s.store)
 		if err != nil {
-			c.JSON(502, err.Error())
+			c.JSON(400, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, data)
+		// c.Data(200,"text/html; charset=utf-8",data)
+		typ := strings.Split(field, ".")[1]
+		c.Data(200, fmt.Sprintf("application/%s; charset=utf-8", typ), data)
+
+	case "data.png", "data.jpeg", "data.gif":
+		data, err := txMetaData(txMeta, s.store)
+		if err != nil {
+			c.JSON(400, err.Error())
+			return
+		}
+		typ := strings.Split(field, ".")[1]
+		c.Data(200, fmt.Sprintf("image/%s; charset=utf-8", typ), data)
+	case "data.mp4":
+		data, err := txMetaData(txMeta, s.store)
+		if err != nil {
+			c.JSON(400, err.Error())
+			return
+		}
+		c.Data(200, "video/mpeg4; charset=utf-8", data)
 	case "data_root":
 		c.JSON(http.StatusOK, txMeta.DataRoot)
 	case "data_size":
@@ -218,6 +236,23 @@ func (s *Server) getTxField(c *gin.Context) {
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_field"})
 	}
+}
+
+func txMetaData(txMeta *types.Transaction, db *Store) ([]byte, error) {
+	size, err := strconv.ParseUint(txMeta.DataSize, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	// When data is bigger than 12MiB return statusCode == 400, use chunk
+	if size > 50*128*1024 {
+		return nil, errors.New("tx_data_too_big")
+	}
+
+	data, err := getData(txMeta.DataRoot, txMeta.DataSize, db)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 func getData(dataRoot, dataSize string, db *Store) ([]byte, error) {
