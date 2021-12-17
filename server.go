@@ -23,6 +23,7 @@ type Server struct {
 }
 
 func New() *Server {
+	log.Debug("start new server...")
 	boltDb, err := NewStore()
 	if err != nil {
 		panic(err)
