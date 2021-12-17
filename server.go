@@ -36,9 +36,9 @@ func New() *Server {
 	}
 
 	jobmg := NewJobManager(500)
-	if err := jobmg.InitJobManager(boltDb, len(peers)); err != nil {
-		panic(err)
-	}
+	// if err := jobmg.InitJobManager(boltDb, len(peers)); err != nil {
+	// 	panic(err)
+	// }
 	return &Server{
 		store:           boltDb,
 		engine:          gin.Default(),
