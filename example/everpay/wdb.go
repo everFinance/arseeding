@@ -19,8 +19,8 @@ type Wdb struct {
 func NewWdb(dsn string) *Wdb {
 	logLevel := logger.Info
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger:          logger.Default.LogMode(logLevel), // 日志 level 设置, prod 使用 warn
-		CreateBatchSize: 200,                              // 每次批量插入最大数量
+		Logger:          logger.Default.LogMode(logLevel),
+		CreateBatchSize: 200,
 	})
 	if err != nil {
 		panic(err)
