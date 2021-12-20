@@ -1,5 +1,5 @@
-# ARseeding
-ARseeding is a lightweight arweave data seed node. It is mainly used to synchronize, cache and broadcast transaction && data.
+# Arseeding
+Arseeding is a lightweight arweave data seed node. It is mainly used to synchronize, cache and broadcast transaction && data.
 
 Important: arseeding is compatible with all http api interfaces of arweave node.
 
@@ -14,7 +14,7 @@ Important: arseeding is compatible with all http api interfaces of arweave node.
 
 ## Run
 ```
-go run cmd/main.go
+PORT=':8080' go run cmd/main.go
 ```
 ## API
 arseeding is compatible with all http api interfaces of arweave node:
@@ -47,6 +47,9 @@ arseeding is compatible with all http api interfaces of arweave node:
         v2.GET("/unconfirmed_tx/:arId")
     }
 ```
+note:    
+when use `submitTx` and `submitChunk`, arseeding caches the tx and data and also submits it to the arweave gateway.   
+
 sync and broadcast api:
 ```
     v1.POST("/job/broadcast/:arid", s.broadcast)
@@ -58,6 +61,93 @@ sync and broadcast api:
 `killJob` This interface can be used to stop a broadcast job when enough nodes have been broadcast via `getJob`   
 `jobType` is 'sync' or 'broadcast'   
 `getCacheJobs` return all pending jobs
+
+## Usage
+### compatible arweave sdk
+arweave-js sdk
+```
+import Arweave from 'arweave';
+
+const arweave = Arweave.init({
+    host: '127.0.0.1', // arseeding service url
+    port: 8080,
+    protocol: 'http'
+});
+```
+goar sdk
+```
+arNode := "http://127.0.0.1:8080" // arseeding service url
+arClient := goar.NewClient(arNode) 
+```
+### Different
+Arseeding is a light node, so it does not store all the data in the arweave network, so when requesting tx or tx data, it is likely that the data will not be available, even if the data already exists in the arweave network.    
+In the case we use the `sync` interface of arseeding to synchronize the tx to the service.   
+e.g:
+1. User want to get a tx
+``` 
+ arId := "yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8"
+ // connect arseeding server by goar sdk
+ arClient := goar.NewClient("http://127.0.0.1:8080") 
+ tx, err := arClient.GetTransactionById(arId)
+ // or 
+ data, err := arClient.GetTransactionData(arId)
+```
+Arseeding service can not include this tx, so will return 'not found' error msg.   
+
+2. So we need to use arseeding `sync` api
+```
+curl --location --request POST 'http://127.0.0.1:8080/job/sync/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
+```
+3. Use `getJob` api to watcher the job status
+```
+ curl --location --request GET 'http://127.0.0.1:8080/job/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/sync'
+```
+resp:
+```
+{
+    "arId": "yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8",
+    "jobType": "sync",
+    "countSuccessed": 1,
+    "countFailed": 0,
+    "totalNodes": 945,
+    "close": false
+}
+```
+`countSuccessed` 1 means sync success
+
+4. This time re-run step 1 and it will work.
+
+## Broadcast usage
+If you want your tx or data to be broadcast to all nodes, the bardcast function can help you do that.   
+e.g:
+1. Register for tx that require broadcasting
+```
+curl --location --request POST 'http://127.0.0.1:8080/job/broadcast/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
+```
+2. Use `getJob` api to watcher the job status
+```
+curl --location --request GET 'http://127.0.0.1:8080/job/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/broadcast'
+```
+resp:
+```
+{
+    "arid": "yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8",
+    "jobType": "broadcast",
+    "countSuccessed": 220,
+    "countFailed": 9,
+    "totalNodes": 939,
+    "close": false
+}
+```
+`countSuccessed` number of nodes successfully broadcast   
+`countFailed` number of nodes failed to broadcast   
+`totalNodes` total number of nodes   
+`close` Is the broadcast task closed   
+
+3. If the goal is to successfully broadcast to 200 nodes, then this broadcast task can be closed
+```
+curl --location --request POST 'http://127.0.0.1:8080/job/kill/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/broadcast'
+```
 
 ## Example
 [everPay rollup txs sync](https://github.com/everFinance/arseeding/tree/main/example/everpay-sync): get all everpay rollup txIds from the arweave node, and then post to the arseeding service using the `sync` interface.

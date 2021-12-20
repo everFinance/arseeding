@@ -128,12 +128,12 @@ func (s *Server) getTxOffset(c *gin.Context) {
 	}
 	txMeta, err := s.store.LoadTxMeta(arId)
 	if err != nil {
-		c.JSON(503, gin.H{"error": "not_joined"})
+		c.JSON(404, "not found")
 		return
 	}
 	offset, err := s.store.LoadTxDataEndOffSet(txMeta.DataRoot, txMeta.DataSize)
 	if err != nil {
-		c.JSON(503, gin.H{"error": "not_joined"})
+		c.JSON(404, "not found")
 		return
 	}
 
@@ -154,6 +154,10 @@ func (s *Server) getChunk(c *gin.Context) {
 
 	chunk, err := s.store.LoadChunk(chunkOffset)
 	if err != nil {
+		if err == ErrNotExist {
+			c.JSON(404, "not found")
+			return
+		}
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -164,6 +168,10 @@ func (s *Server) getTx(c *gin.Context) {
 	arid := c.Param("arid")
 	arTx, err := s.store.LoadTxMeta(arid)
 	if err != nil {
+		if err == ErrNotExist {
+			c.JSON(404, "not found")
+			return
+		}
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -175,6 +183,10 @@ func (s *Server) getTxField(c *gin.Context) {
 	field := c.Param("field")
 	txMeta, err := s.store.LoadTxMeta(arid)
 	if err != nil {
+		if err == ErrNotExist {
+			c.JSON(404, "not found")
+			return
+		}
 		c.JSON(404, err.Error()) // not found
 		return
 	}
