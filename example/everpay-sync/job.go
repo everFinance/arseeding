@@ -1,4 +1,4 @@
-package everpay
+package everpay_sync
 
 import (
 	"errors"
@@ -9,14 +9,14 @@ import (
 	"time"
 )
 
-func (e *EverPay) runJobs() {
+func (e *EverPaySync) runJobs() {
 	e.scheduler.Every(30).Seconds().SingletonMode().Do(e.FetchArIds)
 	e.scheduler.Every(30).Seconds().SingletonMode().Do(e.PostToArseeding)
 
 	e.scheduler.StartAsync()
 }
 
-func (e *EverPay) FetchArIds() {
+func (e *EverPaySync) FetchArIds() {
 	processedArTx, err := e.wdb.GetLastPostedTx()
 	if err != nil {
 		panic(err)
@@ -37,7 +37,7 @@ func (e *EverPay) FetchArIds() {
 	}
 }
 
-func (e *EverPay) PostToArseeding() {
+func (e *EverPaySync) PostToArseeding() {
 	rollupTxs, err := e.wdb.GetNeedPostTxs()
 	if err != nil {
 		panic(err)

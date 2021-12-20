@@ -1,4 +1,4 @@
-package everpay
+package everpay_sync
 
 import (
 	"errors"

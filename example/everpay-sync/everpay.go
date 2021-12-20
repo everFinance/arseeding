@@ -1,4 +1,4 @@
-package everpay
+package everpay_sync
 
 import (
 	"github.com/everFinance/goar"
@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-type EverPay struct {
+// function: sync everpay rollup txs to arseeding
+type EverPaySync struct {
 	wdb         *Wdb
 	arCli       *goar.Client
 	rollupOwner string
@@ -16,8 +17,8 @@ type EverPay struct {
 	scheduler *gocron.Scheduler
 }
 
-func New(dsn string, seedUrl string) *EverPay {
-	return &EverPay{
+func New(dsn string, seedUrl string) *EverPaySync {
+	return &EverPaySync{
 		wdb:         NewWdb(dsn),
 		arCli:       goar.NewClient("https://arweave.net"),
 		rollupOwner: "uGx-QfBXSwABKxjha-00dI7vvfyqIYblY6Z5L6cyTFM",
@@ -26,6 +27,6 @@ func New(dsn string, seedUrl string) *EverPay {
 	}
 }
 
-func (e *EverPay) Run() {
+func (e *EverPaySync) Run() {
 	go e.runJobs()
 }
