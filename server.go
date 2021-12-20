@@ -23,6 +23,7 @@ type Server struct {
 }
 
 func New() *Server {
+	log.Debug("start new server...")
 	boltDb, err := NewStore()
 	if err != nil {
 		panic(err)
@@ -34,6 +35,11 @@ func New() *Server {
 		panic(err)
 	}
 
+	jobmg := NewJobManager(500)
+	if err := jobmg.InitJobManager(boltDb, len(peers)); err != nil {
+		panic(err)
+	}
+
 	return &Server{
 		store:           boltDb,
 		engine:          gin.Default(),
@@ -42,7 +48,7 @@ func New() *Server {
 
 		arCli:      arCli,
 		peers:      peers,
-		jobManager: NewJobManager(200),
+		jobManager: jobmg,
 		scheduler:  gocron.NewScheduler(time.UTC),
 	}
 }

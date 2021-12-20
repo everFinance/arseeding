@@ -2,6 +2,7 @@ package arseeding
 
 import (
 	"fmt"
+	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"github.com/panjf2000/ants/v2"
@@ -35,8 +36,11 @@ func (s *Server) runBroadcastJobs() {
 		log.Error("s.store.LoadPendingPool(jobTypeBroadcast, 20)", "err", err)
 		return
 	}
-	log.Debug("load jobTypeBroadcast pending pool", "number", len(arIds))
+	if len(arIds) == 0 {
+		return
+	}
 
+	log.Debug("load jobTypeBroadcast pending pool", "number", len(arIds))
 	var wg sync.WaitGroup
 	p, _ := ants.NewPoolWithFunc(10, func(i interface{}) {
 		defer wg.Done()
@@ -92,8 +96,12 @@ func (s *Server) runSyncJobs() {
 		log.Error("s.store.LoadPendingPool(jobTypeSync, 50)", "err", err)
 		return
 	}
-	log.Debug("load jobTypeSync pending pool", "number", len(arIds))
 
+	if len(arIds) == 0 {
+		return
+	}
+
+	log.Debug("load jobTypeSync pending pool", "number", len(arIds))
 	var wg sync.WaitGroup
 	p, _ := ants.NewPoolWithFunc(20, func(i interface{}) {
 		defer wg.Done()
@@ -158,11 +166,17 @@ func (s *Server) processBroadcastJob(arId string) (err error) {
 		return err
 	}
 
+	txMetaPosted := true
+	// check this tx whether on chain
+	_, err = s.arCli.GetTransactionStatus(arId)
+	if err == goar.ErrPendingTx || err == goar.ErrNotFound {
+		txMetaPosted = false
+	}
 	// generate tx chunks
 	utils.PrepareChunks(txMeta, txData)
 	txMeta.Data = utils.Base64Encode(txData)
 
-	if err := s.jobManager.BroadcastData(arId, jobTypeBroadcast, txMeta, s.peers); err != nil {
+	if err := s.jobManager.BroadcastData(arId, jobTypeBroadcast, txMeta, s.peers, txMetaPosted); err != nil {
 		log.Error("s.jobManager.BroadcastData(arId,txMeta,s.peers)", "err", err)
 		return err
 	}
@@ -228,6 +242,8 @@ func (s *Server) processSyncJob(arId string) (err error) {
 				log.Error("get data failed", "err", err, "arId", arId)
 				return err
 			}
+		} else {
+			s.jobManager.IncSuccessed(arId, jobTypeSync)
 		}
 	}
 	// store data to local
