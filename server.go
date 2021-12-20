@@ -22,9 +22,9 @@ type Server struct {
 	scheduler  *gocron.Scheduler
 }
 
-func New() *Server {
+func New(boltDirPath string) *Server {
 	log.Debug("start new server...")
-	boltDb, err := NewStore()
+	boltDb, err := NewStore(boltDirPath)
 	if err != nil {
 		panic(err)
 	}

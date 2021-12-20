@@ -17,8 +17,8 @@ import (
 const (
 	boltAllocSize = 8 * 1024 * 1024
 
-	dirPath  = "./data/bolt"
-	boltName = "seed.db"
+	defaultDirPath = "./data/bolt"
+	boltName       = "seed.db"
 )
 
 var (
@@ -44,12 +44,15 @@ type Store struct {
 	BoltDb *bolt.DB
 }
 
-func NewStore() (*Store, error) {
-	if err := os.MkdirAll(dirPath, os.ModePerm); err != nil {
+func NewStore(boltDirPath string) (*Store, error) {
+	if len(boltDirPath) == 0 {
+		boltDirPath = defaultDirPath
+	}
+	if err := os.MkdirAll(boltDirPath, os.ModePerm); err != nil {
 		return nil, err
 	}
 
-	boltDB, err := bolt.Open(path.Join(dirPath, boltName), 0660, &bolt.Options{Timeout: 2 * time.Second, InitialMmapSize: 10e6})
+	boltDB, err := bolt.Open(path.Join(boltDirPath, boltName), 0660, &bolt.Options{Timeout: 2 * time.Second, InitialMmapSize: 10e6})
 	if err != nil {
 		if err == bolt.ErrTimeout {
 			return nil, errors.New("cannot obtain database lock, database may be in use by another process")
