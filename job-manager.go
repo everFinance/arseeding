@@ -42,7 +42,7 @@ func AssembleId(arid, jobType string) string {
 }
 
 func (m *JobManager) InitJobManager(boltDb *Store, peersNum int) error {
-	pendingBroadcast, err := boltDb.LoadPendingPool(jobTypeBroadcast, m.cap)
+	pendingBroadcast, err := boltDb.LoadPendingPool(jobTypeBroadcast, -1)
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func (m *JobManager) InitJobManager(boltDb *Store, peersNum int) error {
 		}
 	}
 
-	pendingSync, err := boltDb.LoadPendingPool(jobTypeSync, m.cap)
+	pendingSync, err := boltDb.LoadPendingPool(jobTypeSync, -1)
 	if err != nil {
 		return err
 	}
