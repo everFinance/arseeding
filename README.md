@@ -60,16 +60,12 @@ sync and broadcast api:
 `getCacheJobs` return all pending jobs
 
 ## Example
-[everPay rollup txs sync](https://github.com/everFinance/arseeding/tree/main/example/everpay-sync): get all everpay rollup txIds from the arweave node, and then post to the arseeding service using the `sync` interface.   
+[everPay rollup txs sync](https://github.com/everFinance/arseeding/tree/main/example/everpay-sync): get all everpay rollup txIds from the arweave node, and then post to the arseeding service using the `sync` interface.
 
+## Notes
+1. The tx and data must exist in the arseeding service before using broadcast. In other words, if there is no tx and data in arseeding, use sync to synchronize the data before using broadcast.
+2. The broadcast job needs to commit tx and data to each node, so each broadcast job takes a long time to execute. So the  user checks the number of successful broadcast nodes by `getJob`, and then actively stops the broadcast job by `killJob`. 
 
-
-
-
-
-
-
-
-
-
-
+## Licenses
+Users are requested to comply with their own license   
+[Apache License](https://github.com/everFinance/arseeding/blob/main/LICENSE)
