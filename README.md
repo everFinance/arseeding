@@ -3,7 +3,7 @@ ARseeding is a lightweight arweave data seed node. It is mainly used to synchron
 
 Important: arseeding is compatible with all http api interfaces of arweave node.
 
-## code introduction
+## Introduction
 - `cmd` is the service starter
 - `api-job` implements the service logic of the api interface for sync and broadcast.
 - `api` register api and compatible with the implementation logic of all api's of arweave node.
@@ -12,7 +12,7 @@ Important: arseeding is compatible with all http api interfaces of arweave node.
 - `service` logic related to the submitTx and submitChunk interfaces.
 - `store` bolt db wrap.
 
-## start
+## Run
 ```
 go run cmd/main.go
 ```
