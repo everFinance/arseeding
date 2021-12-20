@@ -108,5 +108,10 @@ func (s *Server) getJob(c *gin.Context) {
 }
 
 func (s *Server) getCacheJobs(c *gin.Context) {
-	c.JSON(http.StatusOK, s.jobManager.GetJobs())
+	jobMap := s.jobManager.GetJobs()
+	total := len(jobMap)
+	c.JSON(http.StatusOK, gin.H{
+		"total": total,
+		"jobs":  jobMap,
+	})
 }

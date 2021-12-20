@@ -15,12 +15,12 @@ const (
 )
 
 type JobStatus struct {
-	ArId           string `json:"arid"`
+	ArId           string `json:"arId"`
 	JobType        string `json:"jobType"`
 	CountSuccessed int64  `json:"countSuccessed"`
 	CountFailed    int64  `json:"countFailed"`
 	TotalNodes     int    `json:"totalNodes"`
-	Close          bool
+	Close          bool   `json:"close"`
 }
 
 type JobManager struct {
