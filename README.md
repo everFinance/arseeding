@@ -3,7 +3,7 @@ ARseeding is a lightweight arweave data seed node. It is mainly used to synchron
 
 Important: arseeding is compatible with all http api interfaces of arweave node.
 
-# code introduction
+## code introduction
 - `cmd` is the service starter
 - `api-job` implements the service logic of the api interface for sync and broadcast.
 - `api` register api and compatible with the implementation logic of all api's of arweave node.
@@ -12,11 +12,11 @@ Important: arseeding is compatible with all http api interfaces of arweave node.
 - `service` logic related to the submitTx and submitChunk interfaces.
 - `store` bolt db wrap.
 
-# start
+## start
 ```
 go run cmd/main.go
 ```
-# API
+## API
 arseeding is compatible with all http api interfaces of arweave node:
 ```
     v1.POST("tx", s.submitTx)
@@ -58,6 +58,10 @@ sync and broadcast api:
 `killJob` This interface can be used to stop a broadcast job when enough nodes have been broadcast via `getJob`   
 `jobType` is 'sync' or 'broadcast'   
 `getCacheJobs` return all pending jobs
+
+## Example
+[everPay rollup txs sync](https://github.com/everFinance/arseeding/tree/main/example/everpay-sync): get all everpay rollup txIds from the arweave node, and then post to the arseeding service using the `sync` interface.   
+
 
 
 
