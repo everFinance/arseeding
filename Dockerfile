@@ -6,7 +6,6 @@ ENV GOPATH /go
 
 WORKDIR /arseeding
 
-# 外挂bolt文件夹
 VOLUME ["/arseeding/data"]
 
 COPY cmd/arseeding /arseeding/arseeding
