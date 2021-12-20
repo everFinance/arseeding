@@ -3,12 +3,13 @@ module github.com/everFinance/arseeding
 go 1.15
 
 require (
-	github.com/everFinance/goar v1.3.5-0.20211217095737-9d9e8797e029
+	github.com/everFinance/goar v1.3.5
 	github.com/getsentry/sentry-go v0.11.0
 	github.com/gin-gonic/gin v1.7.4
 	github.com/go-co-op/gocron v1.11.0
 	github.com/inconshreveable/log15 v0.0.0-20201112154412-8562bdadbbac
 	github.com/jinzhu/now v1.1.4 // indirect
+	github.com/labstack/gommon v0.3.0
 	github.com/nbio/st v0.0.0-20140626010706-e9e8d9816f32 // indirect
 	github.com/panjf2000/ants/v2 v2.4.7
 	github.com/stretchr/testify v1.7.0

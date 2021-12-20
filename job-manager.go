@@ -210,8 +210,29 @@ func (j *JobManager) BroadcastData(arId, jobType string, tx *types.Transaction, 
 			continue
 		}
 
+		// post tx
+		if !txPosted {
+			status, code, _ := pNode.SubmitTransaction(&types.Transaction{
+				Format:    tx.Format,
+				ID:        tx.ID,
+				LastTx:    tx.LastTx,
+				Owner:     tx.Owner,
+				Tags:      tx.Tags,
+				Target:    tx.Target,
+				Quantity:  tx.Quantity,
+				Data:      "",
+				DataSize:  tx.DataSize,
+				DataRoot:  tx.DataRoot,
+				Reward:    tx.Reward,
+				Signature: tx.Signature,
+			})
+			if code != 200 {
+				log.Error("BroadcastData submit tx failed", "err", status, "arId", arId)
+			}
+		}
+
 		// Whether to broadcast txMeta
-		uploader.TxPosted = txPosted
+		uploader.TxPosted = true
 		if err = uploader.Once(); err != nil {
 			log.Error("uploader.Once()", "err", err)
 			j.IncFailed(arId, jobType)
