@@ -277,7 +277,7 @@ func (s *Store) LoadPendingPool(jobType string, num int) ([]string, error) {
 		return nil, err
 	}
 
-	arIds := make([]string, 0, num)
+	arIds := make([]string, 0)
 	err = s.BoltDb.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(bktName)
 
