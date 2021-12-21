@@ -96,11 +96,11 @@ Arseeding service can not include this tx, so will return 'not found' error msg.
 
 2. So we need to use arseeding `sync` api
 ```
-curl --location --request POST 'http://127.0.0.1:8080/job/sync/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
+curl POST 'http://127.0.0.1:8080/job/sync/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
 ```
 3. Use `getJob` api to watcher the job status
 ```
- curl --location --request GET 'http://127.0.0.1:8080/job/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/sync'
+ curl GET 'http://127.0.0.1:8080/job/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/sync'
 ```
 resp:
 ```
@@ -122,11 +122,11 @@ If you want your tx or data to be broadcast to all nodes, the bardcast function 
 e.g:
 1. Register for tx that require broadcasting
 ```
-curl --location --request POST 'http://127.0.0.1:8080/job/broadcast/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
+curl POST 'http://127.0.0.1:8080/job/broadcast/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
 ```
 2. Use `getJob` api to watcher the job status
 ```
-curl --location --request GET 'http://127.0.0.1:8080/job/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/broadcast'
+curl GET 'http://127.0.0.1:8080/job/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/broadcast'
 ```
 resp:
 ```
