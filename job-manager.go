@@ -161,13 +161,13 @@ func (m *JobManager) GetJobs() (jobs map[string]JobStatus) {
 }
 
 func (j *JobManager) GetUnconfirmedTxFromPeers(arId, jobType string, peers []string) (*types.Transaction, error) {
-	pNode := goar.NewShortConn()
+	pNode := goar.NewTempConn()
 	for _, peer := range peers {
 		if j.IsClosed(arId, jobType) {
 			return nil, errors.New("job closed")
 		}
 
-		pNode.SetShortConnUrl("http://" + peer)
+		pNode.SetTempConnUrl("http://" + peer)
 		tx, err := pNode.GetUnconfirmedTx(arId)
 		if err != nil {
 			fmt.Printf("get tx error:%v, peer: %s, arTx: %s\n", err, peer, arId)
@@ -181,12 +181,12 @@ func (j *JobManager) GetUnconfirmedTxFromPeers(arId, jobType string, peers []str
 }
 
 func (j *JobManager) GetTxDataFromPeers(arId, jobType string, peers []string) ([]byte, error) {
-	pNode := goar.NewShortConn()
+	pNode := goar.NewTempConn()
 	for _, peer := range peers {
 		if j.IsClosed(arId, jobType) {
 			return nil, errors.New("job closed")
 		}
-		pNode.SetShortConnUrl("http://" + peer)
+		pNode.SetTempConnUrl("http://" + peer)
 		data, err := pNode.DownloadChunkData(arId)
 		if err != nil {
 			log.Error("get tx data", "err", err, "peer", peer)
@@ -201,9 +201,9 @@ func (j *JobManager) GetTxDataFromPeers(arId, jobType string, peers []string) ([
 }
 
 func (j *JobManager) BroadcastData(arId, jobType string, tx *types.Transaction, peers []string, txPosted bool) error {
-	pNode := goar.NewShortConn()
+	pNode := goar.NewTempConn()
 	for _, peer := range peers {
-		pNode.SetShortConnUrl("http://" + peer)
+		pNode.SetTempConnUrl("http://" + peer)
 		uploader, err := goar.CreateUploader(pNode, tx, nil)
 		if err != nil {
 			j.IncFailed(arId, jobType)

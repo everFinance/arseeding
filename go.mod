@@ -3,7 +3,7 @@ module github.com/everFinance/arseeding
 go 1.15
 
 require (
-	github.com/everFinance/goar v1.3.6
+	github.com/everFinance/goar v1.3.8
 	github.com/getsentry/sentry-go v0.11.0
 	github.com/gin-gonic/gin v1.7.4
 	github.com/go-co-op/gocron v1.11.0
