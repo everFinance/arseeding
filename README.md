@@ -27,9 +27,7 @@ PORT=':8080' ./build/arseeding
 
 ### Docker build
 ```
-cd cmd/
-GOOS=linux GOARCH=amd64 go build -o arseeding
-cd ..
+GOOS=linux GOARCH=amd64 go build -o ./cmd/arseeding ./cmd
 docker build .
 ```
 
