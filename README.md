@@ -16,6 +16,19 @@ Important: arseeding is compatible with all http api interfaces of arweave node.
 ```
 PORT=':8080' go run cmd/main.go
 ```
+
+## Development
+### Build & Run
+
+```
+make all
+PORT=':8080' ./build/arseeding
+```
+
+### Docker
+
+TODO
+
 ## API
 arseeding is compatible with all http api interfaces of arweave node:
 ```
@@ -81,26 +94,29 @@ arClient := goar.NewClient(arNode)
 ```
 ### Different
 Arseeding is a light node, so it does not store all the data in the arweave network, so when requesting tx or tx data, it is likely that the data will not be available, even if the data already exists in the arweave network.    
-In the case we use the `sync` interface of arseeding to synchronize the tx to the service.   
+In the case we use the `sync` api of arseeding to synchronize the tx to the service.   
 e.g:
 1. User want to get a tx
 ``` 
  arId := "yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8"
+
  // connect arseeding server by goar sdk
  arClient := goar.NewClient("http://127.0.0.1:8080") 
+ 
  tx, err := arClient.GetTransactionById(arId)
  // or 
  data, err := arClient.GetTransactionData(arId)
+ // err: not found
 ```
-Arseeding service can not include this tx, so will return 'not found' error msg.   
+By default arseeding does not contain this data, so will return 'not found' error msg.   
 
 2. So we need to use arseeding `sync` api
 ```
-curl POST 'http://127.0.0.1:8080/job/sync/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
+curl --request POST 'http://127.0.0.1:8080/job/sync/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
 ```
 3. Use `getJob` api to watcher the job status
 ```
- curl GET 'http://127.0.0.1:8080/job/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/sync'
+ curl 'http://127.0.0.1:8080/job/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/sync'
 ```
 resp:
 ```
