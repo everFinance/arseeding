@@ -146,7 +146,7 @@ resp:
 
 3. If the goal is to successfully broadcast to 200 nodes, then this broadcast task can be closed
 ```
-curl --location --request POST 'http://127.0.0.1:8080/job/kill/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/broadcast'
+curl POST 'http://127.0.0.1:8080/job/kill/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/broadcast'
 ```
 
 ## Example
