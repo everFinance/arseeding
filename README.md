@@ -1,7 +1,8 @@
 # Arseeding
 Arseeding is a lightweight arweave data seed node. It is mainly used to synchronize, cache and broadcast transaction && data.
 
-Important: arseeding is compatible with all http api interfaces of arweave node.
+Important: arseeding is compatible with all http api interfaces of arweave node.   
+Related articles: [arseeding server design](https://medium.com/everfinance/arseeding-server-design-4e684176555a)
 
 ## Introduction
 - `cmd` is the service starter
