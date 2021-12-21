@@ -138,7 +138,7 @@ If you want your tx or data to be broadcast to all nodes, the bardcast function 
 e.g:
 1. Register for tx that require broadcasting
 ```
-curl POST 'http://127.0.0.1:8080/job/broadcast/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
+curl --request POST 'http://127.0.0.1:8080/job/broadcast/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
 ```
 2. Use `getJob` api to watcher the job status
 ```
@@ -162,7 +162,7 @@ resp:
 
 3. If the goal is to successfully broadcast to 200 nodes, then this broadcast task can be closed
 ```
-curl POST 'http://127.0.0.1:8080/job/kill/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/broadcast'
+curl --request POST 'http://127.0.0.1:8080/job/kill/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/broadcast'
 ```
 
 ## Example
