@@ -128,12 +128,12 @@ func (s *Server) getTxOffset(c *gin.Context) {
 	}
 	txMeta, err := s.store.LoadTxMeta(arId)
 	if err != nil {
-		c.JSON(404, "not found")
+		c.Data(404, "text/html; charset=utf-8", []byte("Not Found"))
 		return
 	}
 	offset, err := s.store.LoadTxDataEndOffSet(txMeta.DataRoot, txMeta.DataSize)
 	if err != nil {
-		c.JSON(404, "not found")
+		c.Data(404, "text/html; charset=utf-8", []byte("Not Found"))
 		return
 	}
 
@@ -155,7 +155,7 @@ func (s *Server) getChunk(c *gin.Context) {
 	chunk, err := s.store.LoadChunk(chunkOffset)
 	if err != nil {
 		if err == ErrNotExist {
-			c.JSON(404, "not found")
+			c.Data(404, "text/html; charset=utf-8", []byte("Not Found"))
 			return
 		}
 		c.JSON(http.StatusBadRequest, err.Error())
@@ -169,7 +169,7 @@ func (s *Server) getTx(c *gin.Context) {
 	arTx, err := s.store.LoadTxMeta(arid)
 	if err != nil {
 		if err == ErrNotExist {
-			c.JSON(404, "not found")
+			c.Data(404, "text/html; charset=utf-8", []byte("Not Found"))
 			return
 		}
 		c.JSON(http.StatusBadRequest, err.Error())
