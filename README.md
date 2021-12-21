@@ -25,9 +25,13 @@ make all
 PORT=':8080' ./build/arseeding
 ```
 
-### Docker
-
-TODO
+### Docker build
+```
+cd cmd/
+GOOS=linux GOARCH=amd64 go build -o arseeding
+cd ..
+docker build .
+```
 
 ## API
 arseeding is compatible with all http api interfaces of arweave node:
@@ -77,7 +81,7 @@ sync and broadcast api:
 
 ## Usage
 ### compatible arweave sdk
-arweave-js sdk
+[arweave-js](https://github.com/ArweaveTeam/arweave-js) sdk
 ```
 import Arweave from 'arweave';
 
@@ -87,7 +91,7 @@ const arweave = Arweave.init({
     protocol: 'http'
 });
 ```
-goar sdk
+[goar](https://github.com/everFinance/goar) sdk
 ```
 arNode := "http://127.0.0.1:8080" // arseeding service url
 arClient := goar.NewClient(arNode) 
