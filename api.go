@@ -193,17 +193,17 @@ func (s *Server) getTxField(c *gin.Context) {
 
 	switch field {
 	case "id":
-		c.JSON(http.StatusOK, txMeta.ID)
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.ID))
 	case "last_tx":
-		c.JSON(http.StatusOK, txMeta.LastTx)
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.LastTx))
 	case "owner":
-		c.JSON(http.StatusOK, txMeta.Owner)
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Owner))
 	case "tags":
 		c.JSON(http.StatusOK, txMeta.Tags)
 	case "target":
-		c.JSON(http.StatusOK, txMeta.Target)
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Target))
 	case "quantity":
-		c.JSON(http.StatusOK, txMeta.Quantity)
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Quantity))
 	case "data":
 		data, err := txMetaData(txMeta, s.store)
 		if err != nil {
@@ -218,7 +218,6 @@ func (s *Server) getTxField(c *gin.Context) {
 			c.JSON(400, err.Error())
 			return
 		}
-		// c.Data(200,"text/html; charset=utf-8",data)
 		typ := strings.Split(field, ".")[1]
 		c.Data(200, fmt.Sprintf("application/%s; charset=utf-8", typ), data)
 
@@ -238,15 +237,15 @@ func (s *Server) getTxField(c *gin.Context) {
 		}
 		c.Data(200, "video/mpeg4; charset=utf-8", data)
 	case "data_root":
-		c.JSON(http.StatusOK, txMeta.DataRoot)
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.DataRoot))
 	case "data_size":
-		c.JSON(http.StatusOK, txMeta.DataSize)
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.DataSize))
 	case "reward":
-		c.JSON(http.StatusOK, txMeta.Reward)
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Reward))
 	case "signature":
-		c.JSON(http.StatusOK, txMeta.Signature)
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Signature))
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_field"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": 400, "error": "invalid_field"})
 	}
 }
 
