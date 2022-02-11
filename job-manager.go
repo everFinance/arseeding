@@ -46,6 +46,9 @@ func (m *JobManager) InitJobManager(boltDb *Store, peersNum int) error {
 	if err != nil {
 		return err
 	}
+	if len(pendingBroadcast) > m.cap {
+		m.cap = len(pendingBroadcast)
+	}
 	for _, id := range pendingBroadcast {
 		if err := m.RegisterJob(id, jobTypeBroadcast, peersNum); err != nil {
 			return err
@@ -55,6 +58,9 @@ func (m *JobManager) InitJobManager(boltDb *Store, peersNum int) error {
 	pendingSync, err := boltDb.LoadPendingPool(jobTypeSync, -1)
 	if err != nil {
 		return err
+	}
+	if len(pendingSync) > m.cap {
+		m.cap = len(pendingSync)
 	}
 	for _, id := range pendingSync {
 		if err := m.RegisterJob(id, jobTypeSync, peersNum); err != nil {

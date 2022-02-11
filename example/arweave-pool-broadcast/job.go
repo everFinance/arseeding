@@ -92,7 +92,7 @@ func (b *BcPool) updatePendingTxIds() {
 	}
 }
 
-func (b *BcPool) checkBroadcastTxStatus(broadcastNodeNum int64) {
+func (b *BcPool) checkBroadcastTxStatus() {
 	needCheckBroadcastTxIds := make([]string, 0)
 	b.mapLock.RLock()
 	for txId, finished := range b.broadcastMap {
@@ -112,7 +112,7 @@ func (b *BcPool) checkBroadcastTxStatus(broadcastNodeNum int64) {
 			log.Error("example.GetJob(arId,\"broadcast\",b.seedCli)", "err", err, "arId", arId)
 			continue
 		}
-		if jobStatus.CountSuccessed >= broadcastNodeNum {
+		if jobStatus.CountSuccessed >= 10 {
 			// close job
 			if err := example.KillJob(arId, "broadcast", b.seedCli); err != nil {
 				log.Error("example.KillJob(arId,\"broadcast\",b.seedCli)", "err", err, "arId", arId)
