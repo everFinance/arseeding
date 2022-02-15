@@ -57,6 +57,8 @@ func (s *Server) runAPI(port string) {
 		v1.POST("/job/kill/:arid/:jobType", s.killJob)
 		v1.GET("/job/:arid/:jobType", s.getJob)
 		v1.GET("/cache/jobs", s.getCacheJobs)
+
+		v1.POST("/broadcast/unconfirmed_tx", s.submitUnconfirmedTx)
 	}
 
 	if err := r.Run(port); err != nil {
@@ -271,6 +273,9 @@ func getData(dataRoot, dataSize string, db *Store) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if size == 0 {
+		return []byte{}, nil
+	}
 
 	data := make([]byte, 0, size)
 	txDataEndOffset, err := db.LoadTxDataEndOffSet(dataRoot, dataSize)
@@ -299,4 +304,29 @@ func proxyArweaveGateway(c *gin.Context) {
 	proxy := httputil.NewSingleHostReverseProxy(proxyUrl)
 	proxy.ServeHTTP(c.Writer, c.Request)
 	c.Abort()
+}
+
+func (s *Server) submitUnconfirmedTx(c *gin.Context) {
+	arTx := types.Transaction{}
+	if c.Request.Body == nil {
+		c.JSON(http.StatusBadRequest, "chunk data can not be null")
+		return
+	}
+	by, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+	defer c.Request.Body.Close()
+
+	if err := json.Unmarshal(by, &arTx); err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if err := s.broadcastUnconfirmedTx(arTx); err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, "ok")
 }

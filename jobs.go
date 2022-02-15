@@ -8,12 +8,15 @@ import (
 	"github.com/panjf2000/ants/v2"
 	"math/big"
 	"sync"
+	"time"
 )
 
 func (s *Server) runJobs() {
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updatePeers)
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runBroadcastJobs)
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runSyncJobs)
+
+	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseJobs)
 
 	s.scheduler.StartAsync()
 }
@@ -31,7 +34,7 @@ func (s *Server) updatePeers() {
 }
 
 func (s *Server) runBroadcastJobs() {
-	arIds, err := s.store.LoadPendingPool(jobTypeBroadcast, 20)
+	arIds, err := s.store.LoadPendingPool(jobTypeBroadcast, 50)
 	if err != nil {
 		log.Error("s.store.LoadPendingPool(jobTypeBroadcast, 20)", "err", err)
 		return
@@ -42,14 +45,14 @@ func (s *Server) runBroadcastJobs() {
 
 	log.Debug("load jobTypeBroadcast pending pool", "number", len(arIds))
 	var wg sync.WaitGroup
-	p, _ := ants.NewPoolWithFunc(10, func(i interface{}) {
+	p, _ := ants.NewPoolWithFunc(50, func(i interface{}) {
 		defer wg.Done()
 		arId := i.(string)
 		if s.jobManager.IsClosed(arId, jobTypeBroadcast) {
 			return
 		}
-		job := s.jobManager.GetJob(arId, jobTypeBroadcast)
-		if job == nil {
+		if err := s.jobManager.JobBeginSet(arId, jobTypeBroadcast, len(s.peers)); err != nil {
+			log.Error("s.jobManager.JobBeginSet(arId, jobTypeBroadcast)", "err", err, "arId", arId)
 			return
 		}
 
@@ -69,16 +72,13 @@ func (s *Server) runBroadcastJobs() {
 	// save jobStatus to db and unregister job
 	for _, arId := range arIds {
 		js := s.jobManager.GetJob(arId, jobTypeBroadcast)
-		if js == nil {
-			panic(err)
+		if js != nil {
+			if err := s.store.SaveJobStatus(jobTypeBroadcast, arId, *js); err != nil {
+				log.Error("s.store.SaveJobStatus(jobTypeBroadcast,arId,*js)", "err", err, "arId", arId)
+			}
 		}
-		if err := s.store.SaveJobStatus(jobTypeBroadcast, arId, *js); err != nil {
-			log.Error("s.store.SaveJobStatus(jobTypeBroadcast,arId,*js)", "err", err, "arId", arId)
-			panic(err)
-		} else {
-			// unregister job
-			s.jobManager.UnregisterJob(arId, jobTypeBroadcast)
-		}
+		// unregister job
+		s.jobManager.UnregisterJob(arId, jobTypeBroadcast)
 	}
 
 	// remove pending pool
@@ -91,7 +91,7 @@ func (s *Server) runBroadcastJobs() {
 }
 
 func (s *Server) runSyncJobs() {
-	arIds, err := s.store.LoadPendingPool(jobTypeSync, 50)
+	arIds, err := s.store.LoadPendingPool(jobTypeSync, 100)
 	if err != nil {
 		log.Error("s.store.LoadPendingPool(jobTypeSync, 50)", "err", err)
 		return
@@ -103,14 +103,14 @@ func (s *Server) runSyncJobs() {
 
 	log.Debug("load jobTypeSync pending pool", "number", len(arIds))
 	var wg sync.WaitGroup
-	p, _ := ants.NewPoolWithFunc(20, func(i interface{}) {
+	p, _ := ants.NewPoolWithFunc(100, func(i interface{}) {
 		defer wg.Done()
 		arId := i.(string)
 		if s.jobManager.IsClosed(arId, jobTypeSync) {
 			return
 		}
-		job := s.jobManager.GetJob(arId, jobTypeSync)
-		if job == nil {
+		if err := s.jobManager.JobBeginSet(arId, jobTypeSync, len(s.peers)); err != nil {
+			log.Error("s.jobManager.JobBeginSet(arId, jobTypeSync)", "err", err, "arId", arId)
 			return
 		}
 
@@ -176,10 +176,7 @@ func (s *Server) processBroadcastJob(arId string) (err error) {
 	utils.PrepareChunks(txMeta, txData)
 	txMeta.Data = utils.Base64Encode(txData)
 
-	if err := s.jobManager.BroadcastData(arId, jobTypeBroadcast, txMeta, s.peers, txMetaPosted); err != nil {
-		log.Error("s.jobManager.BroadcastData(arId,txMeta,s.peers)", "err", err)
-		return err
-	}
+	s.jobManager.BroadcastData(arId, jobTypeBroadcast, txMeta, s.peers, txMetaPosted)
 	return
 }
 
@@ -247,19 +244,22 @@ func (s *Server) processSyncJob(arId string) (err error) {
 		}
 	}
 	// store data to local
-	if len(data) == 0 {
-		return fmt.Errorf("data can not be null; arId: %s", arId)
-	}
-	chunks, err := generateChunks(*arTxMeta, data)
-	if err != nil {
-		return err
-	}
-	// save chunks
-	for _, chunk := range chunks {
-		if err := storeChunk(*chunk, s.store); err != nil {
-			log.Error("storeChunk(*chunk,s.store)", "err", err, "arId", arId, "chunk", *chunk)
-			return err
+	return setTxDataChunks(*arTxMeta, data, s.store)
+}
+
+func (s *Server) watcherAndCloseJobs() {
+	jobs := s.jobManager.GetJobs()
+	now := time.Now().Unix()
+	for _, job := range jobs {
+		if job.Close || job.Timestamp == 0 { // timestamp == 0  means do not start
+			continue
+		}
+		// spend time not more than 5 minutes
+		if now-job.Timestamp > 5*60 {
+			if err := s.jobManager.CloseJob(job.ArId, job.JobType); err != nil {
+				log.Error("watcherAndCloseJobs closeJob", "err", err, "jobId", AssembleId(job.ArId, job.JobType))
+				continue
+			}
 		}
 	}
-	return nil
 }

@@ -36,7 +36,7 @@ func New(boltDirPath string) *Server {
 	}
 
 	jobmg := NewJobManager(500)
-	if err := jobmg.InitJobManager(boltDb, len(peers)); err != nil {
+	if err := jobmg.InitJobManager(boltDb); err != nil {
 		panic(err)
 	}
 
