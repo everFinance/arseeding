@@ -140,6 +140,7 @@ func (s *Server) processBroadcastJob(arId string) (err error) {
 	_, err = s.arCli.GetTransactionStatus(arId)
 	if err == goar.ErrPendingTx || err == goar.ErrNotFound {
 		txMetaPosted = false
+		err = nil
 	}
 	// generate tx chunks
 	utils.PrepareChunks(txMeta, txData)

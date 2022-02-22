@@ -80,6 +80,7 @@ func (m *JobManager) InitJobManager(boltDb *Store) error {
 	m.broadcastSubmitTxChan = make(chan string, len(pendingBroadcastSubmitTx))
 	for _, arId := range pendingBroadcastSubmitTx {
 		m.PutToBroadcastSubmitTxChan(arId)
+		m.AddJob(arId, jobTypeSubmitTxBroadcast)
 	}
 	return nil
 }
