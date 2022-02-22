@@ -30,14 +30,15 @@ var (
 	TxMetaBucket          = []byte("tx-meta-bucket")            // key: txId, val: arTx; not include data
 	ConstantsBucket       = []byte("constants-bucket")
 
-	// pending pool
+	// pending pool bucketName
+	BroadcastJobsPendingPool         = []byte("broadcast-pending-pool")           // key: arId, value: "0x01"
+	BroadcastSubmitTxJobsPendingPool = []byte("broadcast-submit-tx-pending-pool") // key: arId, value: "0x01"
+	SyncJobsPendingPool              = []byte("sync-pending-pool")                // key: arId,value: "0x01"
 
-	BroadcastJobsPendingPool = []byte("broadcast-pending-pool") // key: arId, value: "0x01"
-	SyncJobsPendingPool      = []byte("sync-pending-pool")      // key: arId,value: "0x01"
-
-	// save jobStatus
-	BroadcastJobStatus = []byte("broadcast-job-status") // key: arId, value jobStatus
-	SyncJobStatus      = []byte("sync-job-status")      // key: arId, value jobStatus
+	// save jobStatus bucketName
+	BroadcastJobStatus         = []byte("broadcast-job-status") // key: arId, value jobStatus
+	BroadcastSubmitTxJobStatus = []byte("broadcast-submit-tx-job-status")
+	SyncJobStatus              = []byte("sync-job-status") // key: arId, value jobStatus
 )
 
 type Store struct {
@@ -73,8 +74,10 @@ func NewStore(boltDirPath string) (*Store, error) {
 			TxMetaBucket,
 			ConstantsBucket,
 			BroadcastJobsPendingPool,
+			BroadcastSubmitTxJobsPendingPool,
 			SyncJobsPendingPool,
 			BroadcastJobStatus,
+			BroadcastSubmitTxJobStatus,
 			SyncJobStatus}
 		return createBuckets(tx, bucketNames...)
 	}); err != nil {
@@ -320,6 +323,8 @@ func pendingPoolBktName(jobType string) ([]byte, error) {
 		bktName = SyncJobsPendingPool
 	case jobTypeBroadcast:
 		bktName = BroadcastJobsPendingPool
+	case jobTypeSubmitTxBroadcast:
+		bktName = BroadcastSubmitTxJobsPendingPool
 	default:
 		return nil, fmt.Errorf("not support this jobType: %s", jobType)
 	}
@@ -333,6 +338,8 @@ func jobStatusBktName(jobType string) ([]byte, error) {
 		bktName = BroadcastJobStatus
 	case jobTypeBroadcast:
 		bktName = SyncJobStatus
+	case jobTypeSubmitTxBroadcast:
+		bktName = BroadcastSubmitTxJobStatus
 	default:
 		return nil, fmt.Errorf("not support this jobType: %s", jobType)
 	}

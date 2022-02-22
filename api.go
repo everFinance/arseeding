@@ -1,7 +1,6 @@
 package arseeding
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -57,8 +55,6 @@ func (s *Server) runAPI(port string) {
 		v1.POST("/job/kill/:arid/:jobType", s.killJob)
 		v1.GET("/job/:arid/:jobType", s.getJob)
 		v1.GET("/cache/jobs", s.getCacheJobs)
-
-		v1.POST("/broadcast/unconfirmed_tx", s.submitUnconfirmedTx)
 	}
 
 	if err := r.Run(port); err != nil {
@@ -83,14 +79,11 @@ func (s *Server) submitTx(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := s.processSubmitTx(arTx); err != nil {
+
+	if err := s.broadcastSubmitTx(arTx); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
-
-	// proxy to arweave
-	c.Request.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(by)))
-	proxyArweaveGateway(c)
 }
 
 func (s *Server) submitChunk(c *gin.Context) {
@@ -116,10 +109,6 @@ func (s *Server) submitChunk(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
-
-	// proxy to arweave
-	c.Request.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(by)))
-	proxyArweaveGateway(c)
 }
 
 func (s *Server) getTxOffset(c *gin.Context) {
@@ -297,36 +286,13 @@ func getData(dataRoot, dataSize string, db *Store) ([]byte, error) {
 }
 
 func proxyArweaveGateway(c *gin.Context) {
-	var proxyUrl = new(url.URL)
-	proxyUrl.Scheme = "https"
-	proxyUrl.Host = "arweave.net"
+	directer := func(req *http.Request) {
+		req.URL.Scheme = "https"
+		req.URL.Host = "arweave.net"
+		req.Host = "arweave.net"
+	}
+	proxy := &httputil.ReverseProxy{Director: directer}
 
-	proxy := httputil.NewSingleHostReverseProxy(proxyUrl)
 	proxy.ServeHTTP(c.Writer, c.Request)
 	c.Abort()
-}
-
-func (s *Server) submitUnconfirmedTx(c *gin.Context) {
-	arTx := types.Transaction{}
-	if c.Request.Body == nil {
-		c.JSON(http.StatusBadRequest, "chunk data can not be null")
-		return
-	}
-	by, err := ioutil.ReadAll(c.Request.Body)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
-		return
-	}
-	defer c.Request.Body.Close()
-
-	if err := json.Unmarshal(by, &arTx); err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if err := s.broadcastUnconfirmedTx(arTx); err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, "ok")
 }

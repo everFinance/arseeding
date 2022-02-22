@@ -56,4 +56,5 @@ func New(boltDirPath string) *Server {
 func (s *Server) Run(port string) {
 	go s.runAPI(port)
 	go s.runJobs()
+	go s.BroadcastSubmitTx()
 }
