@@ -81,7 +81,7 @@ func (s *Server) killJob(c *gin.Context) {
 func (s *Server) getJob(c *gin.Context) {
 	arid := c.Param("arid")
 	jobType := c.Param("jobType")
-	if !strings.Contains(jobTypeSync+jobTypeBroadcast, strings.ToLower(jobType)) {
+	if !strings.Contains(jobTypeSync+jobTypeBroadcast+jobTypeSubmitTxBroadcast, strings.ToLower(jobType)) {
 		c.JSON(http.StatusBadRequest, "jobType not exist")
 		return
 	}
