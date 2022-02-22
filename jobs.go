@@ -48,14 +48,6 @@ func (s *Server) runBroadcastJobs() {
 	p, _ := ants.NewPoolWithFunc(50, func(i interface{}) {
 		defer wg.Done()
 		arId := i.(string)
-		if s.jobManager.IsClosed(arId, jobTypeBroadcast) {
-			return
-		}
-		if err := s.jobManager.JobBeginSet(arId, jobTypeBroadcast, len(s.peers)); err != nil {
-			log.Error("s.jobManager.JobBeginSet(arId, jobTypeBroadcast)", "err", err, "arId", arId)
-			return
-		}
-
 		if err := s.processBroadcastJob(arId); err != nil {
 			log.Error("processBroadcastJob", "err", err, "arId", arId)
 			return
@@ -92,14 +84,6 @@ func (s *Server) runSyncJobs() {
 	p, _ := ants.NewPoolWithFunc(100, func(i interface{}) {
 		defer wg.Done()
 		arId := i.(string)
-		if s.jobManager.IsClosed(arId, jobTypeSync) {
-			return
-		}
-		if err := s.jobManager.JobBeginSet(arId, jobTypeSync, len(s.peers)); err != nil {
-			log.Error("s.jobManager.JobBeginSet(arId, jobTypeSync)", "err", err, "arId", arId)
-			return
-		}
-
 		if err := s.processSyncJob(arId); err != nil {
 			log.Error("processSyncJob", "err", err, "arId", arId)
 			return
@@ -121,6 +105,16 @@ func (s *Server) runSyncJobs() {
 }
 
 func (s *Server) processBroadcastJob(arId string) (err error) {
+	// job manager set
+	if s.jobManager.IsClosed(arId, jobTypeBroadcast) {
+		log.Warn("broadcast job was closed", "arId", arId)
+		return
+	}
+	if err = s.jobManager.JobBeginSet(arId, jobTypeBroadcast, len(s.peers)); err != nil {
+		log.Error("s.jobManager.JobBeginSet(arId, jobTypeBroadcast)", "err", err, "arId", arId)
+		return
+	}
+
 	if !s.store.IsExistTxMeta(arId) {
 		return ErrNotExist
 	}
@@ -151,6 +145,15 @@ func (s *Server) processBroadcastJob(arId string) (err error) {
 }
 
 func (s *Server) processSyncJob(arId string) (err error) {
+	// 0. job manager set
+	if s.jobManager.IsClosed(arId, jobTypeSync) {
+		return
+	}
+	if err := s.jobManager.JobBeginSet(arId, jobTypeSync, len(s.peers)); err != nil {
+		log.Error("s.jobManager.JobBeginSet(arId, jobTypeSync)", "err", err, "arId", arId)
+		return
+	}
+
 	// 1. sync arTxMeta
 	arTxMeta := &types.Transaction{}
 	arTxMeta, err = s.store.LoadTxMeta(arId)
