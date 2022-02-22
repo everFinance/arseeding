@@ -149,7 +149,7 @@ func (s *Server) processSyncJob(arId string) (err error) {
 	if s.jobManager.IsClosed(arId, jobTypeSync) {
 		return
 	}
-	if err := s.jobManager.JobBeginSet(arId, jobTypeSync, len(s.peers)); err != nil {
+	if err = s.jobManager.JobBeginSet(arId, jobTypeSync, len(s.peers)); err != nil {
 		log.Error("s.jobManager.JobBeginSet(arId, jobTypeSync)", "err", err, "arId", arId)
 		return
 	}
