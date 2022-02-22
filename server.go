@@ -36,7 +36,7 @@ func New(boltDirPath string) *Server {
 	}
 
 	jobmg := NewJobManager(500)
-	if err := jobmg.InitJobManager(boltDb, len(peers)); err != nil {
+	if err := jobmg.InitJobManager(boltDb); err != nil {
 		panic(err)
 	}
 
@@ -56,4 +56,5 @@ func New(boltDirPath string) *Server {
 func (s *Server) Run(port string) {
 	go s.runAPI(port)
 	go s.runJobs()
+	go s.BroadcastSubmitTx()
 }

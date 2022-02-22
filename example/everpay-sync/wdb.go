@@ -45,9 +45,9 @@ func (w *Wdb) GetArIds(fromId int) ([]RollupArId, error) {
 	return rollupTxs, err
 }
 
-func (w *Wdb) GetLastPostedTx() (RollupArId, error) {
+func (w *Wdb) GetLastPostTx() (RollupArId, error) {
 	tx := RollupArId{}
-	err := w.Db.Model(&RollupArId{}).Where("post = ?", true).Order("id desc").Limit(1).Scan(&tx).Error
+	err := w.Db.Model(&RollupArId{}).Order("id desc").Limit(1).Scan(&tx).Error
 	if err == gorm.ErrRecordNotFound {
 		return tx, nil
 	}

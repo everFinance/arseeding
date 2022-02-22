@@ -7,11 +7,13 @@ import (
 	"github.com/everFinance/goar/types"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
-	jobTypeBroadcast = "broadcast"
-	jobTypeSync      = "sync"
+	jobTypeBroadcast         = "broadcast"           // include tx and tx data
+	jobTypeSubmitTxBroadcast = "submit-tx-broadcast" //  not include tx data
+	jobTypeSync              = "sync"
 )
 
 type JobStatus struct {
@@ -20,20 +22,23 @@ type JobStatus struct {
 	CountSuccessed int64  `json:"countSuccessed"`
 	CountFailed    int64  `json:"countFailed"`
 	TotalNodes     int    `json:"totalNodes"`
+	Timestamp      int64  `json:"timestamp"` // begin timestamp
 	Close          bool   `json:"close"`
 }
 
 type JobManager struct {
-	cap    int
-	status map[string]*JobStatus // key: jobType-arId
-	locker sync.RWMutex
+	cap                   int
+	status                map[string]*JobStatus // key: jobType-arId
+	broadcastSubmitTxChan chan string
+	locker                sync.RWMutex
 }
 
 func NewJobManager(cap int) *JobManager {
 	return &JobManager{
-		cap:    cap,
-		status: make(map[string]*JobStatus),
-		locker: sync.RWMutex{},
+		cap:                   cap,
+		status:                make(map[string]*JobStatus),
+		broadcastSubmitTxChan: make(chan string),
+		locker:                sync.RWMutex{},
 	}
 }
 
@@ -41,13 +46,16 @@ func AssembleId(arid, jobType string) string {
 	return strings.ToUpper(jobType) + "-" + arid
 }
 
-func (m *JobManager) InitJobManager(boltDb *Store, peersNum int) error {
+func (m *JobManager) InitJobManager(boltDb *Store) error {
 	pendingBroadcast, err := boltDb.LoadPendingPool(jobTypeBroadcast, -1)
 	if err != nil {
 		return err
 	}
+	if len(pendingBroadcast) > m.cap {
+		m.cap = len(pendingBroadcast)
+	}
 	for _, id := range pendingBroadcast {
-		if err := m.RegisterJob(id, jobTypeBroadcast, peersNum); err != nil {
+		if err := m.RegisterJob(id, jobTypeBroadcast); err != nil {
 			return err
 		}
 	}
@@ -56,15 +64,28 @@ func (m *JobManager) InitJobManager(boltDb *Store, peersNum int) error {
 	if err != nil {
 		return err
 	}
+	if len(pendingSync) > m.cap {
+		m.cap = len(pendingSync)
+	}
 	for _, id := range pendingSync {
-		if err := m.RegisterJob(id, jobTypeSync, peersNum); err != nil {
+		if err := m.RegisterJob(id, jobTypeSync); err != nil {
 			return err
 		}
+	}
+
+	pendingBroadcastSubmitTx, err := boltDb.LoadPendingPool(jobTypeSubmitTxBroadcast, -1)
+	if err != nil {
+		return err
+	}
+	m.broadcastSubmitTxChan = make(chan string, len(pendingBroadcastSubmitTx))
+	for _, arId := range pendingBroadcastSubmitTx {
+		m.PutToBroadcastSubmitTxChan(arId)
+		m.AddJob(arId, jobTypeSubmitTxBroadcast)
 	}
 	return nil
 }
 
-func (m *JobManager) RegisterJob(arid, jobType string, totalNodes int) (err error) {
+func (m *JobManager) RegisterJob(arid, jobType string) (err error) {
 	if m.exist(arid, jobType) {
 		return errors.New("exist job")
 	}
@@ -76,13 +97,7 @@ func (m *JobManager) RegisterJob(arid, jobType string, totalNodes int) (err erro
 		err = fmt.Errorf("fully loaded")
 		return
 	}
-
-	id := AssembleId(arid, jobType)
-	m.status[id] = &JobStatus{
-		ArId:       arid,
-		JobType:    jobType,
-		TotalNodes: totalNodes,
-	}
+	m.AddJob(arid, jobType)
 	return
 }
 
@@ -115,6 +130,28 @@ func (m *JobManager) UnregisterJob(arid, jobType string) {
 	delete(m.status, id)
 }
 
+func (m *JobManager) AddJob(arid, jobType string) {
+	id := AssembleId(arid, jobType)
+	m.status[id] = &JobStatus{
+		ArId:    arid,
+		JobType: jobType,
+	}
+	return
+}
+
+func (m *JobManager) JobBeginSet(arid, jobType string, totalNodes int) error {
+	m.locker.RLock()
+	defer m.locker.RUnlock()
+	id := AssembleId(arid, jobType)
+	job, ok := m.status[id]
+	if !ok {
+		return errors.New("not found")
+	}
+	job.Timestamp = time.Now().Unix()
+	job.TotalNodes = totalNodes
+	return nil
+}
+
 func (m *JobManager) GetJob(arid, jobType string) *JobStatus {
 	m.locker.RLock()
 	defer m.locker.RUnlock()
@@ -140,6 +177,7 @@ func (m *JobManager) CloseJob(arid, jobType string) error {
 	}
 	return nil
 }
+
 func (m *JobManager) IsClosed(arid, jobType string) bool {
 	id := AssembleId(arid, jobType)
 	job, ok := m.status[id]
@@ -200,7 +238,43 @@ func (j *JobManager) GetTxDataFromPeers(arId, jobType string, peers []string) ([
 	return nil, errors.New("get tx data from peers failed")
 }
 
-func (j *JobManager) BroadcastData(arId, jobType string, tx *types.Transaction, peers []string, txPosted bool) error {
+func (j *JobManager) BroadcastTxMeta(arId, jobType string, tx *types.Transaction, peers []string) {
+	pNode := goar.NewTempConn()
+	for _, peer := range peers {
+		pNode.SetTempConnUrl("http://" + peer)
+		status, code, _ := pNode.SubmitTransaction(&types.Transaction{
+			Format:    tx.Format,
+			ID:        tx.ID,
+			LastTx:    tx.LastTx,
+			Owner:     tx.Owner,
+			Tags:      tx.Tags,
+			Target:    tx.Target,
+			Quantity:  tx.Quantity,
+			Data:      "",
+			DataSize:  tx.DataSize,
+			DataRoot:  tx.DataRoot,
+			Reward:    tx.Reward,
+			Signature: tx.Signature,
+		})
+		if code != 200 && code != 208 {
+			log.Debug("BroadcastTxMeta submit tx failed", "err", status, "arId", arId, "code", code, "peerIp", peer)
+			j.IncFailed(arId, jobType)
+		} else {
+			// success send
+			j.IncSuccessed(arId, jobType)
+		}
+
+		// listen close status
+		if j.IsClosed(arId, jobType) {
+			log.Debug("job is closed", "arId", arId, "jobType", jobType)
+			return
+		}
+	}
+	// close job
+	j.CloseJob(arId, jobType)
+}
+
+func (j *JobManager) BroadcastData(arId, jobType string, tx *types.Transaction, peers []string, txPosted bool) {
 	pNode := goar.NewTempConn()
 	for _, peer := range peers {
 		pNode.SetTempConnUrl("http://" + peer)
@@ -226,25 +300,34 @@ func (j *JobManager) BroadcastData(arId, jobType string, tx *types.Transaction, 
 				Reward:    tx.Reward,
 				Signature: tx.Signature,
 			})
-			if code != 200 {
-				log.Error("BroadcastData submit tx failed", "err", status, "arId", arId)
+			if code != 200 && code != 208 {
+				log.Debug("BroadcastData submit tx failed", "err", status, "arId", arId, "code", code, "peerIp", peer)
 			}
 		}
 
-		// Whether to broadcast txMeta
-		uploader.TxPosted = true
+		uploader.TxPosted = true // only broadcast tx data
 		if err = uploader.Once(); err != nil {
-			log.Error("uploader.Once()", "err", err)
+			log.Debug("uploader.Once()", "err", err, "peerIp", peer)
 			j.IncFailed(arId, jobType)
-			continue
+		} else {
+			// success send
+			j.IncSuccessed(arId, jobType)
 		}
-		// success send
-		j.IncSuccessed(arId, jobType)
 
 		// listen close status
 		if j.IsClosed(arId, jobType) {
-			return errors.New("job closed")
+			log.Debug("job is closed", "arId", arId, "jobType", jobType)
+			return
 		}
 	}
-	return nil
+	j.CloseJob(arId, jobType)
+	return
+}
+
+func (j *JobManager) PopBroadcastSubmitTxChan() <-chan string {
+	return j.broadcastSubmitTxChan
+}
+
+func (j *JobManager) PutToBroadcastSubmitTxChan(txId string) {
+	j.broadcastSubmitTxChan <- txId
 }

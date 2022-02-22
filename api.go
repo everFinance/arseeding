@@ -1,7 +1,6 @@
 package arseeding
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -81,14 +79,11 @@ func (s *Server) submitTx(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := s.processSubmitTx(arTx); err != nil {
+
+	if err := s.broadcastSubmitTx(arTx); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
-
-	// proxy to arweave
-	c.Request.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(by)))
-	proxyArweaveGateway(c)
 }
 
 func (s *Server) submitChunk(c *gin.Context) {
@@ -114,10 +109,6 @@ func (s *Server) submitChunk(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
-
-	// proxy to arweave
-	c.Request.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(by)))
-	proxyArweaveGateway(c)
 }
 
 func (s *Server) getTxOffset(c *gin.Context) {
@@ -271,6 +262,9 @@ func getData(dataRoot, dataSize string, db *Store) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if size == 0 {
+		return []byte{}, nil
+	}
 
 	data := make([]byte, 0, size)
 	txDataEndOffset, err := db.LoadTxDataEndOffSet(dataRoot, dataSize)
@@ -292,11 +286,13 @@ func getData(dataRoot, dataSize string, db *Store) ([]byte, error) {
 }
 
 func proxyArweaveGateway(c *gin.Context) {
-	var proxyUrl = new(url.URL)
-	proxyUrl.Scheme = "https"
-	proxyUrl.Host = "arweave.net"
+	directer := func(req *http.Request) {
+		req.URL.Scheme = "https"
+		req.URL.Host = "arweave.net"
+		req.Host = "arweave.net"
+	}
+	proxy := &httputil.ReverseProxy{Director: directer}
 
-	proxy := httputil.NewSingleHostReverseProxy(proxyUrl)
 	proxy.ServeHTTP(c.Writer, c.Request)
 	c.Abort()
 }

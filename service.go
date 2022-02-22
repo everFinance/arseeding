@@ -8,68 +8,6 @@ import (
 	"strconv"
 )
 
-func (s *Server) processSubmitTx(arTx types.Transaction) error {
-	// 1. verify ar tx
-	if err := utils.VerifyTransaction(arTx); err != nil {
-		log.Error("utils.VerifyTransaction(arTx)", "err", err, "arTx", arTx.ID)
-		return err
-	}
-
-	// 2. check meta exist
-	if s.store.IsExistTxMeta(arTx.ID) {
-		return errors.New("arTx meta exist")
-	}
-
-	// 3. save tx meta
-	if err := s.store.SaveTxMeta(arTx); err != nil {
-		log.Error("s.store.SaveTxMeta(arTx)", "err", err, "arTx", arTx.ID)
-		return err
-	}
-
-	s.submitLocker.Lock()
-	defer s.submitLocker.Unlock()
-
-	// 4. check whether update allDataEndOffset
-	if s.store.IsExistTxDataEndOffset(arTx.DataRoot, arTx.DataSize) {
-		return nil
-	}
-	// add txDataEndOffset
-	if err := s.syncAddTxDataEndOffset(arTx.DataRoot, arTx.DataSize); err != nil {
-		log.Error("syncAddTxDataEndOffset(s.store,arTx.DataRoot,arTx.DataSize)", "err", err, "arTx", arTx.ID)
-		return err
-	}
-
-	// 5. save tx data chunk if exist
-	txSize, err := strconv.ParseUint(arTx.DataSize, 10, 64)
-	if err != nil {
-		return err
-	}
-	if len(arTx.Data) > 0 && txSize <= types.MAX_CHUNK_SIZE {
-		// generate chunk
-		dataBy, err := utils.Base64Decode(arTx.Data)
-		if err != nil {
-			log.Error("utils.Base64Decode(arTx.Data)", "err", err, "data", arTx.Data)
-			return err
-		}
-		chunks, err := generateChunks(arTx, dataBy)
-		if err != nil {
-			log.Error("generateChunks(arTx, dataBy)", "err", err, "data", arTx.Data, "arTx", arTx.ID)
-			return err
-		}
-		if len(chunks) != 1 {
-			return fmt.Errorf("arTx must only one chunk, arTx:%s", arTx.ID)
-		}
-		chunk := chunks[0]
-		// store chunk
-		if err := storeChunk(*chunk, s.store); err != nil {
-			log.Error("storeChunk(*chunk,s.store)", "err", err, "chunk", *chunk)
-			return err
-		}
-	}
-	log.Debug("success process a new arTx", "arTx", arTx.ID)
-	return nil
-}
-
 func (s *Server) processSubmitChunk(chunk types.GetChunk) error {
 	// 1. verify chunk
 	err, ok := verifyChunk(chunk)
@@ -96,6 +34,30 @@ func (s *Server) processSubmitChunk(chunk types.GetChunk) error {
 		return err
 	}
 
+	return nil
+}
+
+func setTxDataChunks(arTx types.Transaction, txData []byte, db *Store) error {
+	if len(txData) == 0 {
+		return errors.New("tx data not be null")
+	}
+	chunks, err := generateChunks(arTx, txData)
+	if err != nil {
+		log.Error("generateChunks(arTx, dataBy)", "err", err, "data", arTx.Data, "arTx", arTx.ID)
+		return err
+	}
+	// store chunk
+	for _, chunk := range chunks {
+		if chunk.DataRoot != arTx.DataRoot {
+			log.Error("chunk dataRoot not equal tx dataRoot", "chunkRoot", chunk.DataRoot, "txRoot", arTx.DataRoot)
+			return errors.New("chunk dataRoot not equal tx dataRoot")
+		}
+
+		if err := storeChunk(*chunk, db); err != nil {
+			log.Error("storeChunk(*chunk,s.store)", "err", err, "chunk", *chunk)
+			return err
+		}
+	}
 	return nil
 }
 

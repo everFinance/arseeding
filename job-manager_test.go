@@ -8,20 +8,20 @@ import (
 func TestRegisterAndRemoveJob(t *testing.T) {
 	manager := NewJobManager(3)
 
-	err := manager.RegisterJob("1", jobTypeBroadcast, 300)
+	err := manager.RegisterJob("1", jobTypeBroadcast)
 	assert.NoError(t, err)
 
-	err = manager.RegisterJob("2", jobTypeBroadcast, 300)
+	err = manager.RegisterJob("2", jobTypeBroadcast)
 	assert.NoError(t, err)
 
-	err = manager.RegisterJob("3", jobTypeSync, 300)
+	err = manager.RegisterJob("3", jobTypeSync)
 	assert.NoError(t, err)
 	assert.Equal(t, 3, len(manager.status))
 
-	err = manager.RegisterJob("3", jobTypeSync, 300)
+	err = manager.RegisterJob("3", jobTypeSync)
 	assert.Equal(t, "exist job", err.Error())
 
-	err = manager.RegisterJob("4", jobTypeSync, 300)
+	err = manager.RegisterJob("4", jobTypeSync)
 	assert.Equal(t, "fully loaded", err.Error())
 
 	// remove
@@ -34,7 +34,7 @@ func TestInc(t *testing.T) {
 
 	arId := "1"
 	id := AssembleId(arId, jobTypeBroadcast)
-	err := manager.RegisterJob(arId, jobTypeBroadcast, 300)
+	err := manager.RegisterJob(arId, jobTypeBroadcast)
 	assert.NoError(t, err)
 
 	manager.IncSuccessed(arId, jobTypeBroadcast)

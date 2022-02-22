@@ -10,7 +10,7 @@ func (e *EverPaySync) runJobs() {
 }
 
 func (e *EverPaySync) FetchArIds() {
-	processedArTx, err := e.wdb.GetLastPostedTx()
+	processedArTx, err := e.wdb.GetLastPostTx()
 	if err != nil {
 		panic(err)
 	}

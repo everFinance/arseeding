@@ -4,12 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/everFinance/arseeding"
-	"github.com/labstack/gommon/log"
 	"github.com/panjf2000/ants/v2"
 	"gopkg.in/h2non/gentleman.v2"
 	"sync"
 	"time"
 )
+
+var log = arseeding.NewLog("example")
 
 func MustBatchSyncTxIds(txIds []string, seedCli *gentleman.Client) (successTxIds []string) {
 	var wg sync.WaitGroup
