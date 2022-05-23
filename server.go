@@ -51,6 +51,7 @@ func New(boltDirPath string) *Server {
 		peers:      peers,
 		jobManager: jobmg,
 		scheduler:  gocron.NewScheduler(time.UTC),
+		cache:      &Cache{},
 	}
 }
 

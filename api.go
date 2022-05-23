@@ -31,10 +31,10 @@ func (s *Server) runAPI(port string) {
 		{
 			v2.Use(proxyArweaveGateway)
 
-			v2.GET("/info")
+			// v2.GET("/info")
 			v2.GET("/tx/:arid/status")
 			v2.GET("/:arid")
-			v2.GET("/price/:size")
+			// v2.GET("/price/:size")
 			v2.GET("/price/:size/:target")
 			v2.GET("/block/hash/:hash")
 			v2.GET("/block/height/:height")
@@ -42,7 +42,7 @@ func (s *Server) runAPI(port string) {
 			v2.GET("/wallet/:address/balance")
 			v2.GET("/wallet/:address/last_tx")
 			v2.GET("/peers")
-			v2.GET("/tx_anchor")
+			// v2.GET("/tx_anchor")
 			v2.POST("/arql")
 			v2.POST("/graphql")
 			v2.GET("/tx/pending")
@@ -276,6 +276,7 @@ func (s *Server) getTxPrice(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 	}
+	// totPrice = chunkNum*deltaPrice(price for per chunk) + basePrice
 	totPrice := calculatePrice(basePrice, deltaPrice, dataSize)
 	c.JSON(http.StatusOK, totPrice)
 }
