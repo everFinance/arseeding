@@ -7,11 +7,11 @@ import (
 )
 
 type Cache struct {
-	arweaveInfo *types.NetworkInfo
-	anchor      string
-	basePrice   int64
-	deltaPrice  int64
-	lock        sync.RWMutex
+	arweaveInfo   *types.NetworkInfo
+	anchor        string
+	basePrice     int64
+	perChunkPrice int64
+	lock          sync.RWMutex
 }
 
 var (
@@ -53,10 +53,10 @@ func (c *Cache) UpdateAnchor(anchor string) {
 func (c *Cache) GetPrice() (int64, int64, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	if c.basePrice == 0 || c.deltaPrice == 0 {
+	if c.basePrice == 0 || c.perChunkPrice == 0 {
 		return 0, 0, ErrNotExist
 	}
-	return c.basePrice, c.deltaPrice, nil
+	return c.basePrice, c.perChunkPrice, nil
 }
 
 func (c *Cache) UpdateBasePrice(price int64) {
@@ -68,5 +68,5 @@ func (c *Cache) UpdateBasePrice(price int64) {
 func (c *Cache) UpdateDeltaPrice(price int64) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.deltaPrice = price
+	c.perChunkPrice = price
 }

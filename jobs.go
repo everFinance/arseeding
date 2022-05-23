@@ -284,9 +284,11 @@ func (s *Server) updatePrice() {
 	basePrice, err := s.arCli.GetTransactionPrice(nil, nil)
 	if err == nil {
 		s.cache.UpdateBasePrice(basePrice)
+	} else {
+		return
 	}
 	deltaPrice, err := s.arCli.GetTransactionPrice([]byte("0"), nil)
 	if err == nil {
-		s.cache.UpdateDeltaPrice(deltaPrice)
+		s.cache.UpdateDeltaPrice(deltaPrice - basePrice)
 	}
 }
