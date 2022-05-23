@@ -20,6 +20,7 @@ type Server struct {
 	peers      []string
 	jobManager *JobManager
 	scheduler  *gocron.Scheduler
+	cache      *Cache
 }
 
 func New(boltDirPath string) *Server {

@@ -55,6 +55,9 @@ func (s *Server) runAPI(port string) {
 		v1.POST("/job/kill/:arid/:jobType", s.killJob)
 		v1.GET("/job/:arid/:jobType", s.getJob)
 		v1.GET("/cache/jobs", s.getCacheJobs)
+		v1.GET("/info", s.getInfo)
+		v1.GET("/tx_anchor", s.getAnchor)
+		v1.GET("/price/:size", s.getTxPrice)
 	}
 
 	if err := r.Run(port); err != nil {
@@ -240,6 +243,43 @@ func (s *Server) getTxField(c *gin.Context) {
 	}
 }
 
+func (s *Server) getInfo(c *gin.Context) {
+	info, err := s.cache.GetInfo()
+	if err != nil {
+		if err == ErrNotExist {
+			c.Data(404, "text/html; charset=utf-8", []byte("Not Found"))
+			return
+		}
+		c.JSON(http.StatusBadRequest, err.Error())
+	}
+	c.JSON(http.StatusOK, info)
+}
+
+func (s *Server) getAnchor(c *gin.Context) {
+	anchor, err := s.cache.GetAnchor()
+	if err != nil {
+		if err == ErrNotExist {
+			c.Data(404, "text/html; charset=utf-8", []byte("Not Found"))
+			return
+		}
+		c.JSON(http.StatusBadRequest, err.Error())
+	}
+	c.JSON(http.StatusOK, anchor)
+}
+
+func (s *Server) getTxPrice(c *gin.Context) {
+	dataSize, err := strconv.ParseInt(c.Param("size"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+	}
+	basePrice, deltaPrice, err := s.cache.GetPrice()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+	}
+	totPrice := calculatePrice(basePrice, deltaPrice, dataSize)
+	c.JSON(http.StatusOK, totPrice)
+}
+
 func txMetaData(txMeta *types.Transaction, db *Store) ([]byte, error) {
 	size, err := strconv.ParseUint(txMeta.DataSize, 10, 64)
 	if err != nil {
@@ -295,4 +335,15 @@ func proxyArweaveGateway(c *gin.Context) {
 
 	proxy.ServeHTTP(c.Writer, c.Request)
 	c.Abort()
+}
+
+func calculatePrice(basePrice, deltaPrice, dataSize int64) string {
+	var chunkSize int64 = 256 * 1024
+	var totPrice int64 = basePrice
+	chunkNum := dataSize / chunkSize
+	if dataSize%chunkSize != 0 {
+		chunkNum += 1
+	}
+	totPrice += chunkNum * deltaPrice
+	return fmt.Sprintf("%v", totPrice)
 }

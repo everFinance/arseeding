@@ -15,6 +15,9 @@ func (s *Server) runJobs() {
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updatePeers)
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runBroadcastJobs)
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runSyncJobs)
+	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updateAnchor)
+	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updatePrice)
+	s.scheduler.Every(30).Seconds().SingletonMode().Do(s.updateInfo)
 
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseJobs)
 
@@ -256,5 +259,34 @@ func (s *Server) watcherAndCloseJobs() {
 				continue
 			}
 		}
+	}
+}
+
+func (s *Server) updateAnchor() {
+	anchor, err := s.arCli.GetTransactionAnchor()
+	if err != nil {
+		return
+	}
+	s.cache.UpdateAnchor(anchor)
+}
+
+// update arweave network info
+func (s *Server) updateInfo() {
+	info, err := s.arCli.GetInfo()
+	if err != nil {
+		return
+	}
+	s.cache.UpdateInfo(info)
+}
+
+func (s *Server) updatePrice() {
+	// base price /price/0  datasize = 0,data = nil
+	basePrice, err := s.arCli.GetTransactionPrice(nil, nil)
+	if err == nil {
+		s.cache.UpdateBasePrice(basePrice)
+	}
+	deltaPrice, err := s.arCli.GetTransactionPrice([]byte("0"), nil)
+	if err == nil {
+		s.cache.UpdateDeltaPrice(deltaPrice)
 	}
 }
