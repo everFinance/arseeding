@@ -10,7 +10,7 @@ import (
 
 var log = NewLog("arseeding")
 
-type Server struct {
+type Arseeding struct {
 	store           *Store
 	engine          *gin.Engine
 	submitLocker    sync.Mutex
@@ -22,7 +22,7 @@ type Server struct {
 	scheduler  *gocron.Scheduler
 }
 
-func New(boltDirPath string) *Server {
+func New(boltDirPath string) *Arseeding {
 	log.Debug("start new server...")
 	boltDb, err := NewStore(boltDirPath)
 	if err != nil {
@@ -40,7 +40,7 @@ func New(boltDirPath string) *Server {
 		panic(err)
 	}
 
-	return &Server{
+	return &Arseeding{
 		store:           boltDb,
 		engine:          gin.Default(),
 		submitLocker:    sync.Mutex{},
@@ -53,7 +53,7 @@ func New(boltDirPath string) *Server {
 	}
 }
 
-func (s *Server) Run(port string) {
+func (s *Arseeding) Run(port string) {
 	go s.runAPI(port)
 	go s.runJobs()
 	go s.BroadcastSubmitTx()

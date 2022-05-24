@@ -6,7 +6,7 @@ import (
 	"github.com/everFinance/goar/utils"
 )
 
-func (s *Server) BroadcastSubmitTx() {
+func (s *Arseeding) BroadcastSubmitTx() {
 	for {
 		select {
 		case arId := <-s.jobManager.PopBroadcastSubmitTxChan():
@@ -25,7 +25,7 @@ func (s *Server) BroadcastSubmitTx() {
 	}
 }
 
-func (s *Server) processBroadcastSubmitTxJob(arId string) (err error) {
+func (s *Arseeding) processBroadcastSubmitTxJob(arId string) (err error) {
 	if !s.store.IsExistTxMeta(arId) {
 		return ErrNotExist
 	}
@@ -46,7 +46,7 @@ func (s *Server) processBroadcastSubmitTxJob(arId string) (err error) {
 	return
 }
 
-func (s *Server) broadcastSubmitTx(arTx types.Transaction) error {
+func (s *Arseeding) broadcastSubmitTx(arTx types.Transaction) error {
 	if arTx.ID == "" {
 		return errors.New("arTx id is null")
 	}
@@ -71,7 +71,7 @@ func (s *Server) broadcastSubmitTx(arTx types.Transaction) error {
 	return nil
 }
 
-func (s *Server) processSubmitTx(arTx types.Transaction) error {
+func (s *Arseeding) processSubmitTx(arTx types.Transaction) error {
 	// 1. verify ar tx
 	if err := utils.VerifyTransaction(arTx); err != nil {
 		log.Error("utils.VerifyTransaction(arTx)", "err", err, "arTx", arTx.ID)

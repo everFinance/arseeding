@@ -15,7 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (s *Server) runAPI(port string) {
+func (s *Arseeding) runAPI(port string) {
 	r := s.engine
 	v1 := r.Group("/")
 	{
@@ -62,7 +62,7 @@ func (s *Server) runAPI(port string) {
 	}
 }
 
-func (s *Server) submitTx(c *gin.Context) {
+func (s *Arseeding) submitTx(c *gin.Context) {
 	arTx := types.Transaction{}
 	if c.Request.Body == nil {
 		c.JSON(http.StatusBadRequest, "chunk data can not be null")
@@ -86,7 +86,7 @@ func (s *Server) submitTx(c *gin.Context) {
 	}
 }
 
-func (s *Server) submitChunk(c *gin.Context) {
+func (s *Arseeding) submitChunk(c *gin.Context) {
 	chunk := types.GetChunk{}
 	if c.Request.Body == nil {
 		c.JSON(http.StatusBadRequest, "chunk data can not be null")
@@ -111,7 +111,7 @@ func (s *Server) submitChunk(c *gin.Context) {
 	}
 }
 
-func (s *Server) getTxOffset(c *gin.Context) {
+func (s *Arseeding) getTxOffset(c *gin.Context) {
 	arId := c.Param("arid")
 	if len(arId) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_address"})
@@ -135,7 +135,7 @@ func (s *Server) getTxOffset(c *gin.Context) {
 	c.JSON(http.StatusOK, txOffset)
 }
 
-func (s *Server) getChunk(c *gin.Context) {
+func (s *Arseeding) getChunk(c *gin.Context) {
 	offset := c.Param("offset")
 	chunkOffset, err := strconv.ParseUint(offset, 10, 64)
 	if err != nil {
@@ -155,7 +155,7 @@ func (s *Server) getChunk(c *gin.Context) {
 	c.JSON(http.StatusOK, chunk)
 }
 
-func (s *Server) getTx(c *gin.Context) {
+func (s *Arseeding) getTx(c *gin.Context) {
 	arid := c.Param("arid")
 	arTx, err := s.store.LoadTxMeta(arid)
 	if err != nil {
@@ -169,7 +169,7 @@ func (s *Server) getTx(c *gin.Context) {
 	c.JSON(http.StatusOK, arTx)
 }
 
-func (s *Server) getTxField(c *gin.Context) {
+func (s *Arseeding) getTxField(c *gin.Context) {
 	arid := c.Param("arid")
 	field := c.Param("field")
 	txMeta, err := s.store.LoadTxMeta(arid)

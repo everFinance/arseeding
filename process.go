@@ -8,7 +8,7 @@ import (
 	"strconv"
 )
 
-func (s *Server) processSubmitChunk(chunk types.GetChunk) error {
+func (s *Arseeding) processSubmitChunk(chunk types.GetChunk) error {
 	// 1. verify chunk
 	err, ok := verifyChunk(chunk)
 	if err != nil || !ok {
@@ -110,7 +110,7 @@ func storeChunk(chunk types.GetChunk, db *Store) error {
 	return nil
 }
 
-func (s *Server) syncAddTxDataEndOffset(dataRoot, dataSize string) error {
+func (s *Arseeding) syncAddTxDataEndOffset(dataRoot, dataSize string) error {
 	s.endOffsetLocker.Lock()
 	defer s.endOffsetLocker.Unlock()
 

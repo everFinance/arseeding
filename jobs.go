@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func (s *Server) runJobs() {
+func (s *Arseeding) runJobs() {
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updatePeers)
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runBroadcastJobs)
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runSyncJobs)
@@ -21,7 +21,7 @@ func (s *Server) runJobs() {
 	s.scheduler.StartAsync()
 }
 
-func (s *Server) updatePeers() {
+func (s *Arseeding) updatePeers() {
 	peers, err := s.arCli.GetPeers()
 	if err != nil {
 		return
@@ -33,7 +33,7 @@ func (s *Server) updatePeers() {
 	s.peers = peers
 }
 
-func (s *Server) runBroadcastJobs() {
+func (s *Arseeding) runBroadcastJobs() {
 	arIds, err := s.store.LoadPendingPool(jobTypeBroadcast, 50)
 	if err != nil {
 		log.Error("s.store.LoadPendingPool(jobTypeBroadcast, 20)", "err", err)
@@ -68,7 +68,7 @@ func (s *Server) runBroadcastJobs() {
 	}
 }
 
-func (s *Server) runSyncJobs() {
+func (s *Arseeding) runSyncJobs() {
 	arIds, err := s.store.LoadPendingPool(jobTypeSync, 100)
 	if err != nil {
 		log.Error("s.store.LoadPendingPool(jobTypeSync, 50)", "err", err)
@@ -104,7 +104,7 @@ func (s *Server) runSyncJobs() {
 	}
 }
 
-func (s *Server) processBroadcastJob(arId string) (err error) {
+func (s *Arseeding) processBroadcastJob(arId string) (err error) {
 	// job manager set
 	if s.jobManager.IsClosed(arId, jobTypeBroadcast) {
 		log.Warn("broadcast job was closed", "arId", arId)
@@ -144,7 +144,7 @@ func (s *Server) processBroadcastJob(arId string) (err error) {
 	return
 }
 
-func (s *Server) processSyncJob(arId string) (err error) {
+func (s *Arseeding) processSyncJob(arId string) (err error) {
 	// 0. job manager set
 	if s.jobManager.IsClosed(arId, jobTypeSync) {
 		return
@@ -220,7 +220,7 @@ func (s *Server) processSyncJob(arId string) (err error) {
 	return setTxDataChunks(*arTxMeta, data, s.store)
 }
 
-func (s *Server) setProcessedJobs(arIds []string, jobType string) error {
+func (s *Arseeding) setProcessedJobs(arIds []string, jobType string) error {
 	// process job status
 	for _, arId := range arIds {
 		js := s.jobManager.GetJob(arId, jobType)
@@ -242,7 +242,7 @@ func (s *Server) setProcessedJobs(arIds []string, jobType string) error {
 	return nil
 }
 
-func (s *Server) watcherAndCloseJobs() {
+func (s *Arseeding) watcherAndCloseJobs() {
 	jobs := s.jobManager.GetJobs()
 	now := time.Now().Unix()
 	for _, job := range jobs {
