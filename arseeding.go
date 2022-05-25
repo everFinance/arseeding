@@ -2,8 +2,10 @@ package arseeding
 
 import (
 	"github.com/everFinance/goar"
+	"github.com/everFinance/goar/types"
 	"github.com/gin-gonic/gin"
 	"github.com/go-co-op/gocron"
+	"math/big"
 	"sync"
 	"time"
 )
@@ -20,6 +22,16 @@ type Arseeding struct {
 	peers      []string
 	jobManager *JobManager
 	scheduler  *gocron.Scheduler
+
+	// ANS-104
+	wdb         *Wdb
+	bundler     string // todo fix to wallet
+	arInfo      types.NetworkInfo
+	symbolToFee map[string]*big.Int // key: tokenSymbol, val: fee per chunk_size(256KB)
+
+	paymentExpiredRange int64 // default 1 hour
+	expectedRange       int64 // default 50 block
+
 }
 
 func New(boltDirPath string) *Arseeding {

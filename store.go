@@ -39,6 +39,9 @@ var (
 	BroadcastJobStatus         = []byte("broadcast-job-status") // key: arId, value jobStatus
 	BroadcastSubmitTxJobStatus = []byte("broadcast-submit-tx-job-status")
 	SyncJobStatus              = []byte("sync-job-status") // key: arId, value jobStatus
+
+	// bundle bucketName
+	BundleItemBinary = []byte("bundle-item-binary")
 )
 
 type Store struct {
@@ -376,4 +379,29 @@ func (s *Store) LoadJobStatus(jobType, arId string) (*JobStatus, error) {
 		}
 	})
 	return js, err
+}
+
+// about bundle
+
+func (s *Store) SaveItemBinary(itemId string, itemBinary []byte) error {
+	key := []byte(itemId)
+	val := itemBinary
+
+	return s.BoltDb.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(BundleItemBinary)
+		return bkt.Put(key, val)
+	})
+}
+
+func (s *Store) LoadItemBinary(itemId string) (itemBinary []byte, err error) {
+	key := []byte(itemId)
+
+	err = s.BoltDb.View(func(tx *bolt.Tx) error {
+		itemBinary = tx.Bucket(BundleItemBinary).Get(key)
+		if itemBinary == nil {
+			return ErrNotExist
+		}
+		return nil
+	})
+	return
 }

@@ -4,15 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
+	"github.com/gin-gonic/gin"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"strconv"
 	"strings"
-
-	"github.com/gin-gonic/gin"
 )
 
 func (s *Arseeding) runAPI(port string) {
@@ -55,6 +56,10 @@ func (s *Arseeding) runAPI(port string) {
 		v1.POST("/job/kill/:arid/:jobType", s.killJob)
 		v1.GET("/job/:arid/:jobType", s.getJob)
 		v1.GET("/cache/jobs", s.getCacheJobs)
+
+		// ANS-104 bundle Data api
+		v1.POST("/bundleItem/:currency", s.submitBundleItem)
+
 	}
 
 	if err := r.Run(port); err != nil {
@@ -295,4 +300,63 @@ func proxyArweaveGateway(c *gin.Context) {
 
 	proxy.ServeHTTP(c.Writer, c.Request)
 	c.Abort()
+}
+
+func (s *Arseeding) submitBundleItem(c *gin.Context) {
+	if c.GetHeader("content-type") != "application/octet-stream" {
+		c.JSON(http.StatusBadRequest, "Wrong body type")
+		return
+	}
+	if c.Request.Body == nil {
+		c.JSON(http.StatusBadRequest, "can not submit null bundle item")
+		return
+	}
+
+	defer c.Request.Body.Close()
+
+	itemBinary := make([]byte, 0, 256*1024)
+	buf := make([]byte, 20*1024) // todo add to temp file
+	for {
+		if len(itemBinary) > schema.AllowMaxItemSize {
+			err := fmt.Errorf("allow max item size is 100 MB")
+			c.JSON(http.StatusBadRequest, err.Error())
+			return
+		}
+
+		n, err := c.Request.Body.Read(buf)
+		if err != nil && err != io.EOF {
+			c.JSON(http.StatusBadRequest, "read req failed")
+			log.Error("read req failed", "err", err)
+			return
+		}
+
+		if n == 0 {
+			break
+		}
+		itemBinary = append(itemBinary, buf[:n]...)
+	}
+
+	// decode
+	item, err := utils.DecodeBundleItem(itemBinary)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, "decode item binary failed")
+		return
+	}
+	currency := c.Param("currency")
+
+	// process bundleItem
+	ord, err := s.processSubmitBundleItem(*item, currency)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, schema.RespOrder{
+		ItemId:             ord.ItemId,
+		Bundler:            s.bundler,
+		Currency:           ord.Currency,
+		Fee:                ord.Fee,
+		PaymentExpiredTime: ord.PaymentExpiredTime,
+		ExpectedBlock:      ord.ExpectedBlock,
+	})
 }

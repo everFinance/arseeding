@@ -3,9 +3,13 @@ package arseeding
 import (
 	"errors"
 	"fmt"
+	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
+	"math/big"
 	"strconv"
+	"strings"
+	"time"
 )
 
 func (s *Arseeding) processSubmitChunk(chunk types.GetChunk) error {
@@ -170,4 +174,50 @@ func verifyChunk(chunk types.GetChunk) (err error, ok bool) {
 	}
 	_, ok = utils.ValidatePath(dataRoot, offset, 0, dataSize, path)
 	return
+}
+
+func (s *Arseeding) processSubmitBundleItem(item types.BundleItem, currency string) (schema.Order, error) {
+	if err := utils.VerifyBundleItem(item); err != nil {
+		return schema.Order{}, err
+	}
+
+	// store item
+	if err := s.store.SaveItemBinary(item.Id, item.ItemBinary); err != nil {
+		log.Error("saveItemBinary failed", "err", err, "itemId", item.Id)
+		return schema.Order{}, err
+	}
+
+	// calc fee
+	fee, err := s.calcItemFee(currency, int64(len(item.ItemBinary)))
+	if err != nil {
+		return schema.Order{}, err
+	}
+	order := schema.Order{
+		ItemId:             item.Id,
+		Signer:             "", // todo
+		Currency:           strings.ToUpper(currency),
+		Fee:                fee.String(),
+		PaymentExpiredTime: time.Now().Unix() + s.paymentExpiredRange,
+		ExpectedBlock:      s.arInfo.Height + s.expectedRange,
+		PaymentStatus:      schema.PendingPayment,
+		PaymentId:          "",
+		OnChainStatus:      schema.WaitOnChain,
+	}
+	// insert to mysql
+	if err = s.wdb.InsertOrder(order); err != nil {
+		return schema.Order{}, err
+	}
+	return order, nil
+}
+
+func (s *Arseeding) calcItemFee(currency string, itemSize int64) (*big.Int, error) {
+	perFee, ok := s.symbolToFee[strings.ToUpper(currency)]
+	if !ok {
+		return nil, fmt.Errorf("not support currency: %s", currency)
+	}
+
+	count := (itemSize-1)/types.MAX_CHUNK_SIZE + 1
+	fee := new(big.Int).Mul(big.NewInt(count), perFee)
+
+	return fee, nil
 }
