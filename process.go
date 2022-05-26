@@ -192,9 +192,14 @@ func (s *Arseeding) processSubmitBundleItem(item types.BundleItem, currency stri
 	if err != nil {
 		return schema.Order{}, err
 	}
+	signerAddr, err := utils.ItemSignerAddr(item)
+	if err != nil {
+		return schema.Order{}, err
+	}
 	order := schema.Order{
 		ItemId:             item.Id,
-		Signer:             "", // todo
+		Signer:             signerAddr,
+		SignType: item.SignatureType,
 		Currency:           strings.ToUpper(currency),
 		Fee:                fee.String(),
 		PaymentExpiredTime: time.Now().Unix() + s.paymentExpiredRange,

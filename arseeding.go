@@ -25,16 +25,14 @@ type Arseeding struct {
 
 	// ANS-104
 	wdb         *Wdb
-	bundler     string // todo fix to wallet
+	bundler     *goar.Wallet
 	arInfo      types.NetworkInfo
 	symbolToFee map[string]*big.Int // key: tokenSymbol, val: fee per chunk_size(256KB)
-
 	paymentExpiredRange int64 // default 1 hour
 	expectedRange       int64 // default 50 block
-
 }
 
-func New(boltDirPath string) *Arseeding {
+func New(boltDirPath, dsn string, arWalletKeyPath string, arNode string ) *Arseeding {
 	log.Debug("start new server...")
 	boltDb, err := NewStore(boltDirPath)
 	if err != nil {
@@ -52,16 +50,30 @@ func New(boltDirPath string) *Arseeding {
 		panic(err)
 	}
 
-	return &Arseeding{
-		store:           boltDb,
-		engine:          gin.Default(),
-		submitLocker:    sync.Mutex{},
-		endOffsetLocker: sync.Mutex{},
+	wdb := NewWdb(dsn)
+	if err := wdb.Migrate(); err != nil {
+		panic(err)
+	}
+	bundler, err := goar.NewWalletFromPath(arWalletKeyPath,arNode)
+	if err != nil {
+		panic(err)
+	}
 
-		arCli:      arCli,
-		peers:      peers,
-		jobManager: jobmg,
-		scheduler:  gocron.NewScheduler(time.UTC),
+	return &Arseeding{
+		store:               boltDb,
+		engine:              gin.Default(),
+		submitLocker:        sync.Mutex{},
+		endOffsetLocker:     sync.Mutex{},
+		arCli:               arCli,
+		peers:               peers,
+		jobManager:          jobmg,
+		scheduler:           gocron.NewScheduler(time.UTC),
+		wdb:                 wdb,
+		bundler:             bundler,
+		arInfo:              types.NetworkInfo{},
+		symbolToFee:         nil,
+		paymentExpiredRange: int64(60 * time.Minute),
+		expectedRange:       50,
 	}
 }
 

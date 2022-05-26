@@ -384,13 +384,22 @@ func (s *Store) LoadJobStatus(jobType, arId string) (*JobStatus, error) {
 // about bundle
 
 func (s *Store) SaveItemBinary(itemId string, itemBinary []byte) error {
-	key := []byte(itemId)
-	val := itemBinary
+	if s.IsExistItemBinary(itemId) {
+		return nil
+	}
 
 	return s.BoltDb.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(BundleItemBinary)
-		return bkt.Put(key, val)
+		return bkt.Put([]byte(itemId), itemBinary)
 	})
+}
+
+func (s *Store) IsExistItemBinary(itemId string) bool {
+	_, err := s.LoadItemBinary(itemId)
+	if err == ErrNotExist {
+		return false
+	}
+	return true
 }
 
 func (s *Store) LoadItemBinary(itemId string) (itemBinary []byte, err error) {

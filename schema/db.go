@@ -18,6 +18,7 @@ type Order struct {
 	gorm.Model
 	ItemId string // bundleItem id
 	Signer string // item signer
+	SignType int
 
 	Currency           string // payment token symbol
 	Fee                string

@@ -353,7 +353,7 @@ func (s *Arseeding) submitBundleItem(c *gin.Context) {
 
 	c.JSON(http.StatusOK, schema.RespOrder{
 		ItemId:             ord.ItemId,
-		Bundler:            s.bundler,
+		Bundler:            s.bundler.Signer.Address,
 		Currency:           ord.Currency,
 		Fee:                ord.Fee,
 		PaymentExpiredTime: ord.PaymentExpiredTime,
