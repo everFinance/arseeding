@@ -2,17 +2,25 @@ package arseeding
 
 import (
 	"fmt"
+	"github.com/everFinance/arseeding/schema"
+	"github.com/everFinance/everpay/config"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"github.com/panjf2000/ants/v2"
+	"github.com/shopspring/decimal"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 )
 
 func (s *Arseeding) runJobs() {
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updatePeers)
+	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateTokenPrice)
+	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundlePerFee)
+	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateArFee)
+
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runBroadcastJobs)
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runSyncJobs)
 
@@ -31,6 +39,43 @@ func (s *Arseeding) updatePeers() {
 	}
 	// update
 	s.peers = peers
+}
+
+func (s *Arseeding) updateTokenPrice() {
+	// update symbol
+	tps := make([]schema.TokenPrice, 0)
+	for symbol, _ := range s.paySdk.GetSymbolToTag() {
+		tps = append(tps, schema.TokenPrice{
+			Symbol:    strings.ToUpper(symbol),
+			Price:     0,
+			ManualSet: false,
+		})
+	}
+	if err := s.wdb.InsertPrices(tps); err != nil {
+		log.Error("s.wdb.InsertPrices(tps)", "err", err)
+		return
+	}
+
+	// update price
+	tps, err := s.wdb.GetPrices()
+	if err != nil {
+		log.Error("s.wdb.GetPrices()", "err", err)
+		return
+	}
+	for _, tp := range tps {
+		if tp.ManualSet {
+			continue
+		}
+		price, err := config.GetTokenPriceByRedstone(tp.Symbol, "AR")
+		if err != nil {
+			log.Error("config.GetTokenPriceByRedstone(tp.Symbol,\"AR\")", "err", err, "symbol", tp.Symbol)
+			continue
+		}
+		// update tokenPrice
+		if err := s.wdb.UpdatePrice(tp.Symbol, price); err != nil {
+			log.Error("s.wdb.UpdatePrice(tp.Symbol,price)", "err", err, "symbol", tp.Symbol, "price", price)
+		}
+	}
 }
 
 func (s *Arseeding) runBroadcastJobs() {
@@ -66,6 +111,69 @@ func (s *Arseeding) runBroadcastJobs() {
 	} else {
 		log.Debug("run broadcast jobs success", "broadcastJobs number", len(arIds))
 	}
+}
+
+func (s *Arseeding) updateArFee() {
+	chunk0 := make([]byte, 0)
+	chunk1 := make([]byte, 1)
+	reword0, err := s.arCli.GetTransactionPrice(chunk0, nil)
+	if err != nil {
+		log.Error("s.arCli.GetTransactionPrice(chunk0, nil)", "err", err)
+		return
+	}
+	reword1, err := s.arCli.GetTransactionPrice(chunk1, nil)
+	if err != nil {
+		log.Error("s.arCli.GetTransactionPrice(chunk1, nil)", "err", err)
+		return
+	}
+	baseFee := reword0
+	perChunkFee := reword1 - reword0
+	if perChunkFee <= 0 {
+		log.Error("perChunkFee incorrect", "reword0", reword0, "reword1", reword1)
+		return
+	}
+
+	if err = s.wdb.UpdateArFee(baseFee, perChunkFee); err != nil {
+		log.Error("s.wdb.UpdateArFee(baseFee,perChunkFee)", "err", err, "baseFee", baseFee, "perChunkFee", perChunkFee)
+	}
+}
+
+func (s *Arseeding) updateBundlePerFee() {
+	feeMap, err := s.getBundlePerFees()
+	if err != nil {
+		log.Error("s.getBundlePerFees()", "err", err)
+		return
+	}
+	s.bundlePerFeeMap = feeMap
+}
+
+func (s *Arseeding) getBundlePerFees() (map[string]schema.Fee, error) {
+	tps, err := s.wdb.GetPrices()
+	if err != nil {
+		return nil, err
+	}
+
+	arFee, err := s.wdb.GetArFee()
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[string]schema.Fee)
+	for _, tp := range tps {
+		if tp.Price <= 0.0 {
+			continue
+		}
+
+		price := decimal.NewFromBigInt(utils.ARToWinston(big.NewFloat(tp.Price)), 0)
+		baseFee := decimal.NewFromInt(arFee.Base).Div(price)
+		perChunkFee := decimal.NewFromInt(arFee.PerChunk).Div(price)
+		res[strings.ToUpper(tp.Symbol)] = schema.Fee{
+			Currency: tp.Symbol,
+			Base:     baseFee.BigFloat(),
+			PerChunk: perChunkFee.BigFloat(),
+		}
+	}
+	return res, nil
 }
 
 func (s *Arseeding) runSyncJobs() {

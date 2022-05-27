@@ -60,7 +60,9 @@ func (s *Arseeding) runAPI(port string) {
 		// ANS-104 bundle Data api
 		v1.POST("/bundle/tx/:currency", s.submitItem)
 		v1.GET("/bundle/tx/:id", s.getItemMeta) // get item meta, without data
-		v1.GET("/:id", s.getData)               // get arTx data or bundleItem data
+		v1.GET("/bundle/fees", s.bundleFees)
+		v1.GET("/bundle/fee/:size/:symbol", s.bundleFee)
+		v1.GET("/:id", s.getData) // get arTx data or bundleItem data
 	}
 
 	if err := r.Run(port); err != nil {
@@ -361,6 +363,26 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 		PaymentExpiredTime: ord.PaymentExpiredTime,
 		ExpectedBlock:      ord.ExpectedBlock,
 	})
+}
+
+func (s *Arseeding) bundleFee(c *gin.Context) {
+	size := c.Param("size")
+	symbol := c.Param("symbol")
+	numSize, err := strconv.Atoi(size)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, err)
+		return
+	}
+	finalFee, err := s.calcItemFee(symbol, int64(numSize))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+	c.JSON(http.StatusOK, finalFee.String())
+}
+
+func (s *Arseeding) bundleFees(c *gin.Context) {
+	c.JSON(http.StatusOK, s.bundlePerFeeMap)
 }
 
 func (s *Arseeding) getData(c *gin.Context) {

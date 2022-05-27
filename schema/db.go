@@ -1,6 +1,9 @@
 package schema
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/gorm"
+	"time"
+)
 
 const (
 	WaitOnChain    = "waiting"
@@ -16,8 +19,8 @@ const (
 
 type Order struct {
 	gorm.Model
-	ItemId string // bundleItem id
-	Signer string // item signer
+	ItemId   string // bundleItem id
+	Signer   string // item signer
 	SignType int
 
 	Currency           string // payment token symbol
@@ -29,4 +32,18 @@ type Order struct {
 	PaymentId     string // everHash
 
 	OnChainStatus string // "waiting","pending","success","failed"
+}
+
+type TokenPrice struct {
+	Symbol    string  `gorm:"primarykey"` // token symbol
+	Price     float64 // unit is AR
+	ManualSet bool    // manual set
+	UpdatedAt time.Time
+}
+
+type ArFee struct { // unit is winston
+	ID        uint `gorm:"primarykey"`
+	UpdatedAt time.Time
+	Base      int64
+	PerChunk  int64
 }

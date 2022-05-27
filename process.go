@@ -234,14 +234,20 @@ func (s *Arseeding) processSubmitBundleItem(item types.BundleItem, currency stri
 	return order, nil
 }
 
-func (s *Arseeding) calcItemFee(currency string, itemSize int64) (*big.Int, error) {
-	perFee, ok := s.symbolToFee[strings.ToUpper(currency)]
+func (s *Arseeding) calcItemFee(currency string, itemSize int64) (*big.Float, error) {
+	perFee, ok := s.bundlePerFeeMap[strings.ToUpper(currency)]
 	if !ok {
 		return nil, fmt.Errorf("not support currency: %s", currency)
 	}
 
-	count := (itemSize-1)/types.MAX_CHUNK_SIZE + 1
-	fee := new(big.Int).Mul(big.NewInt(count), perFee)
+	count := int64(0)
+	if itemSize > 0 {
+		count = (itemSize-1)/types.MAX_CHUNK_SIZE + 1
+	}
 
-	return fee, nil
+	chunkFees := new(big.Float).Mul(big.NewFloat(float64(count)), perFee.PerChunk)
+
+	finalFee := new(big.Float).Add(perFee.Base, chunkFees)
+
+	return finalFee, nil
 }
