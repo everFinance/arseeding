@@ -34,7 +34,7 @@ func (s *Arseeding) runAPI(port string) {
 
 			v2.GET("/info")
 			v2.GET("/tx/:arid/status")
-			v2.GET("/:arid")
+			// v2.GET("/:arid")
 			v2.GET("/price/:size")
 			v2.GET("/price/:size/:target")
 			v2.GET("/block/hash/:hash")
@@ -58,8 +58,9 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/cache/jobs", s.getCacheJobs)
 
 		// ANS-104 bundle Data api
-		v1.POST("/bundleItem/:currency", s.submitBundleItem)
-
+		v1.POST("/bundle/tx/:currency", s.submitItem)
+		v1.GET("/bundle/tx/:id", s.getItemMeta) // get item meta, without data
+		v1.GET("/:id", s.getData)               // get arTx data or bundleItem data
 	}
 
 	if err := r.Run(port); err != nil {
@@ -161,17 +162,18 @@ func (s *Arseeding) getChunk(c *gin.Context) {
 }
 
 func (s *Arseeding) getTx(c *gin.Context) {
-	arid := c.Param("arid")
-	arTx, err := s.store.LoadTxMeta(arid)
-	if err != nil {
-		if err == ErrNotExist {
-			c.Data(404, "text/html; charset=utf-8", []byte("Not Found"))
-			return
-		}
+	id := c.Param("arid")
+	arTx, err := s.store.LoadTxMeta(id)
+	if err == nil {
+		c.JSON(http.StatusOK, arTx)
+		return
+	} else if err != ErrNotExist {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, arTx)
+
+	// get from arweave gateway
+	proxyArweaveGateway(c)
 }
 
 func (s *Arseeding) getTxField(c *gin.Context) {
@@ -302,7 +304,7 @@ func proxyArweaveGateway(c *gin.Context) {
 	c.Abort()
 }
 
-func (s *Arseeding) submitBundleItem(c *gin.Context) {
+func (s *Arseeding) submitItem(c *gin.Context) {
 	if c.GetHeader("content-type") != "application/octet-stream" {
 		c.JSON(http.StatusBadRequest, "Wrong body type")
 		return
@@ -359,4 +361,63 @@ func (s *Arseeding) submitBundleItem(c *gin.Context) {
 		PaymentExpiredTime: ord.PaymentExpiredTime,
 		ExpectedBlock:      ord.ExpectedBlock,
 	})
+}
+
+func (s *Arseeding) getData(c *gin.Context) {
+	id := c.Param("id")
+	txMeta, err := s.store.LoadTxMeta(id)
+	if err == nil { // find id is arId
+		data, err := txMetaData(txMeta, s.store)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, err)
+			return
+		}
+		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(txMeta.Tags, "Content-Type")), data)
+		return
+	} else if err != ErrNotExist {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+	// not arId
+	itemBinary, err := s.store.LoadItemBinary(id)
+	if err == nil { // id is bundle item id
+		item, err := utils.DecodeBundleItem(itemBinary)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, err)
+			return
+		}
+		data, err := utils.Base64Decode(item.Data)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, err)
+			return
+		}
+		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(item.Tags, "Content-Type")), data)
+		return
+	} else if err != ErrNotExist {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+
+	// get from arweave gateway
+	proxyArweaveGateway(c)
+}
+
+func (s *Arseeding) getItemMeta(c *gin.Context) {
+	id := c.Param("id")
+	// could be bundle item id
+	meta, err := s.store.LoadItemMeta(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+	c.JSON(200, meta)
+}
+
+func getTagValue(tags []types.Tag, name string) string {
+	for _, tg := range tags {
+		if tg.Name == name {
+			return tg.Value
+		}
+	}
+	return ""
 }

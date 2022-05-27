@@ -137,13 +137,13 @@ func (s *Arseeding) syncAddTxDataEndOffset(dataRoot, dataSize string) error {
 		log.Error("s.store.BoltDb.Begin(true)", "err", err)
 		return err
 	}
-	if err := s.store.SaveAllDataEndOffset(newEndOffset, boltTx); err != nil {
+	if err = s.store.SaveAllDataEndOffset(newEndOffset, boltTx); err != nil {
 		boltTx.Rollback()
 		log.Error("s.store.SaveAllDataEndOffset(newEndOffset)", "err", err)
 		return err
 	}
 	// SaveTxDataEndOffSet
-	if err := s.store.SaveTxDataEndOffSet(dataRoot, dataSize, newEndOffset, boltTx); err != nil {
+	if err = s.store.SaveTxDataEndOffSet(dataRoot, dataSize, newEndOffset, boltTx); err != nil {
 		boltTx.Rollback()
 		return err
 	}
@@ -182,9 +182,28 @@ func (s *Arseeding) processSubmitBundleItem(item types.BundleItem, currency stri
 	}
 
 	// store item
-	if err := s.store.SaveItemBinary(item.Id, item.ItemBinary); err != nil {
-		log.Error("saveItemBinary failed", "err", err, "itemId", item.Id)
-		return schema.Order{}, err
+	if !s.store.IsExistItemBinary(item.Id) {
+		boltTx, err := s.store.BoltDb.Begin(true)
+		if err != nil {
+			log.Error("s.store.BoltDb.Begin(true)", "err", err)
+			return schema.Order{}, err
+		}
+
+		if err = s.store.SaveItemBinary(item.Id, item.ItemBinary, boltTx); err != nil {
+			boltTx.Rollback()
+			log.Error("saveItemBinary failed", "err", err, "itemId", item.Id)
+			return schema.Order{}, err
+		}
+
+		if err = s.store.SaveItemMeta(item, boltTx); err != nil {
+			boltTx.Rollback()
+			return schema.Order{}, err
+		}
+		// commit
+		if err := boltTx.Commit(); err != nil {
+			boltTx.Rollback()
+			return schema.Order{}, err
+		}
 	}
 
 	// calc fee
@@ -199,7 +218,7 @@ func (s *Arseeding) processSubmitBundleItem(item types.BundleItem, currency stri
 	order := schema.Order{
 		ItemId:             item.Id,
 		Signer:             signerAddr,
-		SignType: item.SignatureType,
+		SignType:           item.SignatureType,
 		Currency:           strings.ToUpper(currency),
 		Fee:                fee.String(),
 		PaymentExpiredTime: time.Now().Unix() + s.paymentExpiredRange,

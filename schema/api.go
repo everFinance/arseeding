@@ -5,10 +5,10 @@ const (
 )
 
 type RespOrder struct {
-	ItemId             string // bundleItem id
-	Bundler            string // fee receiver address
-	Currency           string // payment token symbol
-	Fee                string
-	PaymentExpiredTime int64
-	ExpectedBlock      int64
+	ItemId             string `json:"ItemId"`   // bundleItem id
+	Bundler            string `json:"bundler"`  // fee receiver address
+	Currency           string `json:"currency"` // payment token symbol
+	Fee                string `json:"fee"`
+	PaymentExpiredTime int64  `json:"paymentExpiredTime"`
+	ExpectedBlock      int64  `json:"expectedBlock"`
 }

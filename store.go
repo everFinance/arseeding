@@ -42,6 +42,7 @@ var (
 
 	// bundle bucketName
 	BundleItemBinary = []byte("bundle-item-binary")
+	BundleItemMeta   = []byte("bundle-item-meta")
 )
 
 type Store struct {
@@ -81,7 +82,8 @@ func NewStore(boltDirPath string) (*Store, error) {
 			SyncJobsPendingPool,
 			BroadcastJobStatus,
 			BroadcastSubmitTxJobStatus,
-			SyncJobStatus}
+			SyncJobStatus,
+			BundleItemBinary}
 		return createBuckets(tx, bucketNames...)
 	}); err != nil {
 		return nil, err
@@ -383,15 +385,20 @@ func (s *Store) LoadJobStatus(jobType, arId string) (*JobStatus, error) {
 
 // about bundle
 
-func (s *Store) SaveItemBinary(itemId string, itemBinary []byte) error {
-	if s.IsExistItemBinary(itemId) {
-		return nil
+func (s *Store) SaveItemBinary(itemId string, itemBinary []byte, dbTx *bolt.Tx) (err error) {
+	if dbTx == nil {
+		dbTx, err = s.BoltDb.Begin(true)
+		if err != nil {
+			return
+		}
+		defer dbTx.Commit()
 	}
 
-	return s.BoltDb.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(BundleItemBinary)
-		return bkt.Put([]byte(itemId), itemBinary)
-	})
+	bkt, err := dbTx.CreateBucketIfNotExists(BundleItemBinary)
+	if err != nil {
+		return err
+	}
+	return bkt.Put([]byte(itemId), itemBinary)
 }
 
 func (s *Store) IsExistItemBinary(itemId string) bool {
@@ -411,6 +418,40 @@ func (s *Store) LoadItemBinary(itemId string) (itemBinary []byte, err error) {
 			return ErrNotExist
 		}
 		return nil
+	})
+	return
+}
+
+func (s *Store) SaveItemMeta(item types.BundleItem, dbTx *bolt.Tx) (err error) {
+	if dbTx == nil {
+		dbTx, err = s.BoltDb.Begin(true)
+		if err != nil {
+			return
+		}
+		defer dbTx.Commit()
+	}
+
+	bkt, err := dbTx.CreateBucketIfNotExists(BundleItemMeta)
+	if err != nil {
+		return err
+	}
+	item.Data = "" // without data
+	meta, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
+
+	return bkt.Put([]byte(item.Id), meta)
+}
+
+func (s *Store) LoadItemMeta(itemId string) (meta types.BundleItem, err error) {
+	key := []byte(itemId)
+	err = s.BoltDb.View(func(tx *bolt.Tx) error {
+		metaBy := tx.Bucket(BundleItemMeta).Get(key)
+		if metaBy == nil {
+			return ErrNotExist
+		}
+		return json.Unmarshal(metaBy, &meta)
 	})
 	return
 }
