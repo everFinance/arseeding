@@ -6,7 +6,7 @@ import (
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
-	"math/big"
+	"github.com/shopspring/decimal"
 	"strconv"
 	"strings"
 	"time"
@@ -207,7 +207,7 @@ func (s *Arseeding) processSubmitBundleItem(item types.BundleItem, currency stri
 	}
 
 	// calc fee
-	fee, err := s.calcItemFee(currency, int64(len(item.ItemBinary)))
+	respFee, err := s.calcItemFee(currency, int64(len(item.ItemBinary)))
 	if err != nil {
 		return schema.Order{}, err
 	}
@@ -220,13 +220,15 @@ func (s *Arseeding) processSubmitBundleItem(item types.BundleItem, currency stri
 		Signer:             signerAddr,
 		SignType:           item.SignatureType,
 		Currency:           strings.ToUpper(currency),
-		Fee:                fee.String(),
+		Decimals:           respFee.Decimals,
+		Fee:                respFee.FinalFee,
 		PaymentExpiredTime: time.Now().Unix() + s.paymentExpiredRange,
 		ExpectedBlock:      s.arInfo.Height + s.expectedRange,
 		PaymentStatus:      schema.PendingPayment,
 		PaymentId:          "",
 		OnChainStatus:      schema.WaitOnChain,
 	}
+
 	// insert to mysql
 	if err = s.wdb.InsertOrder(order); err != nil {
 		return schema.Order{}, err
@@ -234,7 +236,7 @@ func (s *Arseeding) processSubmitBundleItem(item types.BundleItem, currency stri
 	return order, nil
 }
 
-func (s *Arseeding) calcItemFee(currency string, itemSize int64) (*big.Float, error) {
+func (s *Arseeding) calcItemFee(currency string, itemSize int64) (*schema.RespFee, error) {
 	perFee, ok := s.bundlePerFeeMap[strings.ToUpper(currency)]
 	if !ok {
 		return nil, fmt.Errorf("not support currency: %s", currency)
@@ -245,9 +247,12 @@ func (s *Arseeding) calcItemFee(currency string, itemSize int64) (*big.Float, er
 		count = (itemSize-1)/types.MAX_CHUNK_SIZE + 1
 	}
 
-	chunkFees := new(big.Float).Mul(big.NewFloat(float64(count)), perFee.PerChunk)
+	chunkFees := decimal.NewFromInt(count).Mul(perFee.PerChunk)
+	finalFee := perFee.Base.Add(chunkFees)
 
-	finalFee := new(big.Float).Add(perFee.Base, chunkFees)
-
-	return finalFee, nil
+	return &schema.RespFee{
+		Currency: perFee.Currency,
+		Decimals: perFee.Decimals,
+		FinalFee: finalFee.String(),
+	}, nil
 }

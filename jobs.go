@@ -44,11 +44,12 @@ func (s *Arseeding) updatePeers() {
 func (s *Arseeding) updateTokenPrice() {
 	// update symbol
 	tps := make([]schema.TokenPrice, 0)
-	for symbol, _ := range s.paySdk.GetSymbolToTag() {
+	for _, tok := range s.paySdk.GetTokens() {
 		tps = append(tps, schema.TokenPrice{
-			Symbol:    strings.ToUpper(symbol),
-			Price:     0,
+			Symbol:    strings.ToUpper(tok.Symbol),
+			Decimals:  tok.Decimals,
 			ManualSet: false,
+			UpdatedAt: time.Time{},
 		})
 	}
 	if err := s.wdb.InsertPrices(tps); err != nil {
@@ -75,41 +76,6 @@ func (s *Arseeding) updateTokenPrice() {
 		if err := s.wdb.UpdatePrice(tp.Symbol, price); err != nil {
 			log.Error("s.wdb.UpdatePrice(tp.Symbol,price)", "err", err, "symbol", tp.Symbol, "price", price)
 		}
-	}
-}
-
-func (s *Arseeding) runBroadcastJobs() {
-	arIds, err := s.store.LoadPendingPool(jobTypeBroadcast, 50)
-	if err != nil {
-		log.Error("s.store.LoadPendingPool(jobTypeBroadcast, 20)", "err", err)
-		return
-	}
-	if len(arIds) == 0 {
-		return
-	}
-
-	log.Debug("load jobTypeBroadcast pending pool", "number", len(arIds))
-	var wg sync.WaitGroup
-	p, _ := ants.NewPoolWithFunc(50, func(i interface{}) {
-		defer wg.Done()
-		arId := i.(string)
-		if err := s.processBroadcastJob(arId); err != nil {
-			log.Error("processBroadcastJob", "err", err, "arId", arId)
-			return
-		}
-	})
-	defer p.Release()
-
-	for _, arId := range arIds {
-		wg.Add(1)
-		_ = p.Invoke(arId)
-	}
-	wg.Wait()
-
-	if err := s.setProcessedJobs(arIds, jobTypeBroadcast); err != nil {
-		log.Error("s.setProcessedJobs(arIds,jobTypeBroadcast)", "err", err)
-	} else {
-		log.Debug("run broadcast jobs success", "broadcastJobs number", len(arIds))
 	}
 }
 
@@ -169,11 +135,47 @@ func (s *Arseeding) getBundlePerFees() (map[string]schema.Fee, error) {
 		perChunkFee := decimal.NewFromInt(arFee.PerChunk).Div(price)
 		res[strings.ToUpper(tp.Symbol)] = schema.Fee{
 			Currency: tp.Symbol,
-			Base:     baseFee.BigFloat(),
-			PerChunk: perChunkFee.BigFloat(),
+			Decimals: tp.Decimals,
+			Base:     baseFee,
+			PerChunk: perChunkFee,
 		}
 	}
 	return res, nil
+}
+
+func (s *Arseeding) runBroadcastJobs() {
+	arIds, err := s.store.LoadPendingPool(jobTypeBroadcast, 50)
+	if err != nil {
+		log.Error("s.store.LoadPendingPool(jobTypeBroadcast, 20)", "err", err)
+		return
+	}
+	if len(arIds) == 0 {
+		return
+	}
+
+	log.Debug("load jobTypeBroadcast pending pool", "number", len(arIds))
+	var wg sync.WaitGroup
+	p, _ := ants.NewPoolWithFunc(50, func(i interface{}) {
+		defer wg.Done()
+		arId := i.(string)
+		if err := s.processBroadcastJob(arId); err != nil {
+			log.Error("processBroadcastJob", "err", err, "arId", arId)
+			return
+		}
+	})
+	defer p.Release()
+
+	for _, arId := range arIds {
+		wg.Add(1)
+		_ = p.Invoke(arId)
+	}
+	wg.Wait()
+
+	if err := s.setProcessedJobs(arIds, jobTypeBroadcast); err != nil {
+		log.Error("s.setProcessedJobs(arIds,jobTypeBroadcast)", "err", err)
+	} else {
+		log.Debug("run broadcast jobs success", "broadcastJobs number", len(arIds))
+	}
 }
 
 func (s *Arseeding) runSyncJobs() {

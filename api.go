@@ -359,6 +359,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 		ItemId:             ord.ItemId,
 		Bundler:            s.bundler.Signer.Address,
 		Currency:           ord.Currency,
+		Decimals:           ord.Decimals,
 		Fee:                ord.Fee,
 		PaymentExpiredTime: ord.PaymentExpiredTime,
 		ExpectedBlock:      ord.ExpectedBlock,
@@ -373,12 +374,12 @@ func (s *Arseeding) bundleFee(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, err)
 		return
 	}
-	finalFee, err := s.calcItemFee(symbol, int64(numSize))
+	respFee, err := s.calcItemFee(symbol, int64(numSize))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
-	c.JSON(http.StatusOK, finalFee.String())
+	c.JSON(http.StatusOK, respFee)
 }
 
 func (s *Arseeding) bundleFees(c *gin.Context) {

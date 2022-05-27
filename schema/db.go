@@ -24,6 +24,7 @@ type Order struct {
 	SignType int
 
 	Currency           string // payment token symbol
+	Decimals           int
 	Fee                string
 	PaymentExpiredTime int64
 	ExpectedBlock      int64
@@ -35,7 +36,8 @@ type Order struct {
 }
 
 type TokenPrice struct {
-	Symbol    string  `gorm:"primarykey"` // token symbol
+	Symbol    string `gorm:"primarykey"` // token symbol
+	Decimals  int
 	Price     float64 // unit is AR
 	ManualSet bool    // manual set
 	UpdatedAt time.Time
