@@ -207,7 +207,8 @@ func (s *Arseeding) processSubmitBundleItem(item types.BundleItem, currency stri
 	}
 
 	// calc fee
-	respFee, err := s.calcItemFee(currency, int64(len(item.ItemBinary)))
+	size := int64(len(item.ItemBinary))
+	respFee, err := s.calcItemFee(currency, size)
 	if err != nil {
 		return schema.Order{}, err
 	}
@@ -219,6 +220,7 @@ func (s *Arseeding) processSubmitBundleItem(item types.BundleItem, currency stri
 		ItemId:             item.Id,
 		Signer:             signerAddr,
 		SignType:           item.SignatureType,
+		Size:               size,
 		Currency:           strings.ToUpper(currency),
 		Decimals:           respFee.Decimals,
 		Fee:                respFee.FinalFee,

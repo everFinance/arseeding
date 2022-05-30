@@ -23,6 +23,7 @@ type Order struct {
 	Signer   string // item signer
 	SignType int
 
+	Size               int64
 	Currency           string // payment token symbol
 	Decimals           int
 	Fee                string
