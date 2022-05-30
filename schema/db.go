@@ -36,6 +36,21 @@ type Order struct {
 	OnChainStatus string // "waiting","pending","success","failed"
 }
 
+type ReceiptEverTx struct {
+	EverHash string `gorm:"unique"`
+	Nonce    int64
+	Symbol   string
+	Action   string
+	From     string
+	To       string
+	Amount   string
+	Data     string
+	Page     int `gorm:"index:idx1"`
+
+	OrderId int
+	Status  string // "waiting", "processed"
+}
+
 type TokenPrice struct {
 	Symbol    string `gorm:"primarykey"` // token symbol
 	Decimals  int

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay/config"
+	paySchema "github.com/everFinance/everpay/token/schema"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
@@ -20,6 +21,7 @@ func (s *Arseeding) runJobs() {
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateTokenPrice)
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundlePerFee)
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateArFee)
+	s.scheduler.Every(3).Seconds().SingletonMode().Do(s.watcherBundlerTxs)
 
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runBroadcastJobs)
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runSyncJobs)
@@ -366,5 +368,48 @@ func (s *Arseeding) watcherAndCloseJobs() {
 				continue
 			}
 		}
+	}
+}
+
+func (s *Arseeding) watcherBundlerTxs() {
+	startPage, err := s.wdb.GetLastPage()
+	if err != nil {
+		log.Error("s.wdb.GetLastPage()", "err", err)
+	}
+	page := startPage
+	for {
+		txs, err := s.paySdk.Cli.TxsByAcc(s.bundler.Signer.Address, page, "asc", "", paySchema.TxActionTransfer, "")
+		if err != nil {
+			log.Error("pay.client.TxsByAcc failed", "err", err)
+			return
+		}
+		records := make([]schema.ReceiptEverTx, 0, len(txs.Txs.Txs))
+
+		for _, tt := range txs.Txs.Txs {
+			if tt.To != s.bundler.Signer.Address {
+				continue
+			}
+			records = append(records, schema.ReceiptEverTx{
+				EverHash: tt.EverHash,
+				Nonce:    tt.Nonce,
+				Symbol:   tt.TokenSymbol,
+				Action:   tt.Action,
+				From:     tt.From,
+				To:       tt.To,
+				Amount:   tt.Amount,
+				Data:     tt.Data,
+				Page:     txs.Txs.CurrentPage,
+			})
+		}
+		if err := s.wdb.InsertReceiptTx(records); err != nil {
+			log.Error("s.wdb.InsertReceiptTx(records)", "err", err)
+			return
+		}
+
+		if txs.Txs.CurrentPage == txs.Txs.TotalPages {
+			return
+		}
+
+		page++
 	}
 }

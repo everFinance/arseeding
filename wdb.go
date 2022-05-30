@@ -26,7 +26,7 @@ func NewWdb(dsn string) *Wdb {
 }
 
 func (w *Wdb) Migrate() error {
-	return w.Db.AutoMigrate(&schema.Order{}, &schema.TokenPrice{}, &schema.ArFee{})
+	return w.Db.AutoMigrate(&schema.Order{}, &schema.TokenPrice{}, &schema.ArFee{}, &schema.ReceiptEverTx{})
 }
 
 func (w *Wdb) InsertOrder(order schema.Order) error {
@@ -62,4 +62,17 @@ func (w *Wdb) UpdateArFee(baseFee, perChunkFee int64) error {
 func (w *Wdb) GetArFee() (res schema.ArFee, err error) {
 	err = w.Db.First(&res).Error
 	return
+}
+
+func (w *Wdb) InsertReceiptTx(txs []schema.ReceiptEverTx) error {
+	return w.Db.Clauses(clause.OnConflict{DoNothing: true}).Create(&txs).Error
+}
+
+func (w *Wdb) GetLastPage() (int, error) {
+	tx := schema.ReceiptEverTx{}
+	err := w.Db.Model(&schema.ReceiptEverTx{}).Order("page desc").Limit(1).Scan(&tx).Error
+	if err == gorm.ErrRecordNotFound {
+		return 1, nil
+	}
+	return tx.Page, err
 }
