@@ -11,10 +11,16 @@ const (
 	SuccOnChain    = "success"
 	FailedOnChain  = "failed"
 
-	PendingPayment = "pending"
-	SuccPayment    = "success"
+	// order payment status
+	UnPayment      = "unpaid"
+	SuccPayment    = "paid"
 	ExpiredPayment = "expired"
-	FailedPayment  = "failed"
+
+	// ReceiptEverTx Status
+	UnSpent  = "unspent"
+	Spent    = "spent"
+	UnRefund = "unrefund"
+	Refund   = "refund"
 )
 
 type Order struct {
@@ -27,28 +33,27 @@ type Order struct {
 	Currency           string // payment token symbol
 	Decimals           int
 	Fee                string
-	PaymentExpiredTime int64
+	PaymentExpiredTime int64 // uint s
 	ExpectedBlock      int64
 
-	PaymentStatus string // "pending", "success", "expired", "failed"
+	PaymentStatus string // "unpaid", "paid", "expired"
 	PaymentId     string // everHash
 
 	OnChainStatus string // "waiting","pending","success","failed"
 }
 
 type ReceiptEverTx struct {
+	gorm.Model
 	EverHash string `gorm:"unique"`
-	Nonce    int64
+	Nonce    int64  // ms
 	Symbol   string
 	Action   string
 	From     string
-	To       string
 	Amount   string
 	Data     string
 	Page     int `gorm:"index:idx1"`
 
-	OrderId int
-	Status  string // "waiting", "processed"
+	Status string //  "unspent","spent", "unrefund", "refund"
 }
 
 type TokenPrice struct {

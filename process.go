@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
+	"github.com/everFinance/everpay/account"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"github.com/shopspring/decimal"
@@ -216,9 +217,13 @@ func (s *Arseeding) processSubmitBundleItem(item types.BundleItem, currency stri
 	if err != nil {
 		return schema.Order{}, err
 	}
+	_, accId, err := account.IDCheck(signerAddr)
+	if err != nil {
+		return schema.Order{}, err
+	}
 	order := schema.Order{
 		ItemId:             item.Id,
-		Signer:             signerAddr,
+		Signer:             accId,
 		SignType:           item.SignatureType,
 		Size:               size,
 		Currency:           strings.ToUpper(currency),
@@ -226,7 +231,7 @@ func (s *Arseeding) processSubmitBundleItem(item types.BundleItem, currency stri
 		Fee:                respFee.FinalFee,
 		PaymentExpiredTime: time.Now().Unix() + s.paymentExpiredRange,
 		ExpectedBlock:      s.arInfo.Height + s.expectedRange,
-		PaymentStatus:      schema.PendingPayment,
+		PaymentStatus:      schema.UnPayment,
 		PaymentId:          "",
 		OnChainStatus:      schema.WaitOnChain,
 	}

@@ -79,7 +79,7 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 		bundler:             bundler,
 		arInfo:              types.NetworkInfo{},
 		bundlePerFeeMap:     make(map[string]schema.Fee),
-		paymentExpiredRange: int64(60 * time.Minute),
+		paymentExpiredRange: int64(3600),
 		expectedRange:       50,
 	}
 

@@ -3,6 +3,7 @@ package arseeding
 import (
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
+	"github.com/everFinance/everpay/account"
 	"github.com/everFinance/everpay/config"
 	paySchema "github.com/everFinance/everpay/token/schema"
 	"github.com/everFinance/goar"
@@ -10,6 +11,7 @@ import (
 	"github.com/everFinance/goar/utils"
 	"github.com/panjf2000/ants/v2"
 	"github.com/shopspring/decimal"
+	"gorm.io/gorm"
 	"math/big"
 	"strings"
 	"sync"
@@ -21,7 +23,9 @@ func (s *Arseeding) runJobs() {
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateTokenPrice)
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundlePerFee)
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateArFee)
-	s.scheduler.Every(3).Seconds().SingletonMode().Do(s.watcherBundlerTxs)
+	s.scheduler.Every(3).Seconds().SingletonMode().Do(s.watcherReceiptTxs)
+	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptAndOrder)
+	s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
 
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runBroadcastJobs)
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runSyncJobs)
@@ -371,7 +375,7 @@ func (s *Arseeding) watcherAndCloseJobs() {
 	}
 }
 
-func (s *Arseeding) watcherBundlerTxs() {
+func (s *Arseeding) watcherReceiptTxs() {
 	startPage, err := s.wdb.GetLastPage()
 	if err != nil {
 		log.Error("s.wdb.GetLastPage()", "err", err)
@@ -389,16 +393,21 @@ func (s *Arseeding) watcherBundlerTxs() {
 			if tt.To != s.bundler.Signer.Address {
 				continue
 			}
+			_, from, err := account.IDCheck(tt.From)
+			if err != nil {
+				log.Error("account.IDCheck(tt.From)", "err", err, "from", tt.From)
+				continue
+			}
 			records = append(records, schema.ReceiptEverTx{
 				EverHash: tt.EverHash,
 				Nonce:    tt.Nonce,
 				Symbol:   tt.TokenSymbol,
 				Action:   tt.Action,
-				From:     tt.From,
-				To:       tt.To,
+				From:     from,
 				Amount:   tt.Amount,
 				Data:     tt.Data,
 				Page:     txs.Txs.CurrentPage,
+				Status:   schema.UnSpent,
 			})
 		}
 		if err := s.wdb.InsertReceiptTx(records); err != nil {
@@ -411,5 +420,93 @@ func (s *Arseeding) watcherBundlerTxs() {
 		}
 
 		page++
+	}
+}
+
+func (s *Arseeding) mergeReceiptAndOrder() {
+	unspentReceipts, err := s.wdb.GetReceiptsByStatus(schema.UnSpent)
+	if err != nil {
+		log.Error("s.wdb.GetUnSpentReceipts()", "err", err)
+		return
+	}
+
+	for _, urt := range unspentReceipts {
+		signer := urt.From
+		ord, err := s.wdb.GetUnPaidOrder(signer, urt.Symbol, urt.Amount)
+		if err != nil {
+			log.Error("s.wdb.GetSignerOrder", "err", err, "signer", signer, "symbol", urt.Symbol, "fee", urt.Amount)
+			if err == gorm.ErrRecordNotFound {
+				// update receipt status is unrefund
+				if err = s.wdb.UpdateReceiptStatus(urt.ID, schema.UnRefund, nil); err != nil {
+					log.Error("s.wdb.UpdateReceiptStatus", "err", err, "id", urt.ID)
+				}
+			}
+			continue
+		}
+
+		// check order time expired
+		everTxNonce := urt.Nonce
+		if ord.PaymentExpiredTime*1000 < everTxNonce {
+			// expired
+			dbTx := s.wdb.Db.Begin()
+			if err = s.wdb.UpdateOrderPay(ord.ID, urt.EverHash, schema.ExpiredPayment, dbTx); err != nil {
+				log.Error("s.wdb.UpdateOrderPay(ord.ID,schema.ExpiredPayment,dbTx)", "err", err)
+				dbTx.Rollback()
+				continue
+			}
+
+			if err = s.wdb.UpdateReceiptStatus(urt.ID, schema.UnRefund, dbTx); err != nil {
+				log.Error("s.wdb.UpdateReceiptStatus(urt.ID,schema.UnRefund,dbTx)", "err", err)
+				dbTx.Rollback()
+				continue
+			}
+			dbTx.Commit()
+		}
+
+		// update order payment status
+		dbTx := s.wdb.Db.Begin()
+		if err = s.wdb.UpdateOrderPay(ord.ID, urt.EverHash, schema.SuccPayment, dbTx); err != nil {
+			log.Error("s.wdb.UpdateOrderPay(ord.ID,schema.SuccPayment,dbTx)", "err", err)
+			dbTx.Rollback()
+			continue
+		}
+		if err = s.wdb.UpdateReceiptStatus(urt.ID, schema.Spent, dbTx); err != nil {
+			log.Error("s.wdb.UpdateReceiptStatus(urt.ID,schema.Spent,dbTx)", "err", err)
+			dbTx.Rollback()
+			continue
+		}
+		dbTx.Commit()
+	}
+}
+
+func (s *Arseeding) refundReceipt() {
+	recpts, err := s.wdb.GetReceiptsByStatus(schema.UnRefund)
+	if err != nil {
+		log.Error("s.wdb.GetReceiptsByStatus(schema.UnRefund)", "err", err)
+		return
+	}
+
+	for _, rpt := range recpts {
+		// update rpt status is refund
+		if err := s.wdb.UpdateReceiptStatus(rpt.ID, schema.Refund, nil); err != nil {
+			log.Error("s.wdb.UpdateReceiptStatus(rpt.ID,schema.Refund,nil)", "err", err, "id", rpt.ID)
+			continue
+		}
+		// send everTx transfer for refund
+		amount, ok := new(big.Int).SetString(rpt.Amount, 10)
+		if !ok {
+			log.Error("new(big.Int).SetString(rpt.Amount,10) failed", "amt", rpt.Amount)
+			continue
+		}
+		everTx, err := s.paySdk.Transfer(rpt.Symbol, amount, rpt.From, rpt.EverHash)
+		if err != nil {
+			log.Error("s.paySdk.Transfer", "err", err)
+			// update receipt status is unrefund
+			if err := s.wdb.UpdateReceiptStatus(rpt.ID, schema.UnRefund, nil); err != nil {
+				log.Error("s.wdb.UpdateReceiptStatus(rpt.ID,schema.UnRefund,nil)", "err", err, "id", rpt.ID)
+			}
+			continue
+		}
+		log.Info("refund receipt success", "receipt everHash", rpt.EverHash, "refund everHash", everTx.HexHash())
 	}
 }

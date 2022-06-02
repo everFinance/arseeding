@@ -33,6 +33,24 @@ func (w *Wdb) InsertOrder(order schema.Order) error {
 	return w.Db.Create(&order).Error
 }
 
+func (w *Wdb) GetUnPaidOrder(signer, currency, fee string) (schema.Order, error) {
+	res := schema.Order{}
+	err := w.Db.Model(&schema.Order{}).Where("signer = ? and payment_status = ?"+
+		" and currency = ? and fee = ?", signer, schema.UnPayment, currency, fee).First(&res).Error
+	return res, err
+}
+
+func (w *Wdb) UpdateOrderPay(id uint, everHash string, paymentStatus string, tx *gorm.DB) error {
+	db := w.Db
+	if tx != nil {
+		db = tx
+	}
+	data := make(map[string]interface{})
+	data["payment_status"] = paymentStatus
+	data["payment_id"] = everHash
+	return db.Model(&schema.Order{}).Where("id = ?", id).Updates(data).Error
+}
+
 func (w *Wdb) InsertPrices(tps []schema.TokenPrice) error {
 	return w.Db.Clauses(clause.OnConflict{DoNothing: true}).Create(&tps).Error
 }
@@ -75,4 +93,18 @@ func (w *Wdb) GetLastPage() (int, error) {
 		return 1, nil
 	}
 	return tx.Page, err
+}
+
+func (w *Wdb) GetReceiptsByStatus(status string) ([]schema.ReceiptEverTx, error) {
+	res := make([]schema.ReceiptEverTx, 0)
+	err := w.Db.Model(&schema.ReceiptEverTx{}).Where("status = ?", status).Find(&res).Error
+	return res, err
+}
+
+func (w *Wdb) UpdateReceiptStatus(id uint, status string, tx *gorm.DB) error {
+	db := w.Db
+	if tx != nil {
+		db = tx
+	}
+	return db.Model(&schema.ReceiptEverTx{}).Where("id = ?", id).Update("status", status).Error
 }
