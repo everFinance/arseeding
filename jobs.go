@@ -1,6 +1,7 @@
 package arseeding
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay/account"
@@ -26,6 +27,8 @@ func (s *Arseeding) runJobs() {
 	s.scheduler.Every(3).Seconds().SingletonMode().Do(s.watcherReceiptTxs)
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptAndOrder)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
+	s.scheduler.Every(30).Seconds().SingletonMode().Do(s.onChainBundleItems)
+	s.scheduler.Every(5).Minute().SingletonMode().Do(s.watcherOnChainTx)
 
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runBroadcastJobs)
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runSyncJobs)
@@ -508,5 +511,113 @@ func (s *Arseeding) refundReceipt() {
 			continue
 		}
 		log.Info("refund receipt success", "receipt everHash", rpt.EverHash, "refund everHash", everTx.HexHash())
+	}
+}
+
+func (s *Arseeding) onChainBundleItems() {
+	ords, err := s.wdb.GetNeedOnChainOrders()
+	if err != nil {
+		log.Error("s.wdb.GetNeedOnChainOrders()", "err", err)
+		return
+	}
+	// once total size limit 500 MB
+	filterItemIds := make([]string, 0, len(ords))
+	totalSize := int64(0)
+	for _, ord := range ords {
+		if totalSize >= schema.MaxPerOnChainSize {
+			break
+		}
+		filterItemIds = append(filterItemIds, ord.ItemId)
+		totalSize += ord.Size
+	}
+
+	// assemble Bundle items
+	items := make([]types.BundleItem, 0, len(filterItemIds))
+	for _, id := range filterItemIds {
+		itemBinary, err := s.store.LoadItemBinary(id)
+		if err != nil {
+			log.Error("s.store.LoadItemBinary(id)", "err", err, "id", id)
+			continue
+		}
+		item, err := utils.DecodeBundleItem(itemBinary)
+		if err != nil {
+			log.Error("utils.DecodeBundleItem(itemBinary)", "err", err, "id", id)
+			continue
+		}
+		items = append(items, *item)
+	}
+	if len(items) == 0 {
+		return
+	}
+	// assemble bundle
+	bundle, err := utils.NewBundle(items...)
+	if err != nil {
+		log.Error("utils.NewBundle(items...)", "err", err)
+		return
+	}
+	arTxtags := []types.Tag{
+		{Name: "Application", Value: "arseeding"},
+		{Name: "Action", Value: "Bundle"},
+	}
+	arTx, err := s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, 20)
+	if err != nil {
+		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags,20)", "err", err)
+		return
+	}
+	log.Info("send bundle arTx", "arTx", arTx.ID)
+
+	// insert arTx record
+	itemIdsJs, err := json.Marshal(filterItemIds)
+	if err != nil {
+		log.Error("json.Marshal(filterItemIds)", "err", err, "ids", filterItemIds)
+		return
+	}
+	if err = s.wdb.InsertOnChainTx(schema.OnChainTx{
+		ArId:      arTx.ID,
+		CurHeight: s.arInfo.Height,
+		Status:    schema.PendingOnChain,
+		ItemIds:   itemIdsJs,
+	}); err != nil {
+		log.Error("s.wdb.InsertOnChainTx", "err", err)
+		return
+	}
+
+	// update order onChainStatus to pending
+	for _, item := range items {
+		if err := s.wdb.UpdateOnChainStatus(item.Id, schema.PendingOnChain); err != nil {
+			log.Error("s.wdb.UpdateOnChainStatus(item.Id,schema.PendingOnChain)", "err", err, "itemId", item.Id)
+		}
+	}
+}
+
+func (s *Arseeding) watcherOnChainTx() {
+	txs, err := s.wdb.GetPendingOnChainTx()
+	if err != nil {
+		log.Error("s.wdb.GetPendingOnChainTx()", "err", err)
+		return
+	}
+
+	for _, tx := range txs {
+		if s.arInfo.Height-tx.CurHeight > 50 {
+			// arTx has expired
+			if err = s.wdb.UpdateOnChainTxStatus(tx.ArId, schema.FailedOnChain); err != nil {
+				log.Error("UpdateOnChainTxStatus(tx.ArId,schema.FailedOnChain)", "err", err)
+			}
+			continue
+		}
+
+		// check onchain status
+		arTxStatus, err := s.arCli.GetTransactionStatus(tx.ArId)
+		if err != nil {
+			log.Error("s.arCli.GetTransactionStatus(tx.ArId)", "err", err, "arId", tx.ArId)
+			continue
+		}
+		// update status success
+		if arTxStatus.NumberOfConfirmations > 3 {
+			if err = s.wdb.UpdateOnChainTxStatus(tx.ArId, schema.SuccOnChain); err != nil {
+				log.Error("UpdateOnChainTxStatus(tx.ArId,schema.SuccOnChain)", "err", err)
+			}
+			// todo update order onChain status
+		}
 	}
 }

@@ -26,7 +26,8 @@ func NewWdb(dsn string) *Wdb {
 }
 
 func (w *Wdb) Migrate() error {
-	return w.Db.AutoMigrate(&schema.Order{}, &schema.TokenPrice{}, &schema.ArFee{}, &schema.ReceiptEverTx{})
+	return w.Db.AutoMigrate(&schema.Order{}, &schema.TokenPrice{},
+		&schema.ArFee{}, &schema.ReceiptEverTx{}, &schema.OnChainTx{})
 }
 
 func (w *Wdb) InsertOrder(order schema.Order) error {
@@ -49,6 +50,16 @@ func (w *Wdb) UpdateOrderPay(id uint, everHash string, paymentStatus string, tx 
 	data["payment_status"] = paymentStatus
 	data["payment_id"] = everHash
 	return db.Model(&schema.Order{}).Where("id = ?", id).Updates(data).Error
+}
+
+func (w *Wdb) GetNeedOnChainOrders() ([]schema.Order, error) {
+	res := make([]schema.Order, 0)
+	err := w.Db.Where("payment_status = ?  and on_chain_status = ?", schema.SuccPayment, schema.WaitOnChain).Find(&res).Error
+	return res, err
+}
+
+func (w *Wdb) UpdateOnChainStatus(itemId, status string) error {
+	return w.Db.Where("item_id = ?", itemId).Update("on_chain_status", status).Error
 }
 
 func (w *Wdb) InsertPrices(tps []schema.TokenPrice) error {
@@ -107,4 +118,18 @@ func (w *Wdb) UpdateReceiptStatus(id uint, status string, tx *gorm.DB) error {
 		db = tx
 	}
 	return db.Model(&schema.ReceiptEverTx{}).Where("id = ?", id).Update("status", status).Error
+}
+
+func (w *Wdb) InsertOnChainTx(tx schema.OnChainTx) error {
+	return w.Db.Create(&tx).Error
+}
+
+func (w *Wdb) GetPendingOnChainTx() ([]schema.OnChainTx, error) {
+	res := make([]schema.OnChainTx, 0, 10)
+	err := w.Db.Where("status = ?", schema.PendingOnChain).Find(&res).Error
+	return res, err
+}
+
+func (w *Wdb) UpdateOnChainTxStatus(arId, status string) error {
+	return w.Db.Where("ar_id = ?", arId).Update("status", status).Error
 }

@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"time"
 )
@@ -21,6 +22,8 @@ const (
 	Spent    = "spent"
 	UnRefund = "unrefund"
 	Refund   = "refund"
+
+	MaxPerOnChainSize = 500 * 1024 * 1024 // 500 MB
 )
 
 type Order struct {
@@ -69,4 +72,12 @@ type ArFee struct { // unit is winston
 	UpdatedAt time.Time
 	Base      int64
 	PerChunk  int64
+}
+
+type OnChainTx struct {
+	gorm.Model
+	ArId      string
+	CurHeight int64
+	Status    string         // "pending","success"
+	ItemIds   datatypes.JSON // json.marshal(itemIds)
 }
