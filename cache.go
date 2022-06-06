@@ -65,7 +65,7 @@ func (c *Cache) UpdateBasePrice(price int64) {
 	c.basePrice = price
 }
 
-func (c *Cache) UpdateDeltaPrice(price int64) {
+func (c *Cache) UpdatePerChunkPrice(price int64) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.perChunkPrice = price

@@ -31,7 +31,10 @@ func New(boltDirPath string) *Server {
 	}
 
 	arCli := goar.NewClient("https://arweave.net")
-	peers, err := arCli.GetPeers()
+	peers, err := boltDb.LoadPeers()
+	if err == ErrNotExist {
+		peers, err = arCli.GetPeers()
+	}
 	if err != nil {
 		panic(err)
 	}
