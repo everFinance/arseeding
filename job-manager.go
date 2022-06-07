@@ -30,6 +30,8 @@ type JobManager struct {
 	cap                   int
 	status                map[string]*JobStatus // key: jobType-arId
 	broadcastSubmitTxChan chan string
+	broadcastTxChan       chan string
+	syncTxChan            chan string
 	locker                sync.RWMutex
 }
 
@@ -330,4 +332,20 @@ func (j *JobManager) PopBroadcastSubmitTxChan() <-chan string {
 
 func (j *JobManager) PutToBroadcastSubmitTxChan(txId string) {
 	j.broadcastSubmitTxChan <- txId
+}
+
+func (j *JobManager) PopBroadcastTxChan() <-chan string {
+	return j.broadcastTxChan
+}
+
+func (j *JobManager) PutToBroadcastTxChan(arid string) {
+	j.broadcastTxChan <- arid
+}
+
+func (j *JobManager) PopSyncTxChan() <-chan string {
+	return j.syncTxChan
+}
+
+func (j *JobManager) PutToSyncTxChan(arid string) {
+	j.syncTxChan <- arid
 }

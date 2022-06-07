@@ -15,7 +15,7 @@ func (s *Server) broadcast(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, "arId incorrect")
 		return
 	}
-	if err := s.jobManager.RegisterJob(arid, jobTypeBroadcast); err != nil {
+	/*if err := s.jobManager.RegisterJob(arid, jobTypeBroadcast); err != nil {
 		c.JSON(http.StatusBadGateway, err.Error())
 		return
 	}
@@ -23,6 +23,10 @@ func (s *Server) broadcast(c *gin.Context) {
 	if err := s.store.PutPendingPool(jobTypeBroadcast, arid); err != nil {
 		s.jobManager.UnregisterJob(arid, jobTypeBroadcast)
 		c.JSON(http.StatusBadGateway, err.Error())
+		return
+	}*/
+	if err = s.broadcastTx(arid); err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -44,7 +48,7 @@ func (s *Server) sync(c *gin.Context) {
 		return
 	}
 
-	if err := s.jobManager.RegisterJob(arid, jobTypeSync); err != nil {
+	/*if err := s.jobManager.RegisterJob(arid, jobTypeSync); err != nil {
 		c.JSON(http.StatusBadGateway, err.Error())
 		return
 	}
@@ -52,6 +56,10 @@ func (s *Server) sync(c *gin.Context) {
 	if err := s.store.PutPendingPool(jobTypeSync, arid); err != nil {
 		s.jobManager.UnregisterJob(arid, jobTypeSync)
 		c.JSON(http.StatusBadGateway, err.Error())
+		return
+	}*/
+	if err := s.syncTx(arid); err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
 
