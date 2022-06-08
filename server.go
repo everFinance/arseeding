@@ -35,8 +35,8 @@ func New(boltDirPath string) *Server {
 		panic(err)
 	}
 
-	jobmg := NewJobManager(500)
-	if err := jobmg.InitJobManager(boltDb); err != nil {
+	jm := NewJM(500)
+	if err := jm.InitJM(boltDb); err != nil {
 		panic(err)
 	}
 
@@ -48,7 +48,7 @@ func New(boltDirPath string) *Server {
 
 		arCli:      arCli,
 		peers:      peers,
-		jobManager: jobmg,
+		jobManager: jm,
 		scheduler:  gocron.NewScheduler(time.UTC),
 	}
 }
@@ -57,4 +57,6 @@ func (s *Server) Run(port string) {
 	go s.runAPI(port)
 	go s.runJobs()
 	go s.BroadcastSubmitTx()
+	go s.BroadcastTx()
+	go s.SyncTx()
 }

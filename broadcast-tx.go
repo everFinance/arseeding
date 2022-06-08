@@ -4,7 +4,7 @@ func (s *Server) BroadcastTx() {
 	for {
 		select {
 		case arId := <-s.jobManager.PopBroadcastTxChan():
-			go func() {
+			go func(arId string) {
 				if err := s.processBroadcastJob(arId); err != nil {
 					log.Error("s.processBroadcastTxJob(arId)", "err", err, "arId", arId)
 				} else {
@@ -13,10 +13,9 @@ func (s *Server) BroadcastTx() {
 				if err := s.setProcessedJobs([]string{arId}, jobTypeBroadcast); err != nil {
 					log.Error("s.setProcessedJobs(arId)", "err", err, "arId", arId)
 				}
-			}()
+			}(arId)
 		}
 	}
-
 }
 
 func (s *Server) broadcastTx(arid string) (err error) {

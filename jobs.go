@@ -5,17 +5,12 @@ import (
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
-	"github.com/panjf2000/ants/v2"
 	"math/big"
-	"sync"
 	"time"
 )
 
 func (s *Server) runJobs() {
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updatePeers)
-	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runBroadcastJobs)
-	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runSyncJobs)
-
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseJobs)
 
 	s.scheduler.StartAsync()
@@ -33,76 +28,6 @@ func (s *Server) updatePeers() {
 	s.peers = peers
 }
 
-func (s *Server) runBroadcastJobs() {
-	arIds, err := s.store.LoadPendingPool(jobTypeBroadcast, 50)
-	if err != nil {
-		log.Error("s.store.LoadPendingPool(jobTypeBroadcast, 20)", "err", err)
-		return
-	}
-	if len(arIds) == 0 {
-		return
-	}
-
-	log.Debug("load jobTypeBroadcast pending pool", "number", len(arIds))
-	var wg sync.WaitGroup
-	p, _ := ants.NewPoolWithFunc(50, func(i interface{}) {
-		defer wg.Done()
-		arId := i.(string)
-		if err := s.processBroadcastJob(arId); err != nil {
-			log.Error("processBroadcastJob", "err", err, "arId", arId)
-			return
-		}
-	})
-	defer p.Release()
-
-	for _, arId := range arIds {
-		wg.Add(1)
-		_ = p.Invoke(arId)
-	}
-	wg.Wait()
-
-	if err := s.setProcessedJobs(arIds, jobTypeBroadcast); err != nil {
-		log.Error("s.setProcessedJobs(arIds,jobTypeBroadcast)", "err", err)
-	} else {
-		log.Debug("run broadcast jobs success", "broadcastJobs number", len(arIds))
-	}
-}
-
-func (s *Server) runSyncJobs() {
-	arIds, err := s.store.LoadPendingPool(jobTypeSync, 100)
-	if err != nil {
-		log.Error("s.store.LoadPendingPool(jobTypeSync, 50)", "err", err)
-		return
-	}
-
-	if len(arIds) == 0 {
-		return
-	}
-
-	log.Debug("load jobTypeSync pending pool", "number", len(arIds))
-	var wg sync.WaitGroup
-	p, _ := ants.NewPoolWithFunc(100, func(i interface{}) {
-		defer wg.Done()
-		arId := i.(string)
-		if err := s.processSyncJob(arId); err != nil {
-			log.Error("processSyncJob", "err", err, "arId", arId)
-			return
-		}
-	})
-	defer p.Release()
-
-	for _, arId := range arIds {
-		wg.Add(1)
-		_ = p.Invoke(arId)
-	}
-	wg.Wait()
-
-	if err := s.setProcessedJobs(arIds, jobTypeSync); err != nil {
-		log.Error("s.setProcessedJobs(arIds, jobTypeSync)", "err", err)
-	} else {
-		log.Debug("run sync jobs success", "syncJobs number", len(arIds))
-	}
-}
 
 func (s *Server) processBroadcastJob(arId string) (err error) {
 	// job manager set
@@ -249,8 +174,8 @@ func (s *Server) watcherAndCloseJobs() {
 		if job.Close || job.Timestamp == 0 { // timestamp == 0  means do not start
 			continue
 		}
-		// spend time not more than 5 minutes
-		if now-job.Timestamp > 5*60 {
+		// spend time not more than 30 minutes
+		if now-job.Timestamp > 30*60 {
 			if err := s.jobManager.CloseJob(job.ArId, job.JobType); err != nil {
 				log.Error("watcherAndCloseJobs closeJob", "err", err, "jobId", AssembleId(job.ArId, job.JobType))
 				continue

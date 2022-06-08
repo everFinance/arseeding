@@ -6,7 +6,7 @@ import (
 )
 
 func TestRegisterAndRemoveJob(t *testing.T) {
-	manager := NewJobManager(3)
+	manager := NewJM(3)
 
 	err := manager.RegisterJob("1", jobTypeBroadcast)
 	assert.NoError(t, err)
@@ -30,7 +30,7 @@ func TestRegisterAndRemoveJob(t *testing.T) {
 }
 
 func TestInc(t *testing.T) {
-	manager := NewJobManager(3)
+	manager := NewJM(3)
 
 	arId := "1"
 	id := AssembleId(arId, jobTypeBroadcast)

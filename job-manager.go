@@ -35,11 +35,10 @@ type JobManager struct {
 	locker                sync.RWMutex
 }
 
-func NewJobManager(cap int) *JobManager {
+func NewJM(cap int) *JobManager {
 	return &JobManager{
 		cap:                   cap,
 		status:                make(map[string]*JobStatus),
-		broadcastSubmitTxChan: make(chan string),
 		locker:                sync.RWMutex{},
 	}
 }
@@ -48,33 +47,7 @@ func AssembleId(arid, jobType string) string {
 	return strings.ToUpper(jobType) + "-" + arid
 }
 
-func (m *JobManager) InitJobManager(boltDb *Store) error {
-	pendingBroadcast, err := boltDb.LoadPendingPool(jobTypeBroadcast, -1)
-	if err != nil {
-		return err
-	}
-	if len(pendingBroadcast) > m.cap {
-		m.cap = len(pendingBroadcast)
-	}
-	for _, id := range pendingBroadcast {
-		if err := m.RegisterJob(id, jobTypeBroadcast); err != nil {
-			return err
-		}
-	}
-
-	pendingSync, err := boltDb.LoadPendingPool(jobTypeSync, -1)
-	if err != nil {
-		return err
-	}
-	if len(pendingSync) > m.cap {
-		m.cap = len(pendingSync)
-	}
-	for _, id := range pendingSync {
-		if err := m.RegisterJob(id, jobTypeSync); err != nil {
-			return err
-		}
-	}
-
+func (m *JobManager) InitJM(boltDb *Store) error {
 	pendingBroadcastSubmitTx, err := boltDb.LoadPendingPool(jobTypeSubmitTxBroadcast, -1)
 	if err != nil {
 		return err
@@ -84,6 +57,27 @@ func (m *JobManager) InitJobManager(boltDb *Store) error {
 		m.PutToBroadcastSubmitTxChan(arId)
 		m.AddJob(arId, jobTypeSubmitTxBroadcast)
 	}
+
+	pendingBroadcast, err := boltDb.LoadPendingPool(jobTypeBroadcast,-1)
+	if err != nil {
+		return err
+	}
+	m.broadcastTxChan = make(chan string, len(pendingBroadcast))
+	for _, arId := range pendingBroadcastSubmitTx {
+		m.PutToBroadcastTxChan(arId)
+		m.AddJob(arId, jobTypeBroadcast)
+	}
+
+	pendingSync, err := boltDb.LoadPendingPool(jobTypeSync,-1)
+	if err != nil {
+		return err
+	}
+	m.syncTxChan =  make(chan string, len(pendingSync))
+	for _, arId := range pendingSync {
+		m.PutToSyncTxChan(arId)
+		m.AddJob(arId, jobTypeSync)
+	}
+
 	return nil
 }
 

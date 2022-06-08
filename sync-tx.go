@@ -4,7 +4,7 @@ func (s *Server) SyncTx() {
 	for {
 		select {
 		case arId := <-s.jobManager.PopSyncTxChan():
-			go func() {
+			go func(arId string) {
 				if err := s.processSyncJob(arId); err != nil {
 					log.Error("s.processSyncTxJob(arId)", "err", err, "arId", arId)
 				} else {
@@ -13,7 +13,7 @@ func (s *Server) SyncTx() {
 				if err := s.setProcessedJobs([]string{arId}, jobTypeSync); err != nil {
 					log.Error("s.setProcessedJobs(arId)", "err", err, "arId", arId)
 				}
-			}()
+			}(arId)
 		}
 	}
 

@@ -10,7 +10,7 @@ func (s *Server) BroadcastSubmitTx() {
 	for {
 		select {
 		case arId := <-s.jobManager.PopBroadcastSubmitTxChan():
-			go func() {
+			go func(arId string) {
 				if err := s.processBroadcastSubmitTxJob(arId); err != nil {
 					log.Error("s.processBroadcastSubmitTxJob(arId)", "err", err, "arId", arId)
 				} else {
@@ -19,7 +19,7 @@ func (s *Server) BroadcastSubmitTx() {
 				if err := s.setProcessedJobs([]string{arId}, jobTypeSubmitTxBroadcast); err != nil {
 					log.Error("s.setProcessedJobs(arId)", "err", err, "arId", arId)
 				}
-			}()
+			}(arId)
 
 		}
 	}
