@@ -257,7 +257,7 @@ func (s *Server) updateAnchor() {
 		for _, peer := range s.peers {
 			pNode.SetTempConnUrl("http://" + peer)
 			anchor, err = pNode.GetTransactionAnchor()
-			if err == nil {
+			if err == nil && len(anchor) > 0 {
 				break
 			}
 		}
@@ -274,7 +274,7 @@ func (s *Server) updateInfo() {
 		for _, peer := range s.peers {
 			pNode.SetTempConnUrl("http://" + peer)
 			info, err = pNode.GetInfo()
-			if err == nil {
+			if err == nil && info != nil {
 				break
 			}
 		}
@@ -288,31 +288,31 @@ func (s *Server) updateInfo() {
 func (s *Server) updatePrice() {
 	// base price /price/0  datasize = 0,data = nil
 	var basePrice, deltaPrice int64
-	var err error
+	var err1, err2 error
 
 	littleData := make([]byte, 1)
-	basePrice, err = s.arCli.GetTransactionPrice(nil, nil)
-	deltaPrice, err = s.arCli.GetTransactionPrice(littleData, nil)
-	if err != nil {
+	basePrice, err1 = s.arCli.GetTransactionPrice(nil, nil)
+	deltaPrice, err2 = s.arCli.GetTransactionPrice(littleData, nil)
+	if err1 != nil || err2 != nil {
 		pNode := goar.NewTempConn()
 		for _, peer := range s.peers {
 			pNode.SetTempConnUrl("http://" + peer)
-			basePrice, err = pNode.GetTransactionPrice(nil, nil)
-			deltaPrice, err = pNode.GetTransactionPrice(littleData, nil)
-			if err == nil { // fetch price from one peer
+			basePrice, err1 = pNode.GetTransactionPrice(nil, nil)
+			deltaPrice, err2 = pNode.GetTransactionPrice(littleData, nil)
+			if err1 == nil && err2 == nil { // fetch price from one peer
 				break
 			}
 		}
 	}
 
-	if err != nil {
+	if err1 != nil || err2 != nil {
 		return
 	}
 	s.cache.UpdatePrice(TxPrice{basePrice, deltaPrice - basePrice})
 }
 
 // update peer list, check peer available, store in db
-
+// TODO update peerList concurrency
 func (s *Server) updatePeerList() {
 	visPeer := make(map[string]bool, 0) // record already handled peer
 	updatedPeers := make([]string, 0)
@@ -343,7 +343,7 @@ func (s *Server) updatePeerList() {
 
 // check the peer is available and health
 // return true temporary
-
+// TODO
 func checkAvailable(peer string) bool {
 	return true
 }

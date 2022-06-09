@@ -347,5 +347,5 @@ func calculatePrice(price TxPrice, dataSize int64) string {
 		chunkNum += 1
 	}
 	totPrice += chunkNum * price.perChunkPrice
-	return fmt.Sprintf("%v", totPrice)
+	return fmt.Sprintf("%d", totPrice)
 }
