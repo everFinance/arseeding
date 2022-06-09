@@ -10,10 +10,12 @@ require (
 	github.com/go-co-op/gocron v1.11.0
 	github.com/inconshreveable/log15 v0.0.0-20201112154412-8562bdadbbac
 	github.com/panjf2000/ants/v2 v2.4.7
+	github.com/shopspring/decimal v1.2.0
 	github.com/stretchr/testify v1.7.0
 	github.com/urfave/cli/v2 v2.3.0
 	go.etcd.io/bbolt v1.3.6
 	gopkg.in/h2non/gentleman.v2 v2.0.5
+	gorm.io/datatypes v1.0.1
 	gorm.io/driver/mysql v1.2.1
 	gorm.io/gorm v1.22.4
 )
@@ -82,7 +84,6 @@ require (
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/russross/blackfriday/v2 v2.0.1 // indirect
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
-	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/status-im/keycard-go v0.0.0-20190316090335-8537d3370df4 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect

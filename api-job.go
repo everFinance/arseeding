@@ -15,17 +15,8 @@ func (s *Arseeding) broadcast(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, "arId incorrect")
 		return
 	}
-	/*if err := s.jobManager.RegisterJob(arid, jobTypeBroadcast); err != nil {
-		c.JSON(http.StatusBadGateway, err.Error())
-		return
-	}
 
-	if err := s.store.PutPendingPool(jobTypeBroadcast, arid); err != nil {
-		s.jobManager.UnregisterJob(arid, jobTypeBroadcast)
-		c.JSON(http.StatusBadGateway, err.Error())
-		return
-	}*/
-	if err = s.broadcastTx(arid); err != nil {
+	if err = s.RegisterBroadcastTx(arid); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -48,17 +39,7 @@ func (s *Arseeding) sync(c *gin.Context) {
 		return
 	}
 
-	/*if err := s.jobManager.RegisterJob(arid, jobTypeSync); err != nil {
-		c.JSON(http.StatusBadGateway, err.Error())
-		return
-	}
-
-	if err := s.store.PutPendingPool(jobTypeSync, arid); err != nil {
-		s.jobManager.UnregisterJob(arid, jobTypeSync)
-		c.JSON(http.StatusBadGateway, err.Error())
-		return
-	}*/
-	if err := s.syncTx(arid); err != nil {
+	if err = s.RegisterSyncTx(arid); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -89,7 +70,7 @@ func (s *Arseeding) killJob(c *gin.Context) {
 func (s *Arseeding) getJob(c *gin.Context) {
 	arid := c.Param("arid")
 	jobType := c.Param("jobType")
-	if !strings.Contains(jobTypeSync+jobTypeBroadcast+jobTypeSubmitTxBroadcast, strings.ToLower(jobType)) {
+	if !strings.Contains(jobTypeSync+jobTypeBroadcast+jobTypeTxMetaBroadcast, strings.ToLower(jobType)) {
 		c.JSON(http.StatusBadRequest, "jobType not exist")
 		return
 	}

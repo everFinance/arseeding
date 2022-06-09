@@ -24,6 +24,8 @@ type Arseeding struct {
 	jobManager *JobManager
 	scheduler  *gocron.Scheduler
 
+	cache *Cache
+
 	// ANS-104
 	paySdk              *sdk.SDK
 	wdb                 *Wdb
@@ -41,13 +43,16 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 	}
 
 	arCli := goar.NewClient(arNode)
-	peers, err := arCli.GetPeers()
+	peers, err := boltDb.LoadPeers()
+	if err == ErrNotExist {
+		peers, err = arCli.GetPeers()
+	}
 	if err != nil {
 		panic(err)
 	}
 
-	jobmg := NewJobManager(500)
-	if err := jobmg.InitJobManager(boltDb); err != nil {
+	jobmg := NewJM(500)
+	if err := jobmg.InitJM(boltDb); err != nil {
 		panic(err)
 	}
 
@@ -83,11 +88,32 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 		expectedRange:       50,
 	}
 
+	arInfo, err := fetchArInfo(arCli, peers)
+	if err != nil {
+		panic(err)
+	}
+
+	txPrice, err := fetchArBkPrice(arCli, peers)
+	if err != nil {
+		panic(err)
+	}
+	anchor, err := fetchAnchor(arCli, peers)
+	if err != nil {
+		panic(err)
+	}
+	a.cache = &Cache{
+		arInfo: arInfo,
+		anchor: anchor,
+		price:  txPrice,
+		lock:   sync.RWMutex{},
+	}
 	return a
 }
 
 func (s *Arseeding) Run(port string) {
 	go s.runAPI(port)
 	go s.runJobs()
-	go s.BroadcastSubmitTx()
+	go s.RunBroadcastTxMeta()
+	go s.RunBroadcastTx()
+	go s.RunSyncTx()
 }

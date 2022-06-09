@@ -1,51 +1,36 @@
 package arseeding
 
 import (
-	"errors"
+	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
 	"sync"
 )
 
 type Cache struct {
-	arweaveInfo *types.NetworkInfo
-	anchor      string
-	price       TxPrice
-	lock        sync.RWMutex
+	arInfo *types.NetworkInfo
+	anchor string
+	price  schema.TxPrice
+	lock   sync.RWMutex
 }
 
-type TxPrice struct {
-	basePrice     int64
-	perChunkPrice int64
-}
-
-var (
-	ErrPriceType = errors.New("price type err")
-)
-
-func (c *Cache) GetInfo() (*types.NetworkInfo, error) {
+func (c *Cache) GetInfo() *types.NetworkInfo {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	info := c.arweaveInfo
-	if info == nil {
-		return info, ErrNotExist
-	}
-	return info, nil
+	info := c.arInfo
+	return info
 }
 
 func (c *Cache) UpdateInfo(info *types.NetworkInfo) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.arweaveInfo = info
+	c.arInfo = info
 }
 
-func (c *Cache) GetAnchor() (string, error) {
+func (c *Cache) GetAnchor() string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	anchor := c.anchor
-	if anchor == "" {
-		return "", ErrNotExist
-	}
-	return anchor, nil
+	return anchor
 }
 
 func (c *Cache) UpdateAnchor(anchor string) {
@@ -54,16 +39,14 @@ func (c *Cache) UpdateAnchor(anchor string) {
 	c.anchor = anchor
 }
 
-func (c *Cache) GetPrice() (*TxPrice, error) {
+func (c *Cache) GetPrice() schema.TxPrice {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	if c.price.basePrice == 0 {
-		return nil, ErrNotExist
-	}
-	return &c.price, nil
+
+	return c.price
 }
 
-func (c *Cache) UpdatePrice(price TxPrice) {
+func (c *Cache) UpdatePrice(price schema.TxPrice) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.price = price

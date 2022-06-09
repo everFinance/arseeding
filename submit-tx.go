@@ -6,17 +6,17 @@ import (
 	"github.com/everFinance/goar/utils"
 )
 
-func (s *Arseeding) BroadcastSubmitTx() {
+func (s *Arseeding) RunBroadcastTxMeta() {
 	for {
 		select {
-		case arId := <-s.jobManager.PopBroadcastSubmitTxChan():
+		case arId := <-s.jobManager.PopBroadcastTxMetaChan():
 			go func(arId string) {
-				if err := s.processBroadcastSubmitTxJob(arId); err != nil {
-					log.Error("s.processBroadcastSubmitTxJob(arId)", "err", err, "arId", arId)
+				if err := s.processBroadcastTxMetaJob(arId); err != nil {
+					log.Error("s.processBroadcastTxMetaJob(arId)", "err", err, "arId", arId)
 				} else {
-					log.Debug("success processBroadcastSubmitTxJob", "arId", arId)
+					log.Debug("success processBroadcastTxMetaJob", "arId", arId)
 				}
-				if err := s.setProcessedJobs([]string{arId}, jobTypeSubmitTxBroadcast); err != nil {
+				if err := s.setProcessedJobs([]string{arId}, jobTypeTxMetaBroadcast); err != nil {
 					log.Error("s.setProcessedJobs(arId)", "err", err, "arId", arId)
 				}
 			}(arId)
@@ -25,7 +25,7 @@ func (s *Arseeding) BroadcastSubmitTx() {
 	}
 }
 
-func (s *Arseeding) processBroadcastSubmitTxJob(arId string) (err error) {
+func (s *Arseeding) processBroadcastTxMetaJob(arId string) (err error) {
 	if !s.store.IsExistTxMeta(arId) {
 		return ErrNotExist
 	}
@@ -35,14 +35,14 @@ func (s *Arseeding) processBroadcastSubmitTxJob(arId string) (err error) {
 		return err
 	}
 
-	if s.jobManager.IsClosed(arId, jobTypeSubmitTxBroadcast) {
+	if s.jobManager.IsClosed(arId, jobTypeTxMetaBroadcast) {
 		return
 	}
-	if err = s.jobManager.JobBeginSet(arId, jobTypeSubmitTxBroadcast, len(s.peers)); err != nil {
-		log.Error("s.jobManager.JobBeginSet(arId, jobTypeSubmitTxBroadcast)", "err", err, "arId", arId)
+	if err = s.jobManager.JobBeginSet(arId, jobTypeTxMetaBroadcast, len(s.peers)); err != nil {
+		log.Error("s.jobManager.JobBeginSet(arId, jobTypeTxMetaBroadcast)", "err", err, "arId", arId)
 		return
 	}
-	s.jobManager.BroadcastTxMeta(arId, jobTypeSubmitTxBroadcast, txMeta, s.peers)
+	s.jobManager.BroadcastTxMeta(arId, jobTypeTxMetaBroadcast, txMeta, s.peers)
 	return
 }
 
@@ -57,16 +57,16 @@ func (s *Arseeding) broadcastSubmitTx(arTx types.Transaction) error {
 	}
 
 	// add broadcast submit arTx
-	s.jobManager.AddJob(arTx.ID, jobTypeSubmitTxBroadcast)
+	s.jobManager.AddJob(arTx.ID, jobTypeTxMetaBroadcast)
 
-	if err := s.store.PutPendingPool(jobTypeSubmitTxBroadcast, arTx.ID); err != nil {
-		s.jobManager.UnregisterJob(arTx.ID, jobTypeSubmitTxBroadcast)
-		log.Error("PutPendingPool(jobTypeSubmitTxBroadcast, arTx.ID)", "err", err, "arId", arTx.ID)
+	if err := s.store.PutPendingPool(jobTypeTxMetaBroadcast, arTx.ID); err != nil {
+		s.jobManager.UnregisterJob(arTx.ID, jobTypeTxMetaBroadcast)
+		log.Error("PutPendingPool(jobTypeTxMetaBroadcast, arTx.ID)", "err", err, "arId", arTx.ID)
 		return err
 	}
 
 	// put channel
-	s.jobManager.PutToBroadcastSubmitTxChan(arTx.ID)
+	s.jobManager.PutToBroadcastTxMetaChan(arTx.ID)
 
 	return nil
 }

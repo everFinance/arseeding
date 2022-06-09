@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	jobTypeBroadcast         = "broadcast"           // include tx and tx data
-	jobTypeSubmitTxBroadcast = "submit-tx-broadcast" //  not include tx data
-	jobTypeSync              = "sync"
+	jobTypeBroadcast       = "broadcast"         // include tx and tx data
+	jobTypeTxMetaBroadcast = "tx-meta-broadcast" //  not include tx data
+	jobTypeSync            = "sync"
 )
 
 type JobStatus struct {
@@ -27,12 +27,12 @@ type JobStatus struct {
 }
 
 type JobManager struct {
-	cap                   int
-	status                map[string]*JobStatus // key: jobType-arId
-	broadcastSubmitTxChan chan string
-	broadcastTxChan       chan string
-	syncTxChan            chan string
-	locker                sync.RWMutex
+	cap                 int
+	status              map[string]*JobStatus // key: jobType-arId
+	broadcastTxMetaChan chan string
+	broadcastTxChan     chan string
+	syncTxChan          chan string
+	locker              sync.RWMutex
 }
 
 func NewJM(cap int) *JobManager {
@@ -48,15 +48,15 @@ func AssembleId(arid, jobType string) string {
 }
 
 func (m *JobManager) InitJM(boltDb *Store) error {
-	pendingBroadcastSubmitTx, err := boltDb.LoadPendingPool(jobTypeSubmitTxBroadcast, -1)
+	pendingBroadcastSubmitTx, err := boltDb.LoadPendingPool(jobTypeTxMetaBroadcast, -1)
 	if err != nil {
 		return err
 	}
 	log.Debug("broadcastSubmit num", "pending num", len(pendingBroadcastSubmitTx))
-	m.broadcastSubmitTxChan = make(chan string, len(pendingBroadcastSubmitTx))
+	m.broadcastTxMetaChan = make(chan string, len(pendingBroadcastSubmitTx))
 	for _, arId := range pendingBroadcastSubmitTx {
-		m.PutToBroadcastSubmitTxChan(arId)
-		m.AddJob(arId, jobTypeSubmitTxBroadcast)
+		m.PutToBroadcastTxMetaChan(arId)
+		m.AddJob(arId, jobTypeTxMetaBroadcast)
 	}
 
 	pendingBroadcast, err := boltDb.LoadPendingPool(jobTypeBroadcast, -1)
@@ -322,12 +322,12 @@ func (j *JobManager) BroadcastData(arId, jobType string, tx *types.Transaction, 
 	return
 }
 
-func (j *JobManager) PopBroadcastSubmitTxChan() <-chan string {
-	return j.broadcastSubmitTxChan
+func (j *JobManager) PopBroadcastTxMetaChan() <-chan string {
+	return j.broadcastTxMetaChan
 }
 
-func (j *JobManager) PutToBroadcastSubmitTxChan(txId string) {
-	j.broadcastSubmitTxChan <- txId
+func (j *JobManager) PutToBroadcastTxMetaChan(txId string) {
+	j.broadcastTxMetaChan <- txId
 }
 
 func (j *JobManager) PopBroadcastTxChan() <-chan string {

@@ -31,14 +31,14 @@ var (
 	ConstantsBucket       = []byte("constants-bucket")
 
 	// pending pool bucketName
-	BroadcastJobsPendingPool         = []byte("broadcast-pending-pool")           // key: arId, value: "0x01"
-	BroadcastSubmitTxJobsPendingPool = []byte("broadcast-submit-tx-pending-pool") // key: arId, value: "0x01"
-	SyncJobsPendingPool              = []byte("sync-pending-pool")                // key: arId,value: "0x01"
+	BroadcastJobsPendingPool       = []byte("broadcast-pending-pool")         // key: arId, value: "0x01"
+	BroadcastTxMetaJobsPendingPool = []byte("broadcast-tx-meta-pending-pool") // key: arId, value: "0x01"
+	SyncJobsPendingPool            = []byte("sync-pending-pool")              // key: arId,value: "0x01"
 
 	// save jobStatus bucketName
-	BroadcastJobStatus         = []byte("broadcast-job-status") // key: arId, value jobStatus
-	BroadcastSubmitTxJobStatus = []byte("broadcast-submit-tx-job-status")
-	SyncJobStatus              = []byte("sync-job-status") // key: arId, value jobStatus
+	BroadcastJobStatus       = []byte("broadcast-job-status") // key: arId, value jobStatus
+	BroadcastTxMetaJobStatus = []byte("broadcast-tx-meta-job-status")
+	SyncJobStatus            = []byte("sync-job-status") // key: arId, value jobStatus
 
 	// bundle bucketName
 	BundleItemBinary = []byte("bundle-item-binary")
@@ -78,10 +78,10 @@ func NewStore(boltDirPath string) (*Store, error) {
 			TxMetaBucket,
 			ConstantsBucket,
 			BroadcastJobsPendingPool,
-			BroadcastSubmitTxJobsPendingPool,
+			BroadcastTxMetaJobsPendingPool,
 			SyncJobsPendingPool,
 			BroadcastJobStatus,
-			BroadcastSubmitTxJobStatus,
+			BroadcastTxMetaJobStatus,
 			SyncJobStatus,
 			BundleItemBinary}
 		return createBuckets(tx, bucketNames...)
@@ -366,8 +366,8 @@ func pendingPoolBktName(jobType string) ([]byte, error) {
 		bktName = SyncJobsPendingPool
 	case jobTypeBroadcast:
 		bktName = BroadcastJobsPendingPool
-	case jobTypeSubmitTxBroadcast:
-		bktName = BroadcastSubmitTxJobsPendingPool
+	case jobTypeTxMetaBroadcast:
+		bktName = BroadcastTxMetaJobsPendingPool
 	default:
 		return nil, fmt.Errorf("not support this jobType: %s", jobType)
 	}
@@ -381,8 +381,8 @@ func jobStatusBktName(jobType string) ([]byte, error) {
 		bktName = BroadcastJobStatus
 	case jobTypeBroadcast:
 		bktName = SyncJobStatus
-	case jobTypeSubmitTxBroadcast:
-		bktName = BroadcastSubmitTxJobStatus
+	case jobTypeTxMetaBroadcast:
+		bktName = BroadcastTxMetaJobStatus
 	default:
 		return nil, fmt.Errorf("not support this jobType: %s", jobType)
 	}
