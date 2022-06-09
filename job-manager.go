@@ -37,9 +37,9 @@ type JobManager struct {
 
 func NewJM(cap int) *JobManager {
 	return &JobManager{
-		cap:                   cap,
-		status:                make(map[string]*JobStatus),
-		locker:                sync.RWMutex{},
+		cap:    cap,
+		status: make(map[string]*JobStatus),
+		locker: sync.RWMutex{},
 	}
 }
 
@@ -52,27 +52,29 @@ func (m *JobManager) InitJM(boltDb *Store) error {
 	if err != nil {
 		return err
 	}
+	log.Debug("broadcastSubmit num", "pending num", len(pendingBroadcastSubmitTx))
 	m.broadcastSubmitTxChan = make(chan string, len(pendingBroadcastSubmitTx))
 	for _, arId := range pendingBroadcastSubmitTx {
 		m.PutToBroadcastSubmitTxChan(arId)
 		m.AddJob(arId, jobTypeSubmitTxBroadcast)
 	}
 
-	pendingBroadcast, err := boltDb.LoadPendingPool(jobTypeBroadcast,-1)
+	pendingBroadcast, err := boltDb.LoadPendingPool(jobTypeBroadcast, -1)
+	log.Debug("broadcast num", "pending num", len(pendingBroadcast), "arIds", pendingBroadcast)
 	if err != nil {
 		return err
 	}
 	m.broadcastTxChan = make(chan string, len(pendingBroadcast))
-	for _, arId := range pendingBroadcastSubmitTx {
+	for _, arId := range pendingBroadcast {
 		m.PutToBroadcastTxChan(arId)
 		m.AddJob(arId, jobTypeBroadcast)
 	}
 
-	pendingSync, err := boltDb.LoadPendingPool(jobTypeSync,-1)
+	pendingSync, err := boltDb.LoadPendingPool(jobTypeSync, -1)
 	if err != nil {
 		return err
 	}
-	m.syncTxChan =  make(chan string, len(pendingSync))
+	m.syncTxChan = make(chan string, len(pendingSync))
 	for _, arId := range pendingSync {
 		m.PutToSyncTxChan(arId)
 		m.AddJob(arId, jobTypeSync)

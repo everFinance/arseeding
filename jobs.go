@@ -28,7 +28,6 @@ func (s *Server) updatePeers() {
 	s.peers = peers
 }
 
-
 func (s *Server) processBroadcastJob(arId string) (err error) {
 	// job manager set
 	if s.jobManager.IsClosed(arId, jobTypeBroadcast) {
@@ -39,21 +38,66 @@ func (s *Server) processBroadcastJob(arId string) (err error) {
 		log.Error("s.jobManager.JobBeginSet(arId, jobTypeBroadcast)", "err", err, "arId", arId)
 		return
 	}
+	arTxMeta := &types.Transaction{}
+	arTxMeta, err = s.store.LoadTxMeta(arId)
+	if err != nil {
+		arTxMeta, err = s.arCli.GetUnconfirmedTx(arId)
+		if err != nil {
+			arTxMeta, err = s.jobManager.GetUnconfirmedTxFromPeers(arId, jobTypeSync, s.peers)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if len(arTxMeta.ID) == 0 { // arTxMeta can not be null
+		return fmt.Errorf("get arTxMeta failed; arId: %s", arId)
+	}
 
+	// if arTxMeta not exist local, store it
 	if !s.store.IsExistTxMeta(arId) {
-		return ErrNotExist
-	}
-	txMeta, err := s.store.LoadTxMeta(arId)
-	if err != nil {
-		log.Error("s.store.LoadTxMeta(arId)", "err", err, "arId", arId)
-		return err
-	}
-	txData, err := getData(txMeta.DataRoot, txMeta.DataSize, s.store)
-	if err != nil {
-		log.Error("getData(txMeta.DataRoot,txMeta.DataSize,s.store)", "err", err, "arId", arId)
-		return err
+		// store txMeta
+		if err := s.store.SaveTxMeta(*arTxMeta); err != nil {
+			log.Error("s.store.SaveTxMeta(arTx)", "err", err, "arTx", arTxMeta.ID)
+			return err
+		}
+		// store txDataEndOffset
+		if err := s.syncAddTxDataEndOffset(arTxMeta.DataRoot, arTxMeta.DataSize); err != nil {
+			log.Error("s.syncAddTxDataEndOffset(arTxMeta.DataRoot,arTxMeta.DataSize)", "err", err, "arId", arId)
+			return err
+		}
 	}
 
+	size, ok := new(big.Int).SetString(arTxMeta.DataSize, 10)
+	if !ok {
+		return fmt.Errorf("new(big.Int).SetString(arTxMeta.DataSize,10) failed; dataSize: %s", arTxMeta.DataSize)
+	}
+
+	if size.Cmp(big.NewInt(0)) <= 0 {
+		// not need to broadcast tx data
+		s.jobManager.BroadcastTxMeta(arId, jobTypeBroadcast, arTxMeta, s.peers)
+		return nil
+	}
+
+	// get data
+	var data []byte
+	data, err = getData(arTxMeta.DataRoot, arTxMeta.DataSize, s.store) // get data from local
+	if err != nil {
+		// need get tx data from arweave network
+		data, err = s.arCli.GetTransactionDataByGateway(arId)
+		if err != nil {
+			data, err = s.jobManager.GetTxDataFromPeers(arId, jobTypeBroadcast, s.peers)
+			if err != nil {
+				log.Error("get data failed", "err", err, "arId", arId)
+				return err
+			}
+		}
+		// store data to local
+		err = setTxDataChunks(*arTxMeta, data, s.store)
+		if err != nil {
+			log.Error("store data failed", "err", err, "arId", arId)
+			return err
+		}
+	}
 	txMetaPosted := true
 	// check this tx whether on chain
 	_, err = s.arCli.GetTransactionStatus(arId)
@@ -62,10 +106,10 @@ func (s *Server) processBroadcastJob(arId string) (err error) {
 		err = nil
 	}
 	// generate tx chunks
-	utils.PrepareChunks(txMeta, txData)
-	txMeta.Data = utils.Base64Encode(txData)
+	utils.PrepareChunks(arTxMeta, data)
+	arTxMeta.Data = utils.Base64Encode(data)
 
-	s.jobManager.BroadcastData(arId, jobTypeBroadcast, txMeta, s.peers, txMetaPosted)
+	s.jobManager.BroadcastData(arId, jobTypeBroadcast, arTxMeta, s.peers, txMetaPosted)
 	return
 }
 
