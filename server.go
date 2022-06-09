@@ -20,6 +20,7 @@ type Server struct {
 	peers      []string
 	jobManager *JobManager
 	scheduler  *gocron.Scheduler
+	cache      *Cache
 }
 
 func New(boltDirPath string) *Server {
@@ -30,7 +31,10 @@ func New(boltDirPath string) *Server {
 	}
 
 	arCli := goar.NewClient("https://arweave.net")
-	peers, err := arCli.GetPeers()
+	peers, err := boltDb.LoadPeers()
+	if err == ErrNotExist {
+		peers, err = arCli.GetPeers()
+	}
 	if err != nil {
 		panic(err)
 	}
@@ -50,6 +54,7 @@ func New(boltDirPath string) *Server {
 		peers:      peers,
 		jobManager: jm,
 		scheduler:  gocron.NewScheduler(time.UTC),
+		cache:      &Cache{},
 	}
 }
 
