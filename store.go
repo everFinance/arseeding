@@ -254,6 +254,44 @@ func (s *Store) IsExistChunk(chunkStartOffset uint64) bool {
 	return true
 }
 
+func (s *Store) SavePeers(peers []string) error {
+	peersB, err := json.Marshal(peers)
+	key := []byte("peer-list")
+	if err != nil {
+		return err
+	}
+	err = s.BoltDb.Update(func(tx *bolt.Tx) error {
+		chunkBkt := tx.Bucket(ConstantsBucket)
+		if err := chunkBkt.Put(key, peersB); err != nil {
+			return err
+		}
+		return nil
+	})
+	return err
+}
+
+func (s *Store) LoadPeers() (peers []string, err error) {
+	key := []byte("peer-list")
+	err = s.BoltDb.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(ConstantsBucket)
+		val := bkt.Get(key)
+		if val == nil {
+			return ErrNotExist
+		}
+		err = json.Unmarshal(val, &peers)
+		return err
+	})
+	return
+}
+
+func (s *Store) IsExistPeers() bool {
+	_, err := s.LoadPeers()
+	if err == ErrNotExist {
+		return false
+	}
+	return true
+}
+
 // itob returns an 64-byte big endian representation of v.
 func itob(v uint64) []byte {
 	b := make([]byte, 64)

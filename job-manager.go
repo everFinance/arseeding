@@ -30,15 +30,16 @@ type JobManager struct {
 	cap                   int
 	status                map[string]*JobStatus // key: jobType-arId
 	broadcastSubmitTxChan chan string
+	broadcastTxChan       chan string
+	syncTxChan            chan string
 	locker                sync.RWMutex
 }
 
-func NewJobManager(cap int) *JobManager {
+func NewJM(cap int) *JobManager {
 	return &JobManager{
-		cap:                   cap,
-		status:                make(map[string]*JobStatus),
-		broadcastSubmitTxChan: make(chan string),
-		locker:                sync.RWMutex{},
+		cap:    cap,
+		status: make(map[string]*JobStatus),
+		locker: sync.RWMutex{},
 	}
 }
 
@@ -46,42 +47,39 @@ func AssembleId(arid, jobType string) string {
 	return strings.ToUpper(jobType) + "-" + arid
 }
 
-func (m *JobManager) InitJobManager(boltDb *Store) error {
-	pendingBroadcast, err := boltDb.LoadPendingPool(jobTypeBroadcast, -1)
+func (m *JobManager) InitJM(boltDb *Store) error {
+	pendingBroadcastSubmitTx, err := boltDb.LoadPendingPool(jobTypeSubmitTxBroadcast, -1)
 	if err != nil {
 		return err
 	}
-	if len(pendingBroadcast) > m.cap {
-		m.cap = len(pendingBroadcast)
+	log.Debug("broadcastSubmit num", "pending num", len(pendingBroadcastSubmitTx))
+	m.broadcastSubmitTxChan = make(chan string, len(pendingBroadcastSubmitTx))
+	for _, arId := range pendingBroadcastSubmitTx {
+		m.PutToBroadcastSubmitTxChan(arId)
+		m.AddJob(arId, jobTypeSubmitTxBroadcast)
 	}
-	for _, id := range pendingBroadcast {
-		if err := m.RegisterJob(id, jobTypeBroadcast); err != nil {
-			return err
-		}
+
+	pendingBroadcast, err := boltDb.LoadPendingPool(jobTypeBroadcast, -1)
+	log.Debug("broadcast num", "pending num", len(pendingBroadcast), "arIds", pendingBroadcast)
+	if err != nil {
+		return err
+	}
+	m.broadcastTxChan = make(chan string, len(pendingBroadcast))
+	for _, arId := range pendingBroadcast {
+		m.PutToBroadcastTxChan(arId)
+		m.AddJob(arId, jobTypeBroadcast)
 	}
 
 	pendingSync, err := boltDb.LoadPendingPool(jobTypeSync, -1)
 	if err != nil {
 		return err
 	}
-	if len(pendingSync) > m.cap {
-		m.cap = len(pendingSync)
-	}
-	for _, id := range pendingSync {
-		if err := m.RegisterJob(id, jobTypeSync); err != nil {
-			return err
-		}
+	m.syncTxChan = make(chan string, len(pendingSync))
+	for _, arId := range pendingSync {
+		m.PutToSyncTxChan(arId)
+		m.AddJob(arId, jobTypeSync)
 	}
 
-	pendingBroadcastSubmitTx, err := boltDb.LoadPendingPool(jobTypeSubmitTxBroadcast, -1)
-	if err != nil {
-		return err
-	}
-	m.broadcastSubmitTxChan = make(chan string, len(pendingBroadcastSubmitTx))
-	for _, arId := range pendingBroadcastSubmitTx {
-		m.PutToBroadcastSubmitTxChan(arId)
-		m.AddJob(arId, jobTypeSubmitTxBroadcast)
-	}
 	return nil
 }
 
@@ -330,4 +328,20 @@ func (j *JobManager) PopBroadcastSubmitTxChan() <-chan string {
 
 func (j *JobManager) PutToBroadcastSubmitTxChan(txId string) {
 	j.broadcastSubmitTxChan <- txId
+}
+
+func (j *JobManager) PopBroadcastTxChan() <-chan string {
+	return j.broadcastTxChan
+}
+
+func (j *JobManager) PutToBroadcastTxChan(arid string) {
+	j.broadcastTxChan <- arid
+}
+
+func (j *JobManager) PopSyncTxChan() <-chan string {
+	return j.syncTxChan
+}
+
+func (j *JobManager) PutToSyncTxChan(arid string) {
+	j.syncTxChan <- arid
 }

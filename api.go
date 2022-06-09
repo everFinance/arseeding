@@ -32,10 +32,10 @@ func (s *Arseeding) runAPI(port string) {
 		{
 			v2.Use(proxyArweaveGateway)
 
-			v2.GET("/info")
+			// v2.GET("/info")
 			v2.GET("/tx/:arid/status")
 			// v2.GET("/:arid")
-			v2.GET("/price/:size")
+			// v2.GET("/price/:size")
 			v2.GET("/price/:size/:target")
 			v2.GET("/block/hash/:hash")
 			v2.GET("/block/height/:height")
@@ -43,7 +43,7 @@ func (s *Arseeding) runAPI(port string) {
 			v2.GET("/wallet/:address/balance")
 			v2.GET("/wallet/:address/last_tx")
 			v2.GET("/peers")
-			v2.GET("/tx_anchor")
+			// v2.GET("/tx_anchor")
 			v2.POST("/arql")
 			v2.POST("/graphql")
 			v2.GET("/tx/pending")
@@ -56,6 +56,9 @@ func (s *Arseeding) runAPI(port string) {
 		v1.POST("/job/kill/:arid/:jobType", s.killJob)
 		v1.GET("/job/:arid/:jobType", s.getJob)
 		v1.GET("/cache/jobs", s.getCacheJobs)
+		v1.GET("/info", s.getInfo)
+		v1.GET("/tx_anchor", s.getAnchor)
+		v1.GET("/price/:size", s.getTxPrice)
 
 		// ANS-104 bundle Data api
 		v1.POST("/bundle/tx/:currency", s.submitItem)
@@ -249,6 +252,44 @@ func (s *Arseeding) getTxField(c *gin.Context) {
 	}
 }
 
+func (s *Server) getInfo(c *gin.Context) {
+	info, err := s.cache.GetInfo()
+	if err != nil {
+		if err == ErrNotExist {
+			c.Data(404, "text/html; charset=utf-8", []byte("Not Found"))
+			return
+		}
+		c.JSON(http.StatusBadRequest, err.Error())
+	}
+	c.JSON(http.StatusOK, info)
+}
+
+func (s *Server) getAnchor(c *gin.Context) {
+	anchor, err := s.cache.GetAnchor()
+	if err != nil {
+		if err == ErrNotExist {
+			c.Data(404, "text/html; charset=utf-8", []byte("Not Found"))
+			return
+		}
+		c.JSON(http.StatusBadRequest, err.Error())
+	}
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(anchor))
+}
+
+func (s *Server) getTxPrice(c *gin.Context) {
+	dataSize, err := strconv.ParseInt(c.Param("size"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+	}
+	price, err := s.cache.GetPrice()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+	}
+	// totPrice = chunkNum*deltaPrice(price for per chunk) + basePrice
+	totPrice := calculatePrice(*price, dataSize)
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(totPrice))
+}
+
 func txMetaData(txMeta *types.Transaction, db *Store) ([]byte, error) {
 	size, err := strconv.ParseUint(txMeta.DataSize, 10, 64)
 	if err != nil {
@@ -304,6 +345,18 @@ func proxyArweaveGateway(c *gin.Context) {
 
 	proxy.ServeHTTP(c.Writer, c.Request)
 	c.Abort()
+}
+
+func calculatePrice(price TxPrice, dataSize int64) string {
+
+	var chunkSize int64 = 256 * 1024
+	totPrice := price.basePrice
+	chunkNum := dataSize / chunkSize
+	if dataSize%chunkSize != 0 {
+		chunkNum += 1
+	}
+	totPrice += chunkNum * price.perChunkPrice
+	return fmt.Sprintf("%d", totPrice)
 }
 
 func (s *Arseeding) submitItem(c *gin.Context) {
