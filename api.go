@@ -272,12 +272,12 @@ func (s *Server) getTxPrice(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 	}
-	basePrice, perChunkPrice, err := s.cache.GetPrice()
+	price, err := s.cache.GetPrice()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 	}
 	// totPrice = chunkNum*deltaPrice(price for per chunk) + basePrice
-	totPrice := calculatePrice(basePrice, perChunkPrice, dataSize)
+	totPrice := calculatePrice(*price, dataSize)
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(totPrice))
 }
 
@@ -338,13 +338,14 @@ func proxyArweaveGateway(c *gin.Context) {
 	c.Abort()
 }
 
-func calculatePrice(basePrice, perChunkPrice, dataSize int64) string {
+func calculatePrice(price TxPrice, dataSize int64) string {
+
 	var chunkSize int64 = 256 * 1024
-	var totPrice int64 = basePrice
+	totPrice := price.basePrice
 	chunkNum := dataSize / chunkSize
 	if dataSize%chunkSize != 0 {
 		chunkNum += 1
 	}
-	totPrice += chunkNum * perChunkPrice
+	totPrice += chunkNum * price.perChunkPrice
 	return fmt.Sprintf("%v", totPrice)
 }

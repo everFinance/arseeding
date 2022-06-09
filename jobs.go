@@ -12,7 +12,6 @@ import (
 )
 
 func (s *Server) runJobs() {
-	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updatePeers)
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runBroadcastJobs)
 	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runSyncJobs)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updateAnchor)
@@ -23,18 +22,6 @@ func (s *Server) runJobs() {
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseJobs)
 
 	s.scheduler.StartAsync()
-}
-
-func (s *Server) updatePeers() {
-	peers, err := s.arCli.GetPeers()
-	if err != nil {
-		return
-	}
-	if len(peers) == 0 {
-		return
-	}
-	// update
-	s.peers = peers
 }
 
 func (s *Server) runBroadcastJobs() {
@@ -265,50 +252,29 @@ func (s *Server) watcherAndCloseJobs() {
 
 func (s *Server) updateAnchor() {
 	anchor, err := s.arCli.GetTransactionAnchor()
-	if err == nil {
-		s.cache.UpdateAnchor(anchor)
-	}
-	pNode := goar.NewTempConn()
-	for _, peer := range s.peers {
-		pNode.SetTempConnUrl("http://" + peer)
-		anchor, err = pNode.GetTransactionAnchor()
-		if err == nil {
-			s.cache.UpdateAnchor(anchor)
-			return
+	if err != nil {
+		pNode := goar.NewTempConn()
+		for _, peer := range s.peers {
+			pNode.SetTempConnUrl("http://" + peer)
+			anchor, err = pNode.GetTransactionAnchor()
+			if err == nil {
+				break
+			}
 		}
 	}
+	s.cache.UpdateAnchor(anchor)
 }
 
 // update arweave network info
 
 func (s *Server) updateInfo() {
 	info, err := s.arCli.GetInfo()
-	if err == nil {
-		s.cache.UpdateInfo(info)
-		return
-	}
-	pNode := goar.NewTempConn()
-	for _, peer := range s.peers {
-		pNode.SetTempConnUrl("http://" + peer)
-		info, err = pNode.GetInfo()
-		if err == nil {
-			s.cache.UpdateInfo(info)
-			return
-		}
-	}
-}
-
-func (s *Server) updatePrice() {
-	// base price /price/0  datasize = 0,data = nil
-	basePrice, err := s.arCli.GetTransactionPrice(nil, nil)
-	pNode := goar.NewTempConn()
-	if err == nil {
-		s.cache.UpdateBasePrice(basePrice)
-	} else {
+	if err != nil {
+		pNode := goar.NewTempConn()
 		for _, peer := range s.peers {
 			pNode.SetTempConnUrl("http://" + peer)
-			basePrice, err = pNode.GetTransactionPrice(nil, nil)
-			if err == nil { // fetch price from one peer
+			info, err = pNode.GetInfo()
+			if err == nil {
 				break
 			}
 		}
@@ -316,26 +282,33 @@ func (s *Server) updatePrice() {
 	if err != nil {
 		return
 	}
-	s.cache.UpdateBasePrice(basePrice)
+	s.cache.UpdateInfo(info)
+}
 
-	// perChunk + basePrice
-	littleData := []byte("0")
-	deltaPrice, err := s.arCli.GetTransactionPrice(littleData, nil)
-	if err == nil {
-		s.cache.UpdatePerChunkPrice(deltaPrice - basePrice)
-	} else {
+func (s *Server) updatePrice() {
+	// base price /price/0  datasize = 0,data = nil
+	var basePrice, deltaPrice int64
+	var err error
+
+	littleData := make([]byte, 1)
+	basePrice, err = s.arCli.GetTransactionPrice(nil, nil)
+	deltaPrice, err = s.arCli.GetTransactionPrice(littleData, nil)
+	if err != nil {
+		pNode := goar.NewTempConn()
 		for _, peer := range s.peers {
 			pNode.SetTempConnUrl("http://" + peer)
+			basePrice, err = pNode.GetTransactionPrice(nil, nil)
 			deltaPrice, err = pNode.GetTransactionPrice(littleData, nil)
 			if err == nil { // fetch price from one peer
 				break
 			}
 		}
 	}
+
 	if err != nil {
 		return
 	}
-	s.cache.UpdatePerChunkPrice(deltaPrice - basePrice)
+	s.cache.UpdatePrice(TxPrice{basePrice, deltaPrice - basePrice})
 }
 
 // update peer list, check peer available, store in db
