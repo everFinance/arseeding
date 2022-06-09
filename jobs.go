@@ -10,8 +10,6 @@ import (
 )
 
 func (s *Server) runJobs() {
-	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runBroadcastJobs)
-	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runSyncJobs)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updateAnchor)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updatePrice)
 	s.scheduler.Every(30).Seconds().SingletonMode().Do(s.updateInfo)
