@@ -2,73 +2,70 @@ package arseeding
 
 import (
 	"fmt"
+	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"math/big"
-	"strings"
 )
 
-func (s *Arseeding) runJM() {
+func (s *Arseeding) runTask() {
 	for {
 		select {
-		case jobId := <-s.jobManager.PopChan():
-			go s.processJob(jobId)
+		case jobId := <-s.taskMg.PopTkChan():
+			go s.processTask(jobId)
 		}
 	}
 }
 
-func (s *Arseeding) processJob(jobId string) {
-	ss := strings.SplitN(jobId, "-", 2)
-	if len(ss) != 2 {
-		log.Error("jobId incorrect", "jobId", jobId)
-		return
+func (s *Arseeding) processTask(taskId string) {
+	arId, taskType, err := splitTaskId(taskId)
+	if err != nil {
+		log.Error("splitTaskId", "err", err, "taskId", taskId)
 	}
-	var err error
-	jobTp, arId := ss[0], ss[1]
-	switch jobTp {
-	case jobTypeSync:
-		err = s.syncJob(arId)
-	case jobTypeBroadcast:
-		err = s.broadcastTxJob(arId)
-	case jobTypeMetaBroadcast:
-		err = s.broadcastTxMetaJob(arId)
+	switch taskType {
+	case schema.TaskTypeSync:
+		err = s.syncTask(arId)
+	case schema.TaskTypeBroadcast:
+		err = s.broadcastTxTask(arId)
+	case schema.TaskTypeBroadcastMeta:
+		err = s.broadcastTxMetaTask(arId)
 	}
 	if err != nil {
-		log.Error("process job failed", "err", err, "jobId", jobId)
+		log.Error("process task failed", "err", err, "taskId", taskId)
 		return
 	}
 
-	if err = s.setProcessedJobs([]string{arId}, jobTp); err != nil {
-		log.Error("setProcessedJobs failed", "err", err, "jobId", jobId)
+	if err = s.setProcessedTask(arId, taskType); err != nil {
+		log.Error("setProcessedTask failed", "err", err, "taskId", taskId)
 	}
 }
 
-func (s *Arseeding) syncJob(arId string) (err error) {
+func (s *Arseeding) syncTask(arId string) (err error) {
 	// 0. job manager set
-	if s.jobManager.IsClosed(arId, jobTypeSync) {
+	if s.taskMg.IsClosed(arId, schema.TaskTypeSync) {
 		return
 	}
-	if err = s.jobManager.JobBeginSet(arId, jobTypeSync, len(s.cache.GetPeers())); err != nil {
-		log.Error("s.jobManager.JobBeginSet(arId, jobTypeSync)", "err", err, "arId", arId)
+	if err = s.taskMg.TaskBeginSet(arId, schema.TaskTypeSync, len(s.cache.GetPeers())); err != nil {
+		log.Error("s.taskMg.TaskBeginSet(arId, TaskTypeSync)", "err", err, "arId", arId)
 		return
 	}
 
 	err = s.fetchAndStoreTx(arId)
 	if err == nil {
-		s.jobManager.IncSuccessed(arId, jobTypeSync)
+		s.taskMg.IncSuccessed(arId, schema.TaskTypeSync)
 	}
 	return err
 }
 
-func (s *Arseeding) broadcastTxJob(arId string) (err error) {
+func (s *Arseeding) broadcastTxTask(arId string) (err error) {
 	// job manager set
-	if s.jobManager.IsClosed(arId, jobTypeBroadcast) {
-		log.Warn("broadcast job was closed", "arId", arId)
+	if s.taskMg.IsClosed(arId, schema.TaskTypeBroadcast) {
+		log.Warn("broadcast task was closed", "arId", arId)
 		return
 	}
-	if err = s.jobManager.JobBeginSet(arId, jobTypeBroadcast, len(s.cache.GetPeers())); err != nil {
-		log.Error("s.jobManager.JobBeginSet(arId, jobTypeBroadcast)", "err", err, "arId", arId)
+	if err = s.taskMg.TaskBeginSet(arId, schema.TaskTypeBroadcast, len(s.cache.GetPeers())); err != nil {
+		log.Error("s.taskMg.TaskBeginSet(arId, TaskTypeBroadcast)", "err", err, "arId", arId)
 		return
 	}
 
@@ -101,11 +98,11 @@ func (s *Arseeding) broadcastTxJob(arId string) (err error) {
 	utils.PrepareChunks(txMeta, txData)
 	txMeta.Data = utils.Base64Encode(txData)
 
-	s.jobManager.BroadcastData(arId, jobTypeBroadcast, txMeta, s.cache.GetPeers(), txMetaPosted)
+	s.taskMg.BroadcastData(arId, schema.TaskTypeBroadcast, txMeta, s.cache.GetPeers(), txMetaPosted)
 	return
 }
 
-func (s *Arseeding) broadcastTxMetaJob(arId string) (err error) {
+func (s *Arseeding) broadcastTxMetaTask(arId string) (err error) {
 	if !s.store.IsExistTxMeta(arId) {
 		return ErrNotExist
 	}
@@ -115,14 +112,14 @@ func (s *Arseeding) broadcastTxMetaJob(arId string) (err error) {
 		return err
 	}
 
-	if s.jobManager.IsClosed(arId, jobTypeMetaBroadcast) {
+	if s.taskMg.IsClosed(arId, schema.TaskTypeBroadcastMeta) {
 		return
 	}
-	if err = s.jobManager.JobBeginSet(arId, jobTypeMetaBroadcast, len(s.cache.GetPeers())); err != nil {
-		log.Error("s.jobManager.JobBeginSet(arId, jobTypeMetaBroadcast)", "err", err, "arId", arId)
+	if err = s.taskMg.TaskBeginSet(arId, schema.TaskTypeBroadcastMeta, len(s.cache.GetPeers())); err != nil {
+		log.Error("s.taskMg.TaskBeginSet(arId, TaskTypeBroadcastMeta)", "err", err, "arId", arId)
 		return
 	}
-	s.jobManager.BroadcastTxMeta(arId, jobTypeMetaBroadcast, txMeta, s.cache.GetPeers())
+	s.taskMg.BroadcastTxMeta(arId, schema.TaskTypeBroadcastMeta, txMeta, s.cache.GetPeers())
 	return
 }
 
@@ -135,7 +132,7 @@ func (s *Arseeding) fetchAndStoreTx(arId string) (err error) {
 		arTxMeta, err = s.arCli.GetUnconfirmedTx(arId) // this api can return all tx (unconfirmed and confirmed)
 		if err != nil {
 			// get tx from peers
-			arTxMeta, err = s.jobManager.GetUnconfirmedTxFromPeers(arId, jobTypeSync, s.cache.GetPeers())
+			arTxMeta, err = s.taskMg.GetUnconfirmedTxFromPeers(arId, schema.TaskTypeSync, s.cache.GetPeers())
 			if err != nil {
 				return err
 			}
@@ -179,7 +176,7 @@ func (s *Arseeding) fetchAndStoreTx(arId string) (err error) {
 	// need get tx data from arweave network
 	data, err = s.arCli.GetTransactionDataByGateway(arId)
 	if err != nil {
-		data, err = s.jobManager.GetTxDataFromPeers(arId, jobTypeSync, s.cache.GetPeers())
+		data, err = s.taskMg.GetTxDataFromPeers(arId, schema.TaskTypeSync, s.cache.GetPeers())
 		if err != nil {
 			log.Error("get data failed", "err", err, "arId", arId)
 			return err
@@ -190,24 +187,18 @@ func (s *Arseeding) fetchAndStoreTx(arId string) (err error) {
 	return setTxDataChunks(*arTxMeta, data, s.store)
 }
 
-func (s *Arseeding) setProcessedJobs(arIds []string, jobType string) error {
-	// process job status
-	for _, arId := range arIds {
-		js := s.jobManager.GetJob(arId, jobType)
-		if js != nil {
-			if err := s.store.SaveJobStatus(jobType, arId, *js); err != nil {
-				log.Error("s.store.SaveJobStatus(jobType,arId,*js)", "err", err, "jobType", jobType, "arId", arId)
-				return err
-			}
+func (s *Arseeding) setProcessedTask(arId string, tktype string) error {
+	taskId := assembleTaskId(arId, tktype)
+
+	tk := s.taskMg.GetTask(arId, tktype)
+	if tk != nil {
+		if err := s.store.SaveTask(taskId, *tk); err != nil {
+			return err
 		}
-		// unregister job
-		s.jobManager.DelJob(arId, jobType)
 	}
+	// unregister job
+	s.taskMg.DelTask(arId, tktype)
 
 	// remove pending pool
-	if err := s.store.BatchDeletePendingPool(jobType, arIds); err != nil {
-		log.Error("s.store.BatchDeletePendingPool(jobType,arIds)", "err", err, "jobType", jobType, "arIds", arIds)
-		return err
-	}
-	return nil
+	return s.store.DelPendingPoolTaskId(taskId)
 }

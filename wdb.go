@@ -67,7 +67,7 @@ func (w *Wdb) InsertPrices(tps []schema.TokenPrice) error {
 }
 
 func (w *Wdb) UpdatePrice(symbol string, newPrice float64) error {
-	return w.Db.Model(&schema.TokenPrice{}).Where("symbol = ?", symbol).Update("fee", newPrice).Error
+	return w.Db.Model(&schema.TokenPrice{}).Where("symbol = ?", symbol).Update("price", newPrice).Error
 }
 
 func (w *Wdb) GetPrices() ([]schema.TokenPrice, error) {
@@ -114,5 +114,5 @@ func (w *Wdb) GetPendingOnChainTx() ([]schema.OnChainTx, error) {
 }
 
 func (w *Wdb) UpdateOnChainTxStatus(arId, status string) error {
-	return w.Db.Where("ar_id = ?", arId).Update("status", status).Error
+	return w.Db.Model(&schema.OnChainTx{}).Where("ar_id = ?", arId).Update("status", status).Error
 }

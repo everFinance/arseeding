@@ -5,12 +5,11 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
 	bolt "go.etcd.io/bbolt"
 	"os"
 	"path"
-	"strings"
 	"time"
 )
 
@@ -28,15 +27,9 @@ var (
 	TxMetaBucket          = []byte("tx-meta-bucket")            // key: txId, val: arTx; not include data
 	ConstantsBucket       = []byte("constants-bucket")
 
-	// pending pool bucketName
-	BroadcastJobsPendingPool       = []byte("broadcast-pending-pool")         // key: arId, value: "0x01"
-	BroadcastTxMetaJobsPendingPool = []byte("broadcast-tx-meta-pending-pool") // key: arId, value: "0x01"
-	SyncJobsPendingPool            = []byte("sync-pending-pool")              // key: arId,value: "0x01"
-
-	// save jobStatus bucketName
-	BroadcastJobStatus       = []byte("broadcast-job-status") // key: arId, value jobStatus
-	BroadcastTxMetaJobStatus = []byte("broadcast-tx-meta-job-status")
-	SyncJobStatus            = []byte("sync-job-status") // key: arId, value jobStatus
+	// tasks
+	TaskIdPendingPoolBucket = []byte("task-pending-pool-bucket") // key: taskId(taskType+"-"+arId), val: "0x01"
+	TaskBucket              = []byte("task-bucket")              // key: taskId(taskType+"-"+arId), val: task
 
 	// bundle bucketName
 	BundleItemBinary = []byte("bundle-item-binary")
@@ -75,12 +68,8 @@ func NewStore(boltDirPath string) (*Store, error) {
 			TxDataEndOffSetBucket,
 			TxMetaBucket,
 			ConstantsBucket,
-			BroadcastJobsPendingPool,
-			BroadcastTxMetaJobsPendingPool,
-			SyncJobsPendingPool,
-			BroadcastJobStatus,
-			BroadcastTxMetaJobStatus,
-			SyncJobStatus,
+			TaskIdPendingPoolBucket,
+			TaskBucket,
 			BundleItemBinary}
 		return createBuckets(tx, bucketNames...)
 	}); err != nil {
@@ -306,117 +295,55 @@ func generateOffSetKey(dataRoot, dataSize string) []byte {
 	return hash[:]
 }
 
-// about jobs
+// about tasks
 
-func (s *Store) PutPendingPool(jobType string, arId string) error {
-	bktName, err := pendingPoolBktName(jobType)
-	if err != nil {
-		return err
-	}
+func (s *Store) PutTaskPendingPool(taskId string) error {
 	return s.BoltDb.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(bktName).Put([]byte(arId), []byte("0x01"))
+		return tx.Bucket(TaskIdPendingPoolBucket).Put([]byte(taskId), []byte("0x01"))
 	})
 }
 
-func (s *Store) LoadPendingPool(jobType string, num int) ([]string, error) {
-	bktName, err := pendingPoolBktName(jobType)
+func (s *Store) LoadAllPendingTaskIds() ([]string, error) {
+	taskIds := make([]string, 0)
+	err := s.BoltDb.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(TaskIdPendingPoolBucket)
+
+		return bkt.ForEach(func(k, v []byte) error {
+			taskIds = append(taskIds, string(k))
+			return nil
+		})
+	})
+	return taskIds, err
+}
+
+func (s *Store) DelPendingPoolTaskId(taskId string) error {
+	return s.BoltDb.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(TaskIdPendingPoolBucket).Delete([]byte(taskId))
+	})
+}
+
+func (s *Store) SaveTask(taskId string, tk schema.Task) error {
+	val, err := json.Marshal(&tk)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	arIds := make([]string, 0)
+	return s.BoltDb.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(TaskBucket).Put([]byte(taskId), val)
+	})
+}
+
+func (s *Store) LoadTask(taskId string) (tk *schema.Task, err error) {
 	err = s.BoltDb.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bktName)
-
-		c := bkt.Cursor()
-		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			if len(arIds) == num {
-				return nil
-			}
-			arIds = append(arIds, string(k))
-		}
-		return nil
-	})
-	return arIds, err
-}
-
-func (s *Store) BatchDeletePendingPool(jobType string, arIds []string) error {
-	bktName, err := pendingPoolBktName(jobType)
-	if err != nil {
-		return err
-	}
-	return s.BoltDb.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bktName)
-		for _, arId := range arIds {
-			if err := bkt.Delete([]byte(arId)); err != nil {
-				log.Error("delete PendingPool error", "err", err, "arId", arId)
-				return err
-			}
-		}
-		return nil
-	})
-}
-
-func pendingPoolBktName(jobType string) ([]byte, error) {
-	var bktName []byte
-	switch strings.ToLower(jobType) {
-	case jobTypeSync:
-		bktName = SyncJobsPendingPool
-	case jobTypeBroadcast:
-		bktName = BroadcastJobsPendingPool
-	case jobTypeMetaBroadcast:
-		bktName = BroadcastTxMetaJobsPendingPool
-	default:
-		return nil, fmt.Errorf("not support this jobType: %s", jobType)
-	}
-	return bktName, nil
-}
-
-func jobStatusBktName(jobType string) ([]byte, error) {
-	var bktName []byte
-	switch strings.ToLower(jobType) {
-	case jobTypeSync:
-		bktName = BroadcastJobStatus
-	case jobTypeBroadcast:
-		bktName = SyncJobStatus
-	case jobTypeMetaBroadcast:
-		bktName = BroadcastTxMetaJobStatus
-	default:
-		return nil, fmt.Errorf("not support this jobType: %s", jobType)
-	}
-	return bktName, nil
-}
-
-func (s *Store) SaveJobStatus(jobType string, arId string, jobStatus JobStatus) error {
-	bktName, err := jobStatusBktName(jobType)
-	if err != nil {
-		return err
-	}
-	val, err := json.Marshal(&jobStatus)
-	if err != nil {
-		return err
-	}
-	return s.BoltDb.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(bktName).Put([]byte(arId), val)
-	})
-}
-
-func (s *Store) LoadJobStatus(jobType, arId string) (*JobStatus, error) {
-	bktName, err := jobStatusBktName(jobType)
-	if err != nil {
-		return nil, err
-	}
-	js := &JobStatus{}
-	err = s.BoltDb.View(func(tx *bolt.Tx) error {
-		val := tx.Bucket(bktName).Get([]byte(arId))
+		val := tx.Bucket(TaskBucket).Get([]byte(taskId))
 		if val == nil {
 			return ErrNotExist
 		} else {
-			err = json.Unmarshal(val, js)
+			err = json.Unmarshal(val, tk)
 			return err
 		}
 	})
-	return js, err
+	return
 }
 
 // about bundle

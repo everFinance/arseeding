@@ -70,12 +70,12 @@ sync and broadcast api:
 ```
     v1.POST("/job/broadcast/:arid", s.broadcast)
     v1.POST("/job/sync/:arid", s.sync)
-    v1.POST("/job/kill/:arid/:jobType", s.killJob)
-    v1.GET("/job/:arid/:jobType", s.getJob)
+    v1.POST("/job/kill/:arid/:tktype", s.killJob)
+    v1.GET("/job/:arid/:tktype", s.getJob)
     v1.GET("/cache/jobs", s.getCacheJobs)
 ```
 `killJob` This interface can be used to stop a broadcast job when enough nodes have been broadcast via `getJob`   
-`jobType` is 'sync' or 'broadcast'   
+`tktype` is 'sync' or 'broadcast'   
 `getCacheJobs` return all pending jobs
 
 ## Usage
@@ -125,7 +125,7 @@ resp:
 ```
 {
     "arId": "yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8",
-    "jobType": "sync",
+    "tktype": "sync",
     "countSuccessed": 1,
     "countFailed": 0,
     "totalNodes": 945,
@@ -151,7 +151,7 @@ resp:
 ```
 {
     "arid": "yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8",
-    "jobType": "broadcast",
+    "tktype": "broadcast",
     "countSuccessed": 220,
     "countFailed": 9,
     "totalNodes": 939,

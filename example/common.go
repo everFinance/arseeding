@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/everFinance/arseeding"
+	"github.com/everFinance/arseeding/schema"
 	"github.com/panjf2000/ants/v2"
 	"gopkg.in/h2non/gentleman.v2"
 	"sync"
@@ -105,9 +106,9 @@ func postBroadcastJob(arId string, cli *gentleman.Client) error {
 	return nil
 }
 
-func GetJob(arId string, jobType string, cli *gentleman.Client) (*arseeding.JobStatus, error) {
+func GetJob(arId string, tktype string, cli *gentleman.Client) (*schema.Task, error) {
 	req := cli.Request()
-	req.AddPath(fmt.Sprintf("/job/%s/%s", arId, jobType))
+	req.AddPath(fmt.Sprintf("/job/%s/%s", arId, tktype))
 	req.Method("GET")
 	resp, err := req.Send()
 	if err != nil {
@@ -116,14 +117,14 @@ func GetJob(arId string, jobType string, cli *gentleman.Client) (*arseeding.JobS
 	if !resp.Ok {
 		return nil, errors.New(resp.String())
 	}
-	res := &arseeding.JobStatus{}
+	res := &schema.Task{}
 	err = resp.JSON(res)
 	return res, err
 }
 
-func KillJob(arId string, jobType string, cli *gentleman.Client) error {
+func KillJob(arId string, tktype string, cli *gentleman.Client) error {
 	req := cli.Request()
-	req.AddPath(fmt.Sprintf("/job/kill/%s/%s", arId, jobType))
+	req.AddPath(fmt.Sprintf("/job/kill/%s/%s", arId, tktype))
 	req.Method("POST")
 	resp, err := req.Send()
 	if err != nil {

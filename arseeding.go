@@ -19,9 +19,9 @@ type Arseeding struct {
 	submitLocker    sync.Mutex
 	endOffsetLocker sync.Mutex
 
-	arCli      *goar.Client
-	jobManager *JobManager
-	scheduler  *gocron.Scheduler
+	arCli     *goar.Client
+	taskMg    *TaskManager
+	scheduler *gocron.Scheduler
 
 	cache *Cache
 
@@ -41,8 +41,8 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 		panic(err)
 	}
 
-	jobmg := NewJM()
-	if err := jobmg.InitJM(boltDb); err != nil {
+	jobmg := NewTaskMg()
+	if err := jobmg.InitTaskMg(boltDb); err != nil {
 		panic(err)
 	}
 
@@ -67,7 +67,7 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 		submitLocker:        sync.Mutex{},
 		endOffsetLocker:     sync.Mutex{},
 		arCli:               arCli,
-		jobManager:          jobmg,
+		taskMg:              jobmg,
 		scheduler:           gocron.NewScheduler(time.UTC),
 		paySdk:              paySdk,
 		wdb:                 wdb,
@@ -113,5 +113,5 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 func (s *Arseeding) Run(port string) {
 	go s.runAPI(port)
 	go s.runJobs()
-	go s.runJM()
+	go s.runTask()
 }

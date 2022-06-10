@@ -85,7 +85,7 @@ func (s *Arseeding) updateBundlePerFee() {
 }
 
 func (s *Arseeding) watcherAndCloseJobs() {
-	jobs := s.jobManager.GetJobs()
+	jobs := s.taskMg.GetTasks()
 	now := time.Now().Unix()
 	for _, job := range jobs {
 		if job.Close || job.Timestamp == 0 { // timestamp == 0  means do not start
@@ -93,8 +93,8 @@ func (s *Arseeding) watcherAndCloseJobs() {
 		}
 		// spend time not more than 30 minutes
 		if now-job.Timestamp > 30*60 {
-			if err := s.jobManager.CloseJob(job.ArId, job.JobType); err != nil {
-				log.Error("watcherAndCloseJobs closeJob", "err", err, "jobId", assembleId(job.ArId, job.JobType))
+			if err := s.taskMg.CloseTask(job.ArId, job.TaskType); err != nil {
+				log.Error("watcherAndCloseJobs closeJob", "err", err, "jobId", assembleTaskId(job.ArId, job.TaskType))
 				continue
 			}
 		}
@@ -223,7 +223,7 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 		if err != nil {
 			log.Error("s.wdb.GetSignerOrder", "err", err, "signer", signer, "symbol", urt.Symbol, "fee", urt.Amount)
 			if err == gorm.ErrRecordNotFound {
-				// update receipt status is unrefund
+				// update receipt taskMap is unrefund
 				if err = s.wdb.UpdateReceiptStatus(urt.ID, schema.UnRefund, nil); err != nil {
 					log.Error("s.wdb.UpdateReceiptStatus", "err", err, "id", urt.ID)
 				}
@@ -250,7 +250,7 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 			dbTx.Commit()
 		}
 
-		// update order payment status
+		// update order payment taskMap
 		dbTx := s.wdb.Db.Begin()
 		if err = s.wdb.UpdateOrderPay(ord.ID, urt.EverHash, schema.SuccPayment, dbTx); err != nil {
 			log.Error("s.wdb.UpdateOrderPay(ord.ID,schema.SuccPayment,dbTx)", "err", err)
@@ -274,7 +274,7 @@ func (s *Arseeding) refundReceipt() {
 	}
 
 	for _, rpt := range recpts {
-		// update rpt status is refund
+		// update rpt taskMap is refund
 		if err := s.wdb.UpdateReceiptStatus(rpt.ID, schema.Refund, nil); err != nil {
 			log.Error("s.wdb.UpdateReceiptStatus(rpt.ID,schema.Refund,nil)", "err", err, "id", rpt.ID)
 			continue
@@ -288,7 +288,7 @@ func (s *Arseeding) refundReceipt() {
 		everTx, err := s.paySdk.Transfer(rpt.Symbol, amount, rpt.From, rpt.EverHash)
 		if err != nil {
 			log.Error("s.paySdk.Transfer", "err", err)
-			// update receipt status is unrefund
+			// update receipt taskMap is unrefund
 			if err := s.wdb.UpdateReceiptStatus(rpt.ID, schema.UnRefund, nil); err != nil {
 				log.Error("s.wdb.UpdateReceiptStatus(rpt.ID,schema.UnRefund,nil)", "err", err, "id", rpt.ID)
 			}
@@ -390,18 +390,18 @@ func (s *Arseeding) watcherOnChainTx() {
 			continue
 		}
 
-		// check onchain status
+		// check onchain taskMap
 		arTxStatus, err := s.arCli.GetTransactionStatus(tx.ArId)
 		if err != nil {
 			log.Error("s.arCli.GetTransactionStatus(tx.ArId)", "err", err, "arId", tx.ArId)
 			continue
 		}
-		// update status success
+		// update taskMap success
 		if arTxStatus.NumberOfConfirmations > 3 {
 			if err = s.wdb.UpdateOnChainTxStatus(tx.ArId, schema.SuccOnChain); err != nil {
 				log.Error("UpdateOnChainTxStatus(tx.ArId,schema.SuccOnChain)", "err", err)
 			}
-			// todo update order onChain status
+			// todo update order onChain taskMap
 		}
 	}
 }

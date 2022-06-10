@@ -109,7 +109,7 @@ func (b *BcPool) checkBroadcastTxStatus() {
 	for _, arId := range needCheckBroadcastTxIds {
 		jobStatus, err := example.GetJob(arId, "broadcast", b.seedCli)
 		if err != nil {
-			log.Error("example.GetJob(arId,\"broadcast\",b.seedCli)", "err", err, "arId", arId)
+			log.Error("example.GetTask(arId,\"broadcast\",b.seedCli)", "err", err, "arId", arId)
 			continue
 		}
 		if jobStatus.CountSuccessed >= 10 {

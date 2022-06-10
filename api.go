@@ -34,31 +34,26 @@ func (s *Arseeding) runAPI(port string) {
 		v2 := r.Group("/")
 		{
 			v2.Use(proxyArweaveGateway)
-
-			// v2.GET("/info")
-			v2.GET("/tx/:arid/status")
-			// v2.GET("/:arid")
-			// v2.GET("/fee/:size")
+			v2.GET("/tx/:arid/taskMap")
 			v2.GET("/fee/:size/:target")
 			v2.GET("/block/hash/:hash")
 			v2.GET("/block/height/:height")
 			v2.GET("/current_block")
 			v2.GET("/wallet/:address/balance")
 			v2.GET("/wallet/:address/last_tx")
-			// v2.GET("/peers")
-			// v2.GET("/tx_anchor")
 			v2.POST("/arql")
 			v2.POST("/graphql")
 			v2.GET("/tx/pending")
 			v2.GET("/unconfirmed_tx/:arId")
 		}
 
-		// broadcast && sync jobs
-		v1.POST("/job/broadcast/:arid", s.broadcast)
-		v1.POST("/job/sync/:arid", s.sync)
-		v1.POST("/job/kill/:arid/:jobType", s.killJob)
-		v1.GET("/job/:arid/:jobType", s.getJob)
-		v1.GET("/cache/jobs", s.getCacheJobs)
+		// broadcast && sync tasks
+		// v1.POST("/job/broadcast/:arid", s.broadcast)
+		// v1.POST("/job/sync/:arid", s.sync)
+		v1.POST("/task/:taskType/:arid", s.postTask)
+		v1.POST("/task/kill/:taskType/:arid", s.killJob)
+		v1.GET("/task/:taskType/:arid", s.getTask)
+		v1.GET("/task/cache", s.getCacheTasks)
 
 		// ANS-104 bundle Data api
 		v1.POST("/bundle/tx/:currency", s.submitItem)
@@ -97,7 +92,7 @@ func (s *Arseeding) submitTx(c *gin.Context) {
 	}
 
 	// register broadcast submit tx
-	if err := s.registerJob(arTx.ID, jobTypeMetaBroadcast); err != nil {
+	if err := s.registerTask(arTx.ID, schema.TaskTypeBroadcastMeta); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -254,7 +249,7 @@ func (s *Arseeding) getTxField(c *gin.Context) {
 	case "signature":
 		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Signature))
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"status": 400, "error": "invalid_field"})
+		c.JSON(http.StatusBadRequest, gin.H{"taskMap": 400, "error": "invalid_field"})
 	}
 }
 
@@ -350,7 +345,28 @@ func calculatePrice(fee schema.ArFee, dataSize int64) string {
 	return fmt.Sprintf("%d", totPrice)
 }
 
-// about job-manager
+// about task-manager
+
+func (s *Arseeding) postTask(c *gin.Context) {
+	arid := c.Param("arid")
+	txHash, err := utils.Base64Decode(arid)
+	if err != nil || len(txHash) != 32 {
+		c.JSON(http.StatusBadRequest, "arId incorrect")
+		return
+	}
+	tkType := c.Param("taskType")
+	if !strings.Contains(schema.TaskTypeSync+schema.TaskTypeBroadcast+schema.TaskTypeBroadcastMeta, tkType) {
+		c.JSON(http.StatusBadRequest, "tktype not exist")
+		return
+	}
+
+	if err = s.registerTask(arid, tkType); err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, "ok")
+}
+
 func (s *Arseeding) broadcast(c *gin.Context) {
 	arid := c.Param("arid")
 	txHash, err := utils.Base64Decode(arid)
@@ -359,7 +375,7 @@ func (s *Arseeding) broadcast(c *gin.Context) {
 		return
 	}
 
-	if err = s.registerJob(arid, jobTypeBroadcast); err != nil {
+	if err = s.registerTask(arid, schema.TaskTypeBroadcast); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -375,7 +391,7 @@ func (s *Arseeding) sync(c *gin.Context) {
 		return
 	}
 
-	if err = s.registerJob(arid, jobTypeSync); err != nil {
+	if err = s.registerTask(arid, schema.TaskTypeSync); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -385,9 +401,9 @@ func (s *Arseeding) sync(c *gin.Context) {
 
 func (s *Arseeding) killJob(c *gin.Context) {
 	arid := c.Param("arid")
-	jobType := c.Param("jobType")
-	if !strings.Contains(jobTypeSync+jobTypeBroadcast, strings.ToLower(jobType)) {
-		c.JSON(http.StatusBadRequest, "jobType not exist")
+	tktype := c.Param("taskType")
+	if !strings.Contains(schema.TaskTypeSync+schema.TaskTypeBroadcast, tktype) {
+		c.JSON(http.StatusBadRequest, "tktype not exist")
 		return
 	}
 	txHash, err := utils.Base64Decode(arid)
@@ -395,7 +411,7 @@ func (s *Arseeding) killJob(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, "arId incorrect")
 		return
 	}
-	err = s.jobManager.CloseJob(arid, jobType)
+	err = s.taskMg.CloseTask(arid, tktype)
 	if err != nil {
 		c.JSON(http.StatusNotFound, err.Error())
 	} else {
@@ -403,11 +419,11 @@ func (s *Arseeding) killJob(c *gin.Context) {
 	}
 }
 
-func (s *Arseeding) getJob(c *gin.Context) {
+func (s *Arseeding) getTask(c *gin.Context) {
 	arid := c.Param("arid")
-	jobType := c.Param("jobType")
-	if !strings.Contains(jobTypeSync+jobTypeBroadcast+jobTypeMetaBroadcast, strings.ToLower(jobType)) {
-		c.JSON(http.StatusBadRequest, "jobType not exist")
+	tktype := c.Param("taskType")
+	if !strings.Contains(schema.TaskTypeSync+schema.TaskTypeBroadcast+schema.TaskTypeBroadcastMeta, tktype) {
+		c.JSON(http.StatusBadRequest, "tktype not exist")
 		return
 	}
 	txHash, err := utils.Base64Decode(arid)
@@ -416,39 +432,39 @@ func (s *Arseeding) getJob(c *gin.Context) {
 		return
 	}
 	// get from cache
-	job := s.jobManager.GetJob(arid, jobType)
-	if job != nil {
-		c.JSON(http.StatusOK, job)
+	tk := s.taskMg.GetTask(arid, tktype)
+	if tk != nil {
+		c.JSON(http.StatusOK, tk)
 		return
 	}
 
 	// get from db
-	job, err = s.store.LoadJobStatus(jobType, arid)
+	tk, err = s.store.LoadTask(assembleTaskId(arid, tktype))
 	if err != nil {
 		c.JSON(http.StatusNotFound, err.Error())
 	} else {
-		c.JSON(http.StatusOK, job)
+		c.JSON(http.StatusOK, tk)
 	}
 }
 
-func (s *Arseeding) getCacheJobs(c *gin.Context) {
-	jobMap := s.jobManager.GetJobs()
-	total := len(jobMap)
+func (s *Arseeding) getCacheTasks(c *gin.Context) {
+	tks := s.taskMg.GetTasks()
+	total := len(tks)
 	c.JSON(http.StatusOK, gin.H{
 		"total": total,
-		"jobs":  jobMap,
+		"tasks": tks,
 	})
 }
 
-func (s *Arseeding) registerJob(arId, jobType string) error {
-	s.jobManager.AddJob(arId, jobType)
-	if err := s.store.PutPendingPool(jobType, arId); err != nil {
-		s.jobManager.DelJob(arId, jobType)
-		log.Error("PutPendingPool(jobType, arTx.ID)", "err", err, "arId", arId, "jobType", jobType)
+func (s *Arseeding) registerTask(arId, tktype string) error {
+	s.taskMg.AddTask(arId, tktype)
+	if err := s.store.PutTaskPendingPool(assembleTaskId(arId, tktype)); err != nil {
+		s.taskMg.DelTask(arId, tktype)
+		log.Error("PutTaskPendingPool(tktype, arTx.ID)", "err", err, "arId", arId, "tktype", tktype)
 		return err
 	}
 
-	s.jobManager.PutToChan(arId, jobType)
+	s.taskMg.PutToTkChan(arId, tktype)
 	return nil
 }
 
