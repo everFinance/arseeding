@@ -41,7 +41,7 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 		panic(err)
 	}
 
-	jobmg := NewJM(500)
+	jobmg := NewJM()
 	if err := jobmg.InitJM(boltDb); err != nil {
 		panic(err)
 	}
@@ -113,7 +113,5 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 func (s *Arseeding) Run(port string) {
 	go s.runAPI(port)
 	go s.runJobs()
-	go s.RunBroadcastTxMeta()
-	go s.RunBroadcastTx()
-	go s.RunSyncTx()
+	go s.runJM()
 }

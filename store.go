@@ -364,7 +364,7 @@ func pendingPoolBktName(jobType string) ([]byte, error) {
 		bktName = SyncJobsPendingPool
 	case jobTypeBroadcast:
 		bktName = BroadcastJobsPendingPool
-	case jobTypeTxMetaBroadcast:
+	case jobTypeMetaBroadcast:
 		bktName = BroadcastTxMetaJobsPendingPool
 	default:
 		return nil, fmt.Errorf("not support this jobType: %s", jobType)
@@ -379,7 +379,7 @@ func jobStatusBktName(jobType string) ([]byte, error) {
 		bktName = BroadcastJobStatus
 	case jobTypeBroadcast:
 		bktName = SyncJobStatus
-	case jobTypeTxMetaBroadcast:
+	case jobTypeMetaBroadcast:
 		bktName = BroadcastTxMetaJobStatus
 	default:
 		return nil, fmt.Errorf("not support this jobType: %s", jobType)

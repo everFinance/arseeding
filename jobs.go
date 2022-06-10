@@ -84,28 +84,6 @@ func (s *Arseeding) updateBundlePerFee() {
 	s.bundlePerFeeMap = feeMap
 }
 
-func (s *Arseeding) setProcessedJobs(arIds []string, jobType string) error {
-	// process job status
-	for _, arId := range arIds {
-		js := s.jobManager.GetJob(arId, jobType)
-		if js != nil {
-			if err := s.store.SaveJobStatus(jobType, arId, *js); err != nil {
-				log.Error("s.store.SaveJobStatus(jobType,arId,*js)", "err", err, "jobType", jobType, "arId", arId)
-				return err
-			}
-		}
-		// unregister job
-		s.jobManager.UnregisterJob(arId, jobType)
-	}
-
-	// remove pending pool
-	if err := s.store.BatchDeletePendingPool(jobType, arIds); err != nil {
-		log.Error("s.store.BatchDeletePendingPool(jobType,arIds)", "err", err, "jobType", jobType, "arIds", arIds)
-		return err
-	}
-	return nil
-}
-
 func (s *Arseeding) watcherAndCloseJobs() {
 	jobs := s.jobManager.GetJobs()
 	now := time.Now().Unix()
@@ -116,7 +94,7 @@ func (s *Arseeding) watcherAndCloseJobs() {
 		// spend time not more than 30 minutes
 		if now-job.Timestamp > 30*60 {
 			if err := s.jobManager.CloseJob(job.ArId, job.JobType); err != nil {
-				log.Error("watcherAndCloseJobs closeJob", "err", err, "jobId", AssembleId(job.ArId, job.JobType))
+				log.Error("watcherAndCloseJobs closeJob", "err", err, "jobId", assembleId(job.ArId, job.JobType))
 				continue
 			}
 		}

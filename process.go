@@ -8,7 +8,7 @@ import (
 	"strconv"
 )
 
-func (s *Arseeding) processSubmitChunk(chunk types.GetChunk) error {
+func (s *Arseeding) saveSubmitChunk(chunk types.GetChunk) error {
 	// 1. verify chunk
 	err, ok := verifyChunk(chunk)
 	if err != nil || !ok {
@@ -34,6 +34,53 @@ func (s *Arseeding) processSubmitChunk(chunk types.GetChunk) error {
 		return err
 	}
 
+	return nil
+}
+
+func (s *Arseeding) saveSubmitTx(arTx types.Transaction) error {
+	// 1. verify ar tx
+	if err := utils.VerifyTransaction(arTx); err != nil {
+		log.Error("utils.VerifyTransaction(arTx)", "err", err, "arTx", arTx.ID)
+		return err
+	}
+
+	// 2. check meta exist
+	if s.store.IsExistTxMeta(arTx.ID) {
+		return ErrExistTx
+	}
+
+	// 3. save tx meta
+	if err := s.store.SaveTxMeta(arTx); err != nil {
+		log.Error("s.store.SaveTxMeta(arTx)", "err", err, "arTx", arTx.ID)
+		return err
+	}
+
+	s.submitLocker.Lock()
+	defer s.submitLocker.Unlock()
+
+	// 4. check whether update allDataEndOffset
+	if s.store.IsExistTxDataEndOffset(arTx.DataRoot, arTx.DataSize) {
+		return nil
+	}
+	// add txDataEndOffset
+	if err := s.syncAddTxDataEndOffset(arTx.DataRoot, arTx.DataSize); err != nil {
+		log.Error("syncAddTxDataEndOffset(s.store,arTx.DataRoot,arTx.DataSize)", "err", err, "arTx", arTx.ID)
+		return err
+	}
+
+	// 5. save tx data chunk if exist
+	if len(arTx.Data) > 0 {
+		// set chunks
+		dataBy, err := utils.Base64Decode(arTx.Data)
+		if err != nil {
+			log.Error("utils.Base64Decode(arTx.Data)", "err", err, "data", arTx.Data)
+			return err
+		}
+		if err := setTxDataChunks(arTx, dataBy, s.store); err != nil {
+			return err
+		}
+	}
+	log.Debug("success process a new arTx", "arTx", arTx.ID)
 	return nil
 }
 

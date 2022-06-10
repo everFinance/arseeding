@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	jobTypeBroadcast       = "broadcast"         // include tx and tx data
-	jobTypeTxMetaBroadcast = "tx-meta-broadcast" //  not include tx data
-	jobTypeSync            = "sync"
+	jobTypeBroadcast     = "broadcast"      // include tx and tx data
+	jobTypeMetaBroadcast = "broadcast_meta" //  not include tx data
+	jobTypeSync          = "sync"
 )
 
 type JobStatus struct {
@@ -26,79 +26,72 @@ type JobStatus struct {
 }
 
 type JobManager struct {
-	cap                 int
-	status              map[string]*JobStatus // key: jobType-arId
-	broadcastTxMetaChan chan string
-	broadcastTxChan     chan string
-	syncTxChan          chan string
-	locker              sync.RWMutex
+	status map[string]*JobStatus // key: jobType-arId
+	txChan chan string           // val: jobType-arId
+	locker sync.RWMutex
 }
 
-func NewJM(cap int) *JobManager {
+func NewJM() *JobManager {
 	return &JobManager{
-		cap:    cap,
 		status: make(map[string]*JobStatus),
+		txChan: make(chan string),
 		locker: sync.RWMutex{},
 	}
 }
 
-func AssembleId(arid, jobType string) string {
-	return strings.ToUpper(jobType) + "-" + arid
-}
-
 func (m *JobManager) InitJM(boltDb *Store) error {
-	pendingBroadcastSubmitTx, err := boltDb.LoadPendingPool(jobTypeTxMetaBroadcast, -1)
+	pendingBroadcastMeta, err := boltDb.LoadPendingPool(jobTypeMetaBroadcast, -1)
 	if err != nil {
 		return err
 	}
-	log.Debug("broadcastSubmit num", "pending num", len(pendingBroadcastSubmitTx))
-	m.broadcastTxMetaChan = make(chan string, len(pendingBroadcastSubmitTx))
-	for _, arId := range pendingBroadcastSubmitTx {
-		m.PutToBroadcastTxMetaChan(arId)
-		m.AddJob(arId, jobTypeTxMetaBroadcast)
+	log.Debug("broadcastSubmit num", "pending num", len(pendingBroadcastMeta))
+	for _, arId := range pendingBroadcastMeta {
+		m.AddJob(arId, jobTypeMetaBroadcast)
+		go m.PutToChan(arId, jobTypeMetaBroadcast)
 	}
 
 	pendingBroadcast, err := boltDb.LoadPendingPool(jobTypeBroadcast, -1)
-	log.Debug("broadcast num", "pending num", len(pendingBroadcast), "arIds", pendingBroadcast)
 	if err != nil {
 		return err
 	}
-	m.broadcastTxChan = make(chan string, len(pendingBroadcast))
+	log.Debug("broadcast num", "pending num", len(pendingBroadcast), "arIds", pendingBroadcast)
 	for _, arId := range pendingBroadcast {
-		m.PutToBroadcastTxChan(arId)
 		m.AddJob(arId, jobTypeBroadcast)
+		go m.PutToChan(arId, jobTypeBroadcast)
 	}
 
 	pendingSync, err := boltDb.LoadPendingPool(jobTypeSync, -1)
 	if err != nil {
 		return err
 	}
-	m.syncTxChan = make(chan string, len(pendingSync))
 	for _, arId := range pendingSync {
-		m.PutToSyncTxChan(arId)
 		m.AddJob(arId, jobTypeSync)
+		go m.PutToChan(arId, jobTypeSync)
 	}
 
 	return nil
 }
 
-func (m *JobManager) RegisterJob(arid, jobType string) error {
+func (m *JobManager) AddJob(arid, jobType string) {
 	if m.exist(arid, jobType) {
-		return ErrExistJob
+		return
 	}
 
 	m.locker.Lock()
 	defer m.locker.Unlock()
-
-	if len(m.status) >= m.cap {
-		return ErrFullyLoaded
+	m.status[assembleId(arid, jobType)] = &JobStatus{
+		ArId:    arid,
+		JobType: jobType,
 	}
-	m.AddJob(arid, jobType)
-	return nil
+}
+
+func (m *JobManager) DelJob(arid, jobType string) {
+	id := assembleId(arid, jobType)
+	delete(m.status, id)
 }
 
 func (m *JobManager) exist(arid, jobType string) bool {
-	id := AssembleId(arid, jobType)
+	id := assembleId(arid, jobType)
 	_, ok := m.status[id]
 	return ok
 }
@@ -106,7 +99,7 @@ func (m *JobManager) exist(arid, jobType string) bool {
 func (m *JobManager) IncSuccessed(arid, jobType string) {
 	m.locker.Lock()
 	defer m.locker.Unlock()
-	id := AssembleId(arid, jobType)
+	id := assembleId(arid, jobType)
 	if s, ok := m.status[id]; ok {
 		s.CountSuccessed += 1
 	}
@@ -115,30 +108,16 @@ func (m *JobManager) IncSuccessed(arid, jobType string) {
 func (m *JobManager) IncFailed(arid, jobType string) {
 	m.locker.Lock()
 	defer m.locker.Unlock()
-	id := AssembleId(arid, jobType)
+	id := assembleId(arid, jobType)
 	if s, ok := m.status[id]; ok {
 		s.CountFailed += 1
 	}
 }
 
-func (m *JobManager) UnregisterJob(arid, jobType string) {
-	id := AssembleId(arid, jobType)
-	delete(m.status, id)
-}
-
-func (m *JobManager) AddJob(arid, jobType string) {
-	id := AssembleId(arid, jobType)
-	m.status[id] = &JobStatus{
-		ArId:    arid,
-		JobType: jobType,
-	}
-	return
-}
-
 func (m *JobManager) JobBeginSet(arid, jobType string, totalNodes int) error {
 	m.locker.RLock()
 	defer m.locker.RUnlock()
-	id := AssembleId(arid, jobType)
+	id := assembleId(arid, jobType)
 	job, ok := m.status[id]
 	if !ok {
 		return ErrNotFound
@@ -151,7 +130,7 @@ func (m *JobManager) JobBeginSet(arid, jobType string, totalNodes int) error {
 func (m *JobManager) GetJob(arid, jobType string) *JobStatus {
 	m.locker.RLock()
 	defer m.locker.RUnlock()
-	id := AssembleId(arid, jobType)
+	id := assembleId(arid, jobType)
 	job := JobStatus{}
 	j, ok := m.status[id]
 	if ok {
@@ -164,7 +143,7 @@ func (m *JobManager) GetJob(arid, jobType string) *JobStatus {
 func (m *JobManager) CloseJob(arid, jobType string) error {
 	m.locker.RLock()
 	defer m.locker.RUnlock()
-	id := AssembleId(arid, jobType)
+	id := assembleId(arid, jobType)
 	job, ok := m.status[id]
 	if ok {
 		job.Close = true
@@ -175,7 +154,7 @@ func (m *JobManager) CloseJob(arid, jobType string) error {
 }
 
 func (m *JobManager) IsClosed(arid, jobType string) bool {
-	id := AssembleId(arid, jobType)
+	id := assembleId(arid, jobType)
 	job, ok := m.status[id]
 	if ok {
 		return job.Close
@@ -320,26 +299,14 @@ func (j *JobManager) BroadcastData(arId, jobType string, tx *types.Transaction, 
 	return
 }
 
-func (j *JobManager) PopBroadcastTxMetaChan() <-chan string {
-	return j.broadcastTxMetaChan
+func (j *JobManager) PopChan() <-chan string {
+	return j.txChan
 }
 
-func (j *JobManager) PutToBroadcastTxMetaChan(txId string) {
-	j.broadcastTxMetaChan <- txId
+func (j *JobManager) PutToChan(arId, jobType string) {
+	j.txChan <- assembleId(arId, jobType)
 }
 
-func (j *JobManager) PopBroadcastTxChan() <-chan string {
-	return j.broadcastTxChan
-}
-
-func (j *JobManager) PutToBroadcastTxChan(arid string) {
-	j.broadcastTxChan <- arid
-}
-
-func (j *JobManager) PopSyncTxChan() <-chan string {
-	return j.syncTxChan
-}
-
-func (j *JobManager) PutToSyncTxChan(arid string) {
-	j.syncTxChan <- arid
+func assembleId(arid, jobType string) string {
+	return strings.ToLower(jobType) + "-" + arid
 }

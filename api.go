@@ -90,8 +90,14 @@ func (s *Arseeding) submitTx(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
+	// save tx to local
+	if err = s.saveSubmitTx(arTx); err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
 
-	if err := s.broadcastSubmitTx(arTx); err != nil {
+	// register broadcast submit tx
+	if err := s.registerJob(arTx.ID, jobTypeMetaBroadcast); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -116,7 +122,7 @@ func (s *Arseeding) submitChunk(c *gin.Context) {
 		return
 	}
 
-	if err := s.processSubmitChunk(chunk); err != nil {
+	if err := s.saveSubmitChunk(chunk); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -353,7 +359,7 @@ func (s *Arseeding) broadcast(c *gin.Context) {
 		return
 	}
 
-	if err = s.RegisterBroadcastTx(arid); err != nil {
+	if err = s.registerJob(arid, jobTypeBroadcast); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -369,14 +375,7 @@ func (s *Arseeding) sync(c *gin.Context) {
 		return
 	}
 
-	// check whether synced
-	job, err := s.store.LoadJobStatus(jobTypeSync, arid)
-	if err == nil && job.CountSuccessed > 0 {
-		c.JSON(http.StatusBadRequest, "arId has successed synced")
-		return
-	}
-
-	if err = s.RegisterSyncTx(arid); err != nil {
+	if err = s.registerJob(arid, jobTypeSync); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -407,7 +406,7 @@ func (s *Arseeding) killJob(c *gin.Context) {
 func (s *Arseeding) getJob(c *gin.Context) {
 	arid := c.Param("arid")
 	jobType := c.Param("jobType")
-	if !strings.Contains(jobTypeSync+jobTypeBroadcast+jobTypeTxMetaBroadcast, strings.ToLower(jobType)) {
+	if !strings.Contains(jobTypeSync+jobTypeBroadcast+jobTypeMetaBroadcast, strings.ToLower(jobType)) {
 		c.JSON(http.StatusBadRequest, "jobType not exist")
 		return
 	}
@@ -439,6 +438,18 @@ func (s *Arseeding) getCacheJobs(c *gin.Context) {
 		"total": total,
 		"jobs":  jobMap,
 	})
+}
+
+func (s *Arseeding) registerJob(arId, jobType string) error {
+	s.jobManager.AddJob(arId, jobType)
+	if err := s.store.PutPendingPool(jobType, arId); err != nil {
+		s.jobManager.DelJob(arId, jobType)
+		log.Error("PutPendingPool(jobType, arTx.ID)", "err", err, "arId", arId, "jobType", jobType)
+		return err
+	}
+
+	s.jobManager.PutToChan(arId, jobType)
+	return nil
 }
 
 func (s *Arseeding) submitItem(c *gin.Context) {
