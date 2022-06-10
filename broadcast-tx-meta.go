@@ -1,7 +1,6 @@
 package arseeding
 
 import (
-	"errors"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 )
@@ -38,17 +37,17 @@ func (s *Arseeding) processBroadcastTxMetaJob(arId string) (err error) {
 	if s.jobManager.IsClosed(arId, jobTypeTxMetaBroadcast) {
 		return
 	}
-	if err = s.jobManager.JobBeginSet(arId, jobTypeTxMetaBroadcast, len(s.peers)); err != nil {
+	if err = s.jobManager.JobBeginSet(arId, jobTypeTxMetaBroadcast, len(s.cache.GetPeers())); err != nil {
 		log.Error("s.jobManager.JobBeginSet(arId, jobTypeTxMetaBroadcast)", "err", err, "arId", arId)
 		return
 	}
-	s.jobManager.BroadcastTxMeta(arId, jobTypeTxMetaBroadcast, txMeta, s.peers)
+	s.jobManager.BroadcastTxMeta(arId, jobTypeTxMetaBroadcast, txMeta, s.cache.GetPeers())
 	return
 }
 
 func (s *Arseeding) broadcastSubmitTx(arTx types.Transaction) error {
 	if arTx.ID == "" {
-		return errors.New("arTx id is null")
+		return ErrNullArId
 	}
 	// save tx to local
 	if err := s.processSubmitTx(arTx); err != nil {
@@ -80,7 +79,7 @@ func (s *Arseeding) processSubmitTx(arTx types.Transaction) error {
 
 	// 2. check meta exist
 	if s.store.IsExistTxMeta(arTx.ID) {
-		return errors.New("arTx meta exist")
+		return ErrExistTx
 	}
 
 	// 3. save tx meta

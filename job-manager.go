@@ -1,7 +1,6 @@
 package arseeding
 
 import (
-	"errors"
 	"fmt"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
@@ -83,20 +82,19 @@ func (m *JobManager) InitJM(boltDb *Store) error {
 	return nil
 }
 
-func (m *JobManager) RegisterJob(arid, jobType string) (err error) {
+func (m *JobManager) RegisterJob(arid, jobType string) error {
 	if m.exist(arid, jobType) {
-		return errors.New("exist job")
+		return ErrExistJob
 	}
 
 	m.locker.Lock()
 	defer m.locker.Unlock()
 
 	if len(m.status) >= m.cap {
-		err = fmt.Errorf("fully loaded")
-		return
+		return ErrFullyLoaded
 	}
 	m.AddJob(arid, jobType)
-	return
+	return nil
 }
 
 func (m *JobManager) exist(arid, jobType string) bool {
@@ -143,7 +141,7 @@ func (m *JobManager) JobBeginSet(arid, jobType string, totalNodes int) error {
 	id := AssembleId(arid, jobType)
 	job, ok := m.status[id]
 	if !ok {
-		return errors.New("not found")
+		return ErrNotFound
 	}
 	job.Timestamp = time.Now().Unix()
 	job.TotalNodes = totalNodes
@@ -171,7 +169,7 @@ func (m *JobManager) CloseJob(arid, jobType string) error {
 	if ok {
 		job.Close = true
 	} else {
-		return errors.New("not found")
+		return ErrNotFound
 	}
 	return nil
 }
@@ -200,7 +198,7 @@ func (j *JobManager) GetUnconfirmedTxFromPeers(arId, jobType string, peers []str
 	pNode := goar.NewTempConn()
 	for _, peer := range peers {
 		if j.IsClosed(arId, jobType) {
-			return nil, errors.New("job closed")
+			return nil, ErrJobClosed
 		}
 
 		pNode.SetTempConnUrl("http://" + peer)
@@ -220,7 +218,7 @@ func (j *JobManager) GetTxDataFromPeers(arId, jobType string, peers []string) ([
 	pNode := goar.NewTempConn()
 	for _, peer := range peers {
 		if j.IsClosed(arId, jobType) {
-			return nil, errors.New("job closed")
+			return nil, ErrJobClosed
 		}
 		pNode.SetTempConnUrl("http://" + peer)
 		data, err := pNode.DownloadChunkData(arId)
@@ -233,7 +231,7 @@ func (j *JobManager) GetTxDataFromPeers(arId, jobType string, peers []string) ([
 		return data, nil
 	}
 
-	return nil, errors.New("get tx data from peers failed")
+	return nil, ErrFetchData
 }
 
 func (j *JobManager) BroadcastTxMeta(arId, jobType string, tx *types.Transaction, peers []string) {

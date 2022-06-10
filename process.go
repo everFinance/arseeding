@@ -3,14 +3,9 @@ package arseeding
 import (
 	"errors"
 	"fmt"
-	"github.com/everFinance/arseeding/schema"
-	"github.com/everFinance/everpay/account"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
-	"github.com/shopspring/decimal"
 	"strconv"
-	"strings"
-	"time"
 )
 
 func (s *Arseeding) processSubmitChunk(chunk types.GetChunk) error {
@@ -44,7 +39,7 @@ func (s *Arseeding) processSubmitChunk(chunk types.GetChunk) error {
 
 func setTxDataChunks(arTx types.Transaction, txData []byte, db *Store) error {
 	if len(txData) == 0 {
-		return errors.New("tx data not be null")
+		return ErrNullData
 	}
 	chunks, err := generateChunks(arTx, txData)
 	if err != nil {
@@ -68,7 +63,7 @@ func setTxDataChunks(arTx types.Transaction, txData []byte, db *Store) error {
 
 func generateChunks(arTxMeta types.Transaction, data []byte) ([]*types.GetChunk, error) {
 	if len(data) == 0 {
-		return nil, errors.New("data can not null")
+		return nil, ErrNullData
 	}
 	utils.PrepareChunks(&arTxMeta, data)
 
@@ -175,91 +170,4 @@ func verifyChunk(chunk types.GetChunk) (err error, ok bool) {
 	}
 	_, ok = utils.ValidatePath(dataRoot, offset, 0, dataSize, path)
 	return
-}
-
-func (s *Arseeding) processSubmitBundleItem(item types.BundleItem, currency string) (schema.Order, error) {
-	if err := utils.VerifyBundleItem(item); err != nil {
-		return schema.Order{}, err
-	}
-
-	// store item
-	if !s.store.IsExistItemBinary(item.Id) {
-		boltTx, err := s.store.BoltDb.Begin(true)
-		if err != nil {
-			log.Error("s.store.BoltDb.Begin(true)", "err", err)
-			return schema.Order{}, err
-		}
-
-		if err = s.store.SaveItemBinary(item.Id, item.ItemBinary, boltTx); err != nil {
-			boltTx.Rollback()
-			log.Error("saveItemBinary failed", "err", err, "itemId", item.Id)
-			return schema.Order{}, err
-		}
-
-		if err = s.store.SaveItemMeta(item, boltTx); err != nil {
-			boltTx.Rollback()
-			return schema.Order{}, err
-		}
-		// commit
-		if err := boltTx.Commit(); err != nil {
-			boltTx.Rollback()
-			return schema.Order{}, err
-		}
-	}
-
-	// calc fee
-	size := int64(len(item.ItemBinary))
-	respFee, err := s.calcItemFee(currency, size)
-	if err != nil {
-		return schema.Order{}, err
-	}
-	signerAddr, err := utils.ItemSignerAddr(item)
-	if err != nil {
-		return schema.Order{}, err
-	}
-	_, accId, err := account.IDCheck(signerAddr)
-	if err != nil {
-		return schema.Order{}, err
-	}
-	order := schema.Order{
-		ItemId:             item.Id,
-		Signer:             accId,
-		SignType:           item.SignatureType,
-		Size:               size,
-		Currency:           strings.ToUpper(currency),
-		Decimals:           respFee.Decimals,
-		Fee:                respFee.FinalFee,
-		PaymentExpiredTime: time.Now().Unix() + s.paymentExpiredRange,
-		ExpectedBlock:      s.arInfo.Height + s.expectedRange,
-		PaymentStatus:      schema.UnPayment,
-		PaymentId:          "",
-		OnChainStatus:      schema.WaitOnChain,
-	}
-
-	// insert to mysql
-	if err = s.wdb.InsertOrder(order); err != nil {
-		return schema.Order{}, err
-	}
-	return order, nil
-}
-
-func (s *Arseeding) calcItemFee(currency string, itemSize int64) (*schema.RespFee, error) {
-	perFee, ok := s.bundlePerFeeMap[strings.ToUpper(currency)]
-	if !ok {
-		return nil, fmt.Errorf("not support currency: %s", currency)
-	}
-
-	count := int64(0)
-	if itemSize > 0 {
-		count = (itemSize-1)/types.MAX_CHUNK_SIZE + 1
-	}
-
-	chunkFees := decimal.NewFromInt(count).Mul(perFee.PerChunk)
-	finalFee := perFee.Base.Add(chunkFees)
-
-	return &schema.RespFee{
-		Currency: perFee.Currency,
-		Decimals: perFee.Decimals,
-		FinalFee: finalFee.String(),
-	}, nil
 }

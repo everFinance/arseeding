@@ -2,7 +2,6 @@ package arseeding
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
@@ -27,6 +26,10 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/tx/:arid", s.getTx)
 		v1.GET("chunk/:offset", s.getChunk)
 		v1.GET("tx/:arid/:field", s.getTxField)
+		v1.GET("/info", s.getInfo)
+		v1.GET("/tx_anchor", s.getAnchor)
+		v1.GET("/fee/:size", s.getTxPrice)
+		v1.GET("/peers", s.getPeers)
 		// proxy
 		v2 := r.Group("/")
 		{
@@ -35,14 +38,14 @@ func (s *Arseeding) runAPI(port string) {
 			// v2.GET("/info")
 			v2.GET("/tx/:arid/status")
 			// v2.GET("/:arid")
-			// v2.GET("/price/:size")
-			v2.GET("/price/:size/:target")
+			// v2.GET("/fee/:size")
+			v2.GET("/fee/:size/:target")
 			v2.GET("/block/hash/:hash")
 			v2.GET("/block/height/:height")
 			v2.GET("/current_block")
 			v2.GET("/wallet/:address/balance")
 			v2.GET("/wallet/:address/last_tx")
-			v2.GET("/peers")
+			// v2.GET("/peers")
 			// v2.GET("/tx_anchor")
 			v2.POST("/arql")
 			v2.POST("/graphql")
@@ -56,16 +59,13 @@ func (s *Arseeding) runAPI(port string) {
 		v1.POST("/job/kill/:arid/:jobType", s.killJob)
 		v1.GET("/job/:arid/:jobType", s.getJob)
 		v1.GET("/cache/jobs", s.getCacheJobs)
-		v1.GET("/info", s.getInfo)
-		v1.GET("/tx_anchor", s.getAnchor)
-		v1.GET("/price/:size", s.getTxPrice)
 
 		// ANS-104 bundle Data api
 		v1.POST("/bundle/tx/:currency", s.submitItem)
 		v1.GET("/bundle/tx/:id", s.getItemMeta) // get item meta, without data
 		v1.GET("/bundle/fees", s.bundleFees)
 		v1.GET("/bundle/fee/:size/:symbol", s.bundleFee)
-		v1.GET("/:id", s.getData) // get arTx data or bundleItem data
+		v1.GET("/:id", s.getDataByGW) // get arTx data or bundleItem data
 	}
 
 	if err := r.Run(port); err != nil {
@@ -267,10 +267,14 @@ func (s *Arseeding) getTxPrice(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 	}
-	price := s.cache.GetPrice()
-	// totPrice = chunkNum*deltaPrice(price for per chunk) + basePrice
-	totPrice := calculatePrice(price, dataSize)
+	fee := s.cache.GetFee()
+	// totPrice = chunkNum*deltaPrice(fee for per chunk) + basePrice
+	totPrice := calculatePrice(fee, dataSize)
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(totPrice))
+}
+
+func (s *Arseeding) getPeers(c *gin.Context) {
+	c.JSON(http.StatusOK, s.cache.GetPeers())
 }
 
 func txMetaData(txMeta *types.Transaction, db *Store) ([]byte, error) {
@@ -280,7 +284,7 @@ func txMetaData(txMeta *types.Transaction, db *Store) ([]byte, error) {
 	}
 	// When data is bigger than 12MiB return statusCode == 400, use chunk
 	if size > 50*128*1024 {
-		return nil, errors.New("tx_data_too_big")
+		return nil, ErrDataTooBig
 	}
 
 	data, err := getData(txMeta.DataRoot, txMeta.DataSize, db)
@@ -330,15 +334,111 @@ func proxyArweaveGateway(c *gin.Context) {
 	c.Abort()
 }
 
-func calculatePrice(price schema.TxPrice, dataSize int64) string {
-	var chunkSize int64 = 256 * 1024
-	var totPrice int64
-	chunkNum := dataSize / chunkSize
-	if dataSize%chunkSize != 0 {
-		chunkNum += 1
+func calculatePrice(fee schema.ArFee, dataSize int64) string {
+	count := int64(0)
+	if dataSize > 0 {
+		count = (dataSize-1)/types.MAX_CHUNK_SIZE + 1
 	}
-	totPrice = price.BasePrice + chunkNum*price.PerChunkPrice
+
+	totPrice := fee.Base + count*fee.PerChunk
 	return fmt.Sprintf("%d", totPrice)
+}
+
+// about job-manager
+func (s *Arseeding) broadcast(c *gin.Context) {
+	arid := c.Param("arid")
+	txHash, err := utils.Base64Decode(arid)
+	if err != nil || len(txHash) != 32 {
+		c.JSON(http.StatusBadRequest, "arId incorrect")
+		return
+	}
+
+	if err = s.RegisterBroadcastTx(arid); err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, "ok")
+}
+
+func (s *Arseeding) sync(c *gin.Context) {
+	arid := c.Param("arid")
+	txHash, err := utils.Base64Decode(arid)
+	if err != nil || len(txHash) != 32 {
+		c.JSON(http.StatusBadRequest, "arId incorrect")
+		return
+	}
+
+	// check whether synced
+	job, err := s.store.LoadJobStatus(jobTypeSync, arid)
+	if err == nil && job.CountSuccessed > 0 {
+		c.JSON(http.StatusBadRequest, "arId has successed synced")
+		return
+	}
+
+	if err = s.RegisterSyncTx(arid); err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, "ok")
+}
+
+func (s *Arseeding) killJob(c *gin.Context) {
+	arid := c.Param("arid")
+	jobType := c.Param("jobType")
+	if !strings.Contains(jobTypeSync+jobTypeBroadcast, strings.ToLower(jobType)) {
+		c.JSON(http.StatusBadRequest, "jobType not exist")
+		return
+	}
+	txHash, err := utils.Base64Decode(arid)
+	if err != nil || len(txHash) != 32 {
+		c.JSON(http.StatusBadRequest, "arId incorrect")
+		return
+	}
+	err = s.jobManager.CloseJob(arid, jobType)
+	if err != nil {
+		c.JSON(http.StatusNotFound, err.Error())
+	} else {
+		c.JSON(http.StatusOK, "ok")
+	}
+}
+
+func (s *Arseeding) getJob(c *gin.Context) {
+	arid := c.Param("arid")
+	jobType := c.Param("jobType")
+	if !strings.Contains(jobTypeSync+jobTypeBroadcast+jobTypeTxMetaBroadcast, strings.ToLower(jobType)) {
+		c.JSON(http.StatusBadRequest, "jobType not exist")
+		return
+	}
+	txHash, err := utils.Base64Decode(arid)
+	if err != nil || len(txHash) != 32 {
+		c.JSON(http.StatusBadRequest, "arId incorrect")
+		return
+	}
+	// get from cache
+	job := s.jobManager.GetJob(arid, jobType)
+	if job != nil {
+		c.JSON(http.StatusOK, job)
+		return
+	}
+
+	// get from db
+	job, err = s.store.LoadJobStatus(jobType, arid)
+	if err != nil {
+		c.JSON(http.StatusNotFound, err.Error())
+	} else {
+		c.JSON(http.StatusOK, job)
+	}
+}
+
+func (s *Arseeding) getCacheJobs(c *gin.Context) {
+	jobMap := s.jobManager.GetJobs()
+	total := len(jobMap)
+	c.JSON(http.StatusOK, gin.H{
+		"total": total,
+		"jobs":  jobMap,
+	})
 }
 
 func (s *Arseeding) submitItem(c *gin.Context) {
@@ -384,7 +484,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	currency := c.Param("currency")
 
 	// process bundleItem
-	ord, err := s.processSubmitBundleItem(*item, currency)
+	ord, err := s.ProcessSubmitItem(*item, currency)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
@@ -399,6 +499,17 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 		PaymentExpiredTime: ord.PaymentExpiredTime,
 		ExpectedBlock:      ord.ExpectedBlock,
 	})
+}
+
+func (s *Arseeding) getItemMeta(c *gin.Context) {
+	id := c.Param("id")
+	// could be bundle item id
+	meta, err := s.store.LoadItemMeta(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+	c.JSON(200, meta)
 }
 
 func (s *Arseeding) bundleFee(c *gin.Context) {
@@ -421,7 +532,7 @@ func (s *Arseeding) bundleFees(c *gin.Context) {
 	c.JSON(http.StatusOK, s.bundlePerFeeMap)
 }
 
-func (s *Arseeding) getData(c *gin.Context) {
+func (s *Arseeding) getDataByGW(c *gin.Context) {
 	id := c.Param("id")
 	txMeta, err := s.store.LoadTxMeta(id)
 	if err == nil { // find id is arId
@@ -458,17 +569,6 @@ func (s *Arseeding) getData(c *gin.Context) {
 
 	// get from arweave gateway
 	proxyArweaveGateway(c)
-}
-
-func (s *Arseeding) getItemMeta(c *gin.Context) {
-	id := c.Param("id")
-	// could be bundle item id
-	meta, err := s.store.LoadItemMeta(id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
-		return
-	}
-	c.JSON(200, meta)
 }
 
 func getTagValue(tags []types.Tag, name string) string {

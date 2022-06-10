@@ -47,21 +47,3 @@ func TestInc(t *testing.T) {
 	assert.Equal(t, int64(1), jobs[id].CountSuccessed)
 	assert.Equal(t, int64(1), jobs[id].CountFailed)
 }
-
-func TestJobManager_CloseJob(t *testing.T) {
-	wdb := NewWdb("root@tcp(127.0.0.1:3306)/arseed?charset=utf8mb4&parseTime=True&loc=Local")
-	wdb.Migrate()
-
-	err := wdb.UpdateArFee(11, 22)
-	assert.NoError(t, err)
-	arFee, err := wdb.GetArFee()
-	assert.NoError(t, err)
-	t.Log(arFee)
-
-	err = wdb.UpdateArFee(33, 44)
-	assert.NoError(t, err)
-	arFee, err = wdb.GetArFee()
-	assert.NoError(t, err)
-	t.Log(arFee)
-
-}

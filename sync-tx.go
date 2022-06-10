@@ -44,7 +44,7 @@ func (s *Arseeding) processSyncJob(arId string) (err error) {
 	if s.jobManager.IsClosed(arId, jobTypeSync) {
 		return
 	}
-	if err = s.jobManager.JobBeginSet(arId, jobTypeSync, len(s.peers)); err != nil {
+	if err = s.jobManager.JobBeginSet(arId, jobTypeSync, len(s.cache.GetPeers())); err != nil {
 		log.Error("s.jobManager.JobBeginSet(arId, jobTypeSync)", "err", err, "arId", arId)
 		return
 	}
@@ -65,7 +65,7 @@ func (s *Arseeding) FetchAndStoreTx(arId string) (err error) {
 		arTxMeta, err = s.arCli.GetUnconfirmedTx(arId) // this api can return all tx (unconfirmed and confirmed)
 		if err != nil {
 			// get tx from peers
-			arTxMeta, err = s.jobManager.GetUnconfirmedTxFromPeers(arId, jobTypeSync, s.peers)
+			arTxMeta, err = s.jobManager.GetUnconfirmedTxFromPeers(arId, jobTypeSync, s.cache.GetPeers())
 			if err != nil {
 				return err
 			}
@@ -109,7 +109,7 @@ func (s *Arseeding) FetchAndStoreTx(arId string) (err error) {
 	// need get tx data from arweave network
 	data, err = s.arCli.GetTransactionDataByGateway(arId)
 	if err != nil {
-		data, err = s.jobManager.GetTxDataFromPeers(arId, jobTypeSync, s.peers)
+		data, err = s.jobManager.GetTxDataFromPeers(arId, jobTypeSync, s.cache.GetPeers())
 		if err != nil {
 			log.Error("get data failed", "err", err, "arId", arId)
 			return err

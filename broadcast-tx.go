@@ -44,7 +44,7 @@ func (s *Arseeding) processBroadcastJob(arId string) (err error) {
 		log.Warn("broadcast job was closed", "arId", arId)
 		return
 	}
-	if err = s.jobManager.JobBeginSet(arId, jobTypeBroadcast, len(s.peers)); err != nil {
+	if err = s.jobManager.JobBeginSet(arId, jobTypeBroadcast, len(s.cache.GetPeers())); err != nil {
 		log.Error("s.jobManager.JobBeginSet(arId, jobTypeBroadcast)", "err", err, "arId", arId)
 		return
 	}
@@ -63,7 +63,7 @@ func (s *Arseeding) processBroadcastJob(arId string) (err error) {
 	}
 	txData, err := getData(txMeta.DataRoot, txMeta.DataSize, s.store)
 	if err != nil {
-		log.Error("getData(txMeta.DataRoot,txMeta.DataSize,s.store)", "err", err, "arId", arId)
+		log.Error("getDataByGW(txMeta.DataRoot,txMeta.DataSize,s.store)", "err", err, "arId", arId)
 		return err
 	}
 
@@ -78,6 +78,6 @@ func (s *Arseeding) processBroadcastJob(arId string) (err error) {
 	utils.PrepareChunks(txMeta, txData)
 	txMeta.Data = utils.Base64Encode(txData)
 
-	s.jobManager.BroadcastData(arId, jobTypeBroadcast, txMeta, s.peers, txMetaPosted)
+	s.jobManager.BroadcastData(arId, jobTypeBroadcast, txMeta, s.cache.GetPeers(), txMetaPosted)
 	return
 }

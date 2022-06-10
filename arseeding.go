@@ -20,7 +20,6 @@ type Arseeding struct {
 	endOffsetLocker sync.Mutex
 
 	arCli      *goar.Client
-	peers      []string
 	jobManager *JobManager
 	scheduler  *gocron.Scheduler
 
@@ -42,22 +41,13 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 		panic(err)
 	}
 
-	arCli := goar.NewClient(arNode)
-	peers, err := boltDb.LoadPeers()
-	if err == ErrNotExist {
-		peers, err = arCli.GetPeers()
-	}
-	if err != nil {
-		panic(err)
-	}
-
 	jobmg := NewJM(500)
 	if err := jobmg.InitJM(boltDb); err != nil {
 		panic(err)
 	}
 
 	wdb := NewWdb(dsn)
-	if err := wdb.Migrate(); err != nil {
+	if err = wdb.Migrate(); err != nil {
 		panic(err)
 	}
 	bundler, err := goar.NewWalletFromPath(arWalletKeyPath, arNode)
@@ -70,13 +60,13 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 		panic(err)
 	}
 
+	arCli := goar.NewClient(arNode)
 	a := &Arseeding{
 		store:               boltDb,
 		engine:              gin.Default(),
 		submitLocker:        sync.Mutex{},
 		endOffsetLocker:     sync.Mutex{},
 		arCli:               arCli,
-		peers:               peers,
 		jobManager:          jobmg,
 		scheduler:           gocron.NewScheduler(time.UTC),
 		paySdk:              paySdk,
@@ -88,12 +78,21 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 		expectedRange:       50,
 	}
 
+	// init cache
+	peers, err := boltDb.LoadPeers()
+	if err == ErrNotExist {
+		peers, err = arCli.GetPeers()
+	}
+	if err != nil {
+		panic(err)
+	}
+
 	arInfo, err := fetchArInfo(arCli, peers)
 	if err != nil {
 		panic(err)
 	}
 
-	txPrice, err := fetchArBkPrice(arCli, peers)
+	fee, err := fetchArFee(arCli, peers)
 	if err != nil {
 		panic(err)
 	}
@@ -104,7 +103,8 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 	a.cache = &Cache{
 		arInfo: arInfo,
 		anchor: anchor,
-		price:  txPrice,
+		fee:    fee,
+		peers:  peers,
 		lock:   sync.RWMutex{},
 	}
 	return a

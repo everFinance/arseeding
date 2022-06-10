@@ -27,7 +27,7 @@ func NewWdb(dsn string) *Wdb {
 
 func (w *Wdb) Migrate() error {
 	return w.Db.AutoMigrate(&schema.Order{}, &schema.TokenPrice{},
-		&schema.ArFee{}, &schema.ReceiptEverTx{}, &schema.OnChainTx{})
+		&schema.ReceiptEverTx{}, &schema.OnChainTx{})
 }
 
 func (w *Wdb) InsertOrder(order schema.Order) error {
@@ -67,30 +67,13 @@ func (w *Wdb) InsertPrices(tps []schema.TokenPrice) error {
 }
 
 func (w *Wdb) UpdatePrice(symbol string, newPrice float64) error {
-	return w.Db.Model(&schema.TokenPrice{}).Where("symbol = ?", symbol).Update("price", newPrice).Error
+	return w.Db.Model(&schema.TokenPrice{}).Where("symbol = ?", symbol).Update("fee", newPrice).Error
 }
 
 func (w *Wdb) GetPrices() ([]schema.TokenPrice, error) {
 	res := make([]schema.TokenPrice, 0, 10)
 	err := w.Db.Find(&res).Error
 	return res, err
-}
-
-func (w *Wdb) UpdateArFee(baseFee, perChunkFee int64) error {
-	arFee := &schema.ArFee{
-		ID:       1,
-		Base:     baseFee,
-		PerChunk: perChunkFee,
-	}
-	return w.Db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "id"}},
-		UpdateAll: true,
-	}).Create(arFee).Error
-}
-
-func (w *Wdb) GetArFee() (res schema.ArFee, err error) {
-	err = w.Db.First(&res).Error
-	return
 }
 
 func (w *Wdb) InsertReceiptTx(txs []schema.ReceiptEverTx) error {

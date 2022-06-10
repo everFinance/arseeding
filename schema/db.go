@@ -67,13 +67,6 @@ type TokenPrice struct {
 	UpdatedAt time.Time
 }
 
-type ArFee struct { // unit is winston
-	ID        uint `gorm:"primarykey"`
-	UpdatedAt time.Time
-	Base      int64
-	PerChunk  int64
-}
-
 type OnChainTx struct {
 	gorm.Model
 	ArId      string

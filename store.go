@@ -22,8 +22,6 @@ const (
 )
 
 var (
-	ErrNotExist = errors.New("not exist")
-
 	// bucket
 	ChunkBucket           = []byte("chunk-bucket")              // key: chunkStartOffset, val: chunk
 	TxDataEndOffSetBucket = []byte("tx-data-end-offset-bucket") // key: dataRoot+dataSize; val: txDataEndOffSet

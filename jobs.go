@@ -2,7 +2,6 @@ package arseeding
 
 import (
 	"encoding/json"
-	"errors"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay/account"
 	"github.com/everFinance/everpay/config"
@@ -10,7 +9,6 @@ import (
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
-	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 	"math/big"
 	"strings"
@@ -18,35 +16,25 @@ import (
 )
 
 func (s *Arseeding) runJobs() {
+	// update cache
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updateAnchor)
-	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updatePrice)
+	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updateArFee)
 	s.scheduler.Every(30).Seconds().SingletonMode().Do(s.updateInfo)
 	s.scheduler.Every(30).Minute().SingletonMode().Do(s.updatePeerList)
-	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updatePeers)
+
+	// about bundle
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateTokenPrice)
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundlePerFee)
-	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateArFee)
 	s.scheduler.Every(3).Seconds().SingletonMode().Do(s.watcherReceiptTxs)
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptAndOrder)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
 	s.scheduler.Every(30).Seconds().SingletonMode().Do(s.onChainBundleItems)
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.watcherOnChainTx)
 
+	// manager jobStatus
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseJobs)
 
 	s.scheduler.StartAsync()
-}
-
-func (s *Arseeding) updatePeers() {
-	peers, err := s.arCli.GetPeers()
-	if err != nil {
-		return
-	}
-	if len(peers) == 0 {
-		return
-	}
-	// update
-	s.peers = peers
 }
 
 func (s *Arseeding) updateTokenPrice() {
@@ -65,7 +53,7 @@ func (s *Arseeding) updateTokenPrice() {
 		return
 	}
 
-	// update price
+	// update fee
 	tps, err := s.wdb.GetPrices()
 	if err != nil {
 		log.Error("s.wdb.GetPrices()", "err", err)
@@ -82,73 +70,18 @@ func (s *Arseeding) updateTokenPrice() {
 		}
 		// update tokenPrice
 		if err := s.wdb.UpdatePrice(tp.Symbol, price); err != nil {
-			log.Error("s.wdb.UpdatePrice(tp.Symbol,price)", "err", err, "symbol", tp.Symbol, "price", price)
+			log.Error("s.wdb.UpdateFee(tp.Symbol,fee)", "err", err, "symbol", tp.Symbol, "fee", price)
 		}
-	}
-}
-
-func (s *Arseeding) updateArFee() {
-	chunk0 := make([]byte, 0)
-	chunk1 := make([]byte, 1)
-	reword0, err := s.arCli.GetTransactionPrice(chunk0, nil)
-	if err != nil {
-		log.Error("s.arCli.GetTransactionPrice(chunk0, nil)", "err", err)
-		return
-	}
-	reword1, err := s.arCli.GetTransactionPrice(chunk1, nil)
-	if err != nil {
-		log.Error("s.arCli.GetTransactionPrice(chunk1, nil)", "err", err)
-		return
-	}
-	baseFee := reword0
-	perChunkFee := reword1 - reword0
-	if perChunkFee <= 0 {
-		log.Error("perChunkFee incorrect", "reword0", reword0, "reword1", reword1)
-		return
-	}
-
-	if err = s.wdb.UpdateArFee(baseFee, perChunkFee); err != nil {
-		log.Error("s.wdb.UpdateArFee(baseFee,perChunkFee)", "err", err, "baseFee", baseFee, "perChunkFee", perChunkFee)
 	}
 }
 
 func (s *Arseeding) updateBundlePerFee() {
-	feeMap, err := s.getBundlePerFees()
+	feeMap, err := s.GetBundlePerFees()
 	if err != nil {
-		log.Error("s.getBundlePerFees()", "err", err)
+		log.Error("s.GetBundlePerFees()", "err", err)
 		return
 	}
 	s.bundlePerFeeMap = feeMap
-}
-
-func (s *Arseeding) getBundlePerFees() (map[string]schema.Fee, error) {
-	tps, err := s.wdb.GetPrices()
-	if err != nil {
-		return nil, err
-	}
-
-	arFee, err := s.wdb.GetArFee()
-	if err != nil {
-		return nil, err
-	}
-
-	res := make(map[string]schema.Fee)
-	for _, tp := range tps {
-		if tp.Price <= 0.0 {
-			continue
-		}
-
-		price := decimal.NewFromBigInt(utils.ARToWinston(big.NewFloat(tp.Price)), 0)
-		baseFee := decimal.NewFromInt(arFee.Base).Div(price)
-		perChunkFee := decimal.NewFromInt(arFee.PerChunk).Div(price)
-		res[strings.ToUpper(tp.Symbol)] = schema.Fee{
-			Currency: tp.Symbol,
-			Decimals: tp.Decimals,
-			Base:     baseFee,
-			PerChunk: perChunkFee,
-		}
-	}
-	return res, nil
 }
 
 func (s *Arseeding) setProcessedJobs(arIds []string, jobType string) error {
@@ -191,81 +124,26 @@ func (s *Arseeding) watcherAndCloseJobs() {
 }
 
 func (s *Arseeding) updateAnchor() {
-	anchor, err := fetchAnchor(s.arCli, s.peers)
+	anchor, err := fetchAnchor(s.arCli, s.cache.GetPeers())
 	if err == nil {
 		s.cache.UpdateAnchor(anchor)
 	}
 }
 
-func fetchAnchor(arCli *goar.Client, peers []string) (string, error) {
-	anchor, err := arCli.GetTransactionAnchor()
-	if err != nil {
-		pNode := goar.NewTempConn()
-		for _, peer := range peers {
-			pNode.SetTempConnUrl("http://" + peer)
-			anchor, err = pNode.GetTransactionAnchor()
-			if err == nil && len(anchor) > 0 {
-				break
-			}
-		}
-	}
-	return anchor, err
-}
-
 // update arweave network info
 
 func (s *Arseeding) updateInfo() {
-	info, err := fetchArInfo(s.arCli, s.peers)
+	info, err := fetchArInfo(s.arCli, s.cache.GetPeers())
 	if err == nil {
 		s.cache.UpdateInfo(info)
 	}
 }
 
-func fetchArInfo(arCli *goar.Client, peers []string) (*types.NetworkInfo, error) {
-	info, err := arCli.GetInfo()
-	if err != nil {
-		pNode := goar.NewTempConn()
-		for _, peer := range peers {
-			pNode.SetTempConnUrl("http://" + peer)
-			info, err = pNode.GetInfo()
-			if err == nil && info != nil {
-				break
-			}
-		}
-	}
-	return info, err
-}
-
-func (s *Arseeding) updatePrice() {
-	txPrice, err := fetchArBkPrice(s.arCli, s.peers)
+func (s *Arseeding) updateArFee() {
+	txPrice, err := fetchArFee(s.arCli, s.cache.GetPeers())
 	if err == nil {
-		s.cache.UpdatePrice(txPrice)
+		s.cache.UpdateFee(txPrice)
 	}
-}
-
-func fetchArBkPrice(arCli *goar.Client, peers []string) (schema.TxPrice, error) {
-	// base price /price/0  datasize = 0,data = nil
-	var basePrice, deltaPrice int64
-	var err1, err2 error
-
-	littleData := make([]byte, 1)
-	basePrice, err1 = arCli.GetTransactionPrice(nil, nil)
-	deltaPrice, err2 = arCli.GetTransactionPrice(littleData, nil)
-	if err1 != nil || err2 != nil {
-		pNode := goar.NewTempConn()
-		for _, peer := range peers {
-			pNode.SetTempConnUrl("http://" + peer)
-			basePrice, err1 = pNode.GetTransactionPrice(nil, nil)
-			deltaPrice, err2 = pNode.GetTransactionPrice(littleData, nil)
-			if err1 == nil && err2 == nil { // fetch price from one peer
-				break
-			}
-		}
-	}
-	if err1 != nil || err2 != nil {
-		return schema.TxPrice{}, errors.New("get price failed")
-	}
-	return schema.TxPrice{BasePrice: basePrice, PerChunkPrice: deltaPrice - basePrice}, nil
 }
 
 // update peer list, check peer available, store in db
@@ -274,7 +152,7 @@ func (s *Arseeding) updatePeerList() {
 	visPeer := make(map[string]bool, 0) // record already handled peer
 	updatedPeers := make([]string, 0)
 	pNode := goar.NewTempConn()
-	for _, peer := range s.peers {
+	for _, peer := range s.cache.GetPeers() {
 		pNode.SetTempConnUrl("http://" + peer)
 		newPeers, err := pNode.GetPeers()
 		if err != nil {
@@ -291,7 +169,8 @@ func (s *Arseeding) updatePeerList() {
 			visPeer[newPeer] = true
 		}
 	}
-	s.peers = updatedPeers
+
+	s.cache.UpdatePeers(updatedPeers)
 	err := s.store.SavePeers(updatedPeers)
 	if err != nil {
 		log.Warn("save new peer list fail")
@@ -310,7 +189,7 @@ func (s *Arseeding) watcherReceiptTxs() {
 	if err != nil {
 		log.Error("s.wdb.GetLastPage()", "err", err)
 	}
-	page := startPage
+	page := startPage // todo use new everpay/sdk function
 	for {
 		txs, err := s.paySdk.Cli.TxsByAcc(s.bundler.Signer.Address, page, "asc", "", paySchema.TxActionTransfer, "")
 		if err != nil {

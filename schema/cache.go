@@ -1,6 +1,6 @@
 package schema
 
-type TxPrice struct {
-	BasePrice     int64
-	PerChunkPrice int64
+type ArFee struct {
+	Base     int64
+	PerChunk int64
 }
