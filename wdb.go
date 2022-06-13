@@ -76,17 +76,17 @@ func (w *Wdb) GetPrices() ([]schema.TokenPrice, error) {
 	return res, err
 }
 
-func (w *Wdb) InsertReceiptTx(txs []schema.ReceiptEverTx) error {
-	return w.Db.Clauses(clause.OnConflict{DoNothing: true}).Create(&txs).Error
+func (w *Wdb) InsertReceiptTx(tx schema.ReceiptEverTx) error {
+	return w.Db.Clauses(clause.OnConflict{DoNothing: true}).Create(&tx).Error
 }
 
-func (w *Wdb) GetLastPage() (int, error) {
+func (w *Wdb) GetLastEverRawId() (uint64, error) {
 	tx := schema.ReceiptEverTx{}
-	err := w.Db.Model(&schema.ReceiptEverTx{}).Order("page desc").Limit(1).Scan(&tx).Error
+	err := w.Db.Model(&schema.ReceiptEverTx{}).Last(&tx).Error
 	if err == gorm.ErrRecordNotFound {
-		return 1, nil
+		return 0, nil
 	}
-	return tx.Page, err
+	return tx.RawId, err
 }
 
 func (w *Wdb) GetReceiptsByStatus(status string) ([]schema.ReceiptEverTx, error) {
@@ -95,12 +95,12 @@ func (w *Wdb) GetReceiptsByStatus(status string) ([]schema.ReceiptEverTx, error)
 	return res, err
 }
 
-func (w *Wdb) UpdateReceiptStatus(id uint, status string, tx *gorm.DB) error {
+func (w *Wdb) UpdateReceiptStatus(rawId uint64, status string, tx *gorm.DB) error {
 	db := w.Db
 	if tx != nil {
 		db = tx
 	}
-	return db.Model(&schema.ReceiptEverTx{}).Where("id = ?", id).Update("status", status).Error
+	return db.Model(&schema.ReceiptEverTx{}).Where("raw_id = ?", rawId).Update("status", status).Error
 }
 
 func (w *Wdb) InsertOnChainTx(tx schema.OnChainTx) error {

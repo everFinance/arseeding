@@ -46,15 +46,13 @@ type Order struct {
 }
 
 type ReceiptEverTx struct {
-	gorm.Model
+	RawId    uint64 `grom:"primarykey"` // everTx rawId
 	EverHash string `gorm:"unique"`
 	Nonce    int64  // ms
 	Symbol   string
-	Action   string
 	From     string
 	Amount   string
 	Data     string
-	Page     int `gorm:"index:idx1"`
 
 	Status string //  "unspent","spent", "unrefund", "refund"
 }

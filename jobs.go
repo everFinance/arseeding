@@ -5,6 +5,7 @@ import (
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay/account"
 	"github.com/everFinance/everpay/config"
+	sdkSchema "github.com/everFinance/everpay/sdk/schema"
 	paySchema "github.com/everFinance/everpay/token/schema"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
@@ -25,11 +26,11 @@ func (s *Arseeding) runJobs() {
 	// about bundle
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateTokenPrice)
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundlePerFee)
-	s.scheduler.Every(3).Seconds().SingletonMode().Do(s.watcherReceiptTxs)
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptAndOrder)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
 	s.scheduler.Every(30).Seconds().SingletonMode().Do(s.onChainBundleItems)
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.watcherOnChainTx)
+	go s.watchEverReceiptTxs()
 
 	// manager jobStatus
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseJobs)
@@ -162,21 +163,21 @@ func checkAvailable(peer string) bool {
 	return true
 }
 
-func (s *Arseeding) watcherReceiptTxs() {
-	startPage, err := s.wdb.GetLastPage()
+func (s *Arseeding) watchEverReceiptTxs() {
+	startCursor, err := s.wdb.GetLastEverRawId()
 	if err != nil {
-		log.Error("s.wdb.GetLastPage()", "err", err)
+		panic(err)
 	}
-	page := startPage // todo use new everpay/sdk function
-	for {
-		txs, err := s.paySdk.Cli.TxsByAcc(s.bundler.Signer.Address, page, "asc", "", paySchema.TxActionTransfer, "")
-		if err != nil {
-			log.Error("pay.client.TxsByAcc failed", "err", err)
-			return
-		}
-		records := make([]schema.ReceiptEverTx, 0, len(txs.Txs.Txs))
+	subTx := s.paySdk.Cli.SubscribeTxs(sdkSchema.FilterQuery{
+		StartCursor: startCursor,
+		Address:     s.bundler.Signer.Address,
+		Action:      paySchema.TxActionTransfer,
+	})
+	defer subTx.Unsubscribe()
 
-		for _, tt := range txs.Txs.Txs {
+	for {
+		select {
+		case tt := <-subTx.Subscribe():
 			if tt.To != s.bundler.Signer.Address {
 				continue
 			}
@@ -185,47 +186,40 @@ func (s *Arseeding) watcherReceiptTxs() {
 				log.Error("account.IDCheck(tt.From)", "err", err, "from", tt.From)
 				continue
 			}
-			records = append(records, schema.ReceiptEverTx{
+			res := schema.ReceiptEverTx{
+				RawId:    tt.RawId,
 				EverHash: tt.EverHash,
 				Nonce:    tt.Nonce,
 				Symbol:   tt.TokenSymbol,
-				Action:   tt.Action,
 				From:     from,
 				Amount:   tt.Amount,
 				Data:     tt.Data,
-				Page:     txs.Txs.CurrentPage,
 				Status:   schema.UnSpent,
-			})
-		}
-		if err := s.wdb.InsertReceiptTx(records); err != nil {
-			log.Error("s.wdb.InsertReceiptTx(records)", "err", err)
-			return
-		}
+			}
 
-		if txs.Txs.CurrentPage == txs.Txs.TotalPages {
-			return
+			if err = s.wdb.InsertReceiptTx(res); err != nil {
+				log.Error("s.wdb.InsertReceiptTx(res)", "err", err)
+			}
 		}
-
-		page++
 	}
 }
 
 func (s *Arseeding) mergeReceiptAndOrder() {
-	unspentReceipts, err := s.wdb.GetReceiptsByStatus(schema.UnSpent)
+	unspentRpts, err := s.wdb.GetReceiptsByStatus(schema.UnSpent)
 	if err != nil {
 		log.Error("s.wdb.GetUnSpentReceipts()", "err", err)
 		return
 	}
 
-	for _, urt := range unspentReceipts {
+	for _, urt := range unspentRpts {
 		signer := urt.From
 		ord, err := s.wdb.GetUnPaidOrder(signer, urt.Symbol, urt.Amount)
 		if err != nil {
 			log.Error("s.wdb.GetSignerOrder", "err", err, "signer", signer, "symbol", urt.Symbol, "fee", urt.Amount)
 			if err == gorm.ErrRecordNotFound {
 				// update receipt taskMap is unrefund
-				if err = s.wdb.UpdateReceiptStatus(urt.ID, schema.UnRefund, nil); err != nil {
-					log.Error("s.wdb.UpdateReceiptStatus", "err", err, "id", urt.ID)
+				if err = s.wdb.UpdateReceiptStatus(urt.RawId, schema.UnRefund, nil); err != nil {
+					log.Error("s.wdb.UpdateReceiptStatus", "err", err, "id", urt.RawId)
 				}
 			}
 			continue
@@ -242,7 +236,7 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 				continue
 			}
 
-			if err = s.wdb.UpdateReceiptStatus(urt.ID, schema.UnRefund, dbTx); err != nil {
+			if err = s.wdb.UpdateReceiptStatus(urt.RawId, schema.UnRefund, dbTx); err != nil {
 				log.Error("s.wdb.UpdateReceiptStatus(urt.ID,schema.UnRefund,dbTx)", "err", err)
 				dbTx.Rollback()
 				continue
@@ -257,7 +251,7 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 			dbTx.Rollback()
 			continue
 		}
-		if err = s.wdb.UpdateReceiptStatus(urt.ID, schema.Spent, dbTx); err != nil {
+		if err = s.wdb.UpdateReceiptStatus(urt.RawId, schema.Spent, dbTx); err != nil {
 			log.Error("s.wdb.UpdateReceiptStatus(urt.ID,schema.Spent,dbTx)", "err", err)
 			dbTx.Rollback()
 			continue
@@ -275,8 +269,8 @@ func (s *Arseeding) refundReceipt() {
 
 	for _, rpt := range recpts {
 		// update rpt taskMap is refund
-		if err := s.wdb.UpdateReceiptStatus(rpt.ID, schema.Refund, nil); err != nil {
-			log.Error("s.wdb.UpdateReceiptStatus(rpt.ID,schema.Refund,nil)", "err", err, "id", rpt.ID)
+		if err := s.wdb.UpdateReceiptStatus(rpt.RawId, schema.Refund, nil); err != nil {
+			log.Error("s.wdb.UpdateReceiptStatus(rpt.ID,schema.Refund,nil)", "err", err, "id", rpt.RawId)
 			continue
 		}
 		// send everTx transfer for refund
@@ -289,8 +283,8 @@ func (s *Arseeding) refundReceipt() {
 		if err != nil {
 			log.Error("s.paySdk.Transfer", "err", err)
 			// update receipt taskMap is unrefund
-			if err := s.wdb.UpdateReceiptStatus(rpt.ID, schema.UnRefund, nil); err != nil {
-				log.Error("s.wdb.UpdateReceiptStatus(rpt.ID,schema.UnRefund,nil)", "err", err, "id", rpt.ID)
+			if err := s.wdb.UpdateReceiptStatus(rpt.RawId, schema.UnRefund, nil); err != nil {
+				log.Error("s.wdb.UpdateReceiptStatus(rpt.ID,schema.UnRefund,nil)", "err", err, "id", rpt.RawId)
 			}
 			continue
 		}
