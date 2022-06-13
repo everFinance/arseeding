@@ -3,7 +3,7 @@ module github.com/everFinance/arseeding
 go 1.17
 
 require (
-	github.com/everFinance/everpay v1.3.6
+	github.com/everFinance/everpay v1.3.7
 	github.com/everFinance/goar v1.4.3-0.20220613013958-333a19085f70
 	github.com/getsentry/sentry-go v0.11.0
 	github.com/gin-gonic/gin v1.7.4
