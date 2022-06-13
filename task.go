@@ -30,7 +30,6 @@ func (s *Arseeding) processTask(taskId string) {
 	}
 	if err != nil {
 		log.Error("process task failed", "err", err, "taskId", taskId)
-		return
 	}
 
 	if err = s.setProcessedTask(arId, taskType); err != nil {
@@ -80,8 +79,20 @@ func (s *Arseeding) broadcastTxTask(arId string) (err error) {
 	}
 	txData, err := getData(txMeta.DataRoot, txMeta.DataSize, s.store)
 	if err != nil {
-		log.Error("getDataByGW(txMeta.DataRoot,txMeta.DataSize,s.store)", "err", err, "arId", arId)
-		return err
+		if err == ErrNotExist {
+			if err = s.FetchAndStoreTx(arId); err != nil {
+				log.Error("processBroadcast FetchAndStoreTx failed", "err", err, "arId", arId)
+				return err
+			}
+		} else {
+			log.Error("getDataByGW(txMeta.DataRoot,txMeta.DataSize,s.store)", "err", err, "arId", arId)
+			return err
+		}
+		txData, err = getData(txMeta.DataRoot, txMeta.DataSize, s.store)
+		if err != nil {
+			log.Error("get data failed", "err", err, "arId", arId)
+			return err
+		}
 	}
 
 	txMetaPosted := true

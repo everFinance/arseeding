@@ -28,14 +28,14 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("tx/:arid/:field", s.getTxField)
 		v1.GET("/info", s.getInfo)
 		v1.GET("/tx_anchor", s.getAnchor)
-		v1.GET("/fee/:size", s.getTxPrice)
+		v1.GET("/price/:size", s.getTxPrice)
 		v1.GET("/peers", s.getPeers)
 		// proxy
 		v2 := r.Group("/")
 		{
 			v2.Use(proxyArweaveGateway)
 			v2.GET("/tx/:arid/taskMap")
-			v2.GET("/fee/:size/:target")
+			v2.GET("/price/:size/:target")
 			v2.GET("/block/hash/:hash")
 			v2.GET("/block/height/:height")
 			v2.GET("/current_block")
@@ -59,7 +59,7 @@ func (s *Arseeding) runAPI(port string) {
 		v1.POST("/bundle/tx/:currency", s.submitItem)
 		v1.GET("/bundle/tx/:id", s.getItemMeta) // get item meta, without data
 		v1.GET("/bundle/fees", s.bundleFees)
-		v1.GET("/bundle/fee/:size/:symbol", s.bundleFee)
+		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
 		v1.GET("/:id", s.getDataByGW) // get arTx data or bundleItem data
 	}
 
@@ -209,7 +209,7 @@ func (s *Arseeding) getTxField(c *gin.Context) {
 	case "quantity":
 		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Quantity))
 	case "data":
-		data, err := txMetaData(txMeta, s.store)
+		data, err := txDataByMeta(txMeta, s.store)
 		if err != nil {
 			c.JSON(400, err.Error())
 			return
@@ -217,7 +217,7 @@ func (s *Arseeding) getTxField(c *gin.Context) {
 		c.Data(200, "text/html; charset=utf-8", []byte(utils.Base64Encode(data)))
 
 	case "data.json", "data.txt", "data.pdf":
-		data, err := txMetaData(txMeta, s.store)
+		data, err := txDataByMeta(txMeta, s.store)
 		if err != nil {
 			c.JSON(400, err.Error())
 			return
@@ -226,7 +226,7 @@ func (s *Arseeding) getTxField(c *gin.Context) {
 		c.Data(200, fmt.Sprintf("application/%s; charset=utf-8", typ), data)
 
 	case "data.png", "data.jpeg", "data.gif":
-		data, err := txMetaData(txMeta, s.store)
+		data, err := txDataByMeta(txMeta, s.store)
 		if err != nil {
 			c.JSON(400, err.Error())
 			return
@@ -234,7 +234,7 @@ func (s *Arseeding) getTxField(c *gin.Context) {
 		typ := strings.Split(field, ".")[1]
 		c.Data(200, fmt.Sprintf("image/%s; charset=utf-8", typ), data)
 	case "data.mp4":
-		data, err := txMetaData(txMeta, s.store)
+		data, err := txDataByMeta(txMeta, s.store)
 		if err != nil {
 			c.JSON(400, err.Error())
 			return
@@ -278,7 +278,7 @@ func (s *Arseeding) getPeers(c *gin.Context) {
 	c.JSON(http.StatusOK, s.cache.GetPeers())
 }
 
-func txMetaData(txMeta *types.Transaction, db *Store) ([]byte, error) {
+func txDataByMeta(txMeta *types.Transaction, db *Store) ([]byte, error) {
 	size, err := strconv.ParseUint(txMeta.DataSize, 10, 64)
 	if err != nil {
 		return nil, err
@@ -306,6 +306,9 @@ func getData(dataRoot, dataSize string, db *Store) ([]byte, error) {
 
 	data := make([]byte, 0, size)
 	txDataEndOffset, err := db.LoadTxDataEndOffSet(dataRoot, dataSize)
+	if err != nil {
+		return nil, err
+	}
 	startOffset := txDataEndOffset - size + 1
 	for i := 0; uint64(i)+startOffset < txDataEndOffset; {
 		chunkStartOffset := startOffset + uint64(i)
@@ -541,7 +544,7 @@ func (s *Arseeding) getItemMeta(c *gin.Context) {
 
 func (s *Arseeding) bundleFee(c *gin.Context) {
 	size := c.Param("size")
-	symbol := c.Param("symbol")
+	symbol := c.Param("currency")
 	numSize, err := strconv.Atoi(size)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, err)
@@ -563,7 +566,7 @@ func (s *Arseeding) getDataByGW(c *gin.Context) {
 	id := c.Param("id")
 	txMeta, err := s.store.LoadTxMeta(id)
 	if err == nil { // find id is arId
-		data, err := txMetaData(txMeta, s.store)
+		data, err := txDataByMeta(txMeta, s.store)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err)
 			return
