@@ -51,7 +51,7 @@ func (s *Arseeding) runAPI(port string) {
 		// v1.POST("/job/broadcast/:arid", s.broadcast)
 		// v1.POST("/job/sync/:arid", s.sync)
 		v1.POST("/task/:taskType/:arid", s.postTask)
-		v1.POST("/task/kill/:taskType/:arid", s.killJob)
+		v1.POST("/task/kill/:taskType/:arid", s.killTask)
 		v1.GET("/task/:taskType/:arid", s.getTask)
 		v1.GET("/task/cache", s.getCacheTasks)
 
@@ -86,7 +86,7 @@ func (s *Arseeding) submitTx(c *gin.Context) {
 		return
 	}
 	// save tx to local
-	if err = s.saveSubmitTx(arTx); err != nil {
+	if err = s.SaveSubmitTx(arTx); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -117,7 +117,7 @@ func (s *Arseeding) submitChunk(c *gin.Context) {
 		return
 	}
 
-	if err := s.saveSubmitChunk(chunk); err != nil {
+	if err := s.SaveSubmitChunk(chunk); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -399,10 +399,10 @@ func (s *Arseeding) sync(c *gin.Context) {
 	c.JSON(http.StatusOK, "ok")
 }
 
-func (s *Arseeding) killJob(c *gin.Context) {
+func (s *Arseeding) killTask(c *gin.Context) {
 	arid := c.Param("arid")
 	tktype := c.Param("taskType")
-	if !strings.Contains(schema.TaskTypeSync+schema.TaskTypeBroadcast, tktype) {
+	if !strings.Contains(schema.TaskTypeSync+schema.TaskTypeBroadcast+schema.TaskTypeBroadcastMeta, tktype) {
 		c.JSON(http.StatusBadRequest, "tktype not exist")
 		return
 	}

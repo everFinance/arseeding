@@ -3,12 +3,14 @@ package arseeding
 import (
 	"errors"
 	"fmt"
+	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
+	"math/big"
 	"strconv"
 )
 
-func (s *Arseeding) saveSubmitChunk(chunk types.GetChunk) error {
+func (s *Arseeding) SaveSubmitChunk(chunk types.GetChunk) error {
 	// 1. verify chunk
 	err, ok := verifyChunk(chunk)
 	if err != nil || !ok {
@@ -37,7 +39,7 @@ func (s *Arseeding) saveSubmitChunk(chunk types.GetChunk) error {
 	return nil
 }
 
-func (s *Arseeding) saveSubmitTx(arTx types.Transaction) error {
+func (s *Arseeding) SaveSubmitTx(arTx types.Transaction) error {
 	// 1. verify ar tx
 	if err := utils.VerifyTransaction(arTx); err != nil {
 		log.Error("utils.VerifyTransaction(arTx)", "err", err, "arTx", arTx.ID)
@@ -81,6 +83,111 @@ func (s *Arseeding) saveSubmitTx(arTx types.Transaction) error {
 		}
 	}
 	log.Debug("success process a new arTx", "arTx", arTx.ID)
+	return nil
+}
+
+func (s *Arseeding) FetchAndStoreTx(arId string) (err error) {
+	// 1. sync arTxMeta
+	arTxMeta := &types.Transaction{}
+	arTxMeta, err = s.store.LoadTxMeta(arId)
+	if err != nil {
+		// get txMeta from arweave network
+		arTxMeta, err = s.arCli.GetUnconfirmedTx(arId) // this api can return all tx (unconfirmed and confirmed)
+		if err != nil {
+			// get tx from peers
+			arTxMeta, err = s.taskMg.GetUnconfirmedTxFromPeers(arId, schema.TaskTypeSync, s.cache.GetPeers())
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if len(arTxMeta.ID) == 0 { // arTxMeta can not be null
+		return fmt.Errorf("get arTxMeta failed; arId: %s", arId)
+	}
+
+	// if arTxMeta not exist local, store it
+	if !s.store.IsExistTxMeta(arId) {
+		// store txMeta
+		if err := s.store.SaveTxMeta(*arTxMeta); err != nil {
+			log.Error("s.store.SaveTxMeta(arTx)", "err", err, "arTx", arTxMeta.ID)
+			return err
+		}
+		// store txDataEndOffset
+		if err := s.syncAddTxDataEndOffset(arTxMeta.DataRoot, arTxMeta.DataSize); err != nil {
+			log.Error("s.syncAddTxDataEndOffset(arTxMeta.DataRoot,arTxMeta.DataSize)", "err", err, "arId", arId)
+			return err
+		}
+	}
+
+	// 2. sync data
+	size, ok := new(big.Int).SetString(arTxMeta.DataSize, 10)
+	if !ok {
+		return fmt.Errorf("new(big.Int).SetString(arTxMeta.DataSize,10) failed; dataSize: %s", arTxMeta.DataSize)
+	}
+
+	if size.Cmp(big.NewInt(0)) <= 0 {
+		// not need to sync tx data
+		return nil
+	}
+
+	// get data
+	var data []byte
+	data, err = getData(arTxMeta.DataRoot, arTxMeta.DataSize, s.store) // get data from local
+	if err == nil {
+		return nil // local exist data
+	}
+	// need get tx data from arweave network
+	data, err = s.arCli.GetTransactionDataByGateway(arId)
+	if err != nil {
+		data, err = s.taskMg.GetTxDataFromPeers(arId, schema.TaskTypeSync, s.cache.GetPeers())
+		if err != nil {
+			log.Error("get data failed", "err", err, "arId", arId)
+			return err
+		}
+	}
+
+	// store data to local
+	return setTxDataChunks(*arTxMeta, data, s.store)
+}
+
+func (s *Arseeding) syncAddTxDataEndOffset(dataRoot, dataSize string) error {
+	s.endOffsetLocker.Lock()
+	defer s.endOffsetLocker.Unlock()
+
+	if s.store.IsExistTxDataEndOffset(dataRoot, dataSize) {
+		return nil
+	}
+
+	// update allDataEndOffset
+	txSize, err := strconv.ParseUint(dataSize, 10, 64)
+	if err != nil {
+		log.Error("strconv.ParseUint(arTx.DataSize,10,64)", "err", err)
+		return err
+	}
+	curEndOffset := s.store.LoadAllDataEndOffset()
+	newEndOffset := curEndOffset + txSize
+
+	// must use tx db
+	boltTx, err := s.store.BoltDb.Begin(true)
+	if err != nil {
+		log.Error("s.store.BoltDb.Begin(true)", "err", err)
+		return err
+	}
+	if err = s.store.SaveAllDataEndOffset(newEndOffset, boltTx); err != nil {
+		boltTx.Rollback()
+		log.Error("s.store.SaveAllDataEndOffset(newEndOffset)", "err", err)
+		return err
+	}
+	// SaveTxDataEndOffSet
+	if err = s.store.SaveTxDataEndOffSet(dataRoot, dataSize, newEndOffset, boltTx); err != nil {
+		boltTx.Rollback()
+		return err
+	}
+	// commit
+	if err := boltTx.Commit(); err != nil {
+		boltTx.Rollback()
+		return err
+	}
 	return nil
 }
 
@@ -152,47 +259,6 @@ func storeChunk(chunk types.GetChunk, db *Store) error {
 	// save
 	if err := db.SaveChunk(chunkStartOffset, chunk); err != nil {
 		log.Error("s.store.SaveChunk(chunkStartOffset, *chunk)", "err", err)
-		return err
-	}
-	return nil
-}
-
-func (s *Arseeding) syncAddTxDataEndOffset(dataRoot, dataSize string) error {
-	s.endOffsetLocker.Lock()
-	defer s.endOffsetLocker.Unlock()
-
-	if s.store.IsExistTxDataEndOffset(dataRoot, dataSize) {
-		return nil
-	}
-
-	// update allDataEndOffset
-	txSize, err := strconv.ParseUint(dataSize, 10, 64)
-	if err != nil {
-		log.Error("strconv.ParseUint(arTx.DataSize,10,64)", "err", err)
-		return err
-	}
-	curEndOffset := s.store.LoadAllDataEndOffset()
-	newEndOffset := curEndOffset + txSize
-
-	// must use tx db
-	boltTx, err := s.store.BoltDb.Begin(true)
-	if err != nil {
-		log.Error("s.store.BoltDb.Begin(true)", "err", err)
-		return err
-	}
-	if err = s.store.SaveAllDataEndOffset(newEndOffset, boltTx); err != nil {
-		boltTx.Rollback()
-		log.Error("s.store.SaveAllDataEndOffset(newEndOffset)", "err", err)
-		return err
-	}
-	// SaveTxDataEndOffSet
-	if err = s.store.SaveTxDataEndOffSet(dataRoot, dataSize, newEndOffset, boltTx); err != nil {
-		boltTx.Rollback()
-		return err
-	}
-	// commit
-	if err := boltTx.Commit(); err != nil {
-		boltTx.Rollback()
 		return err
 	}
 	return nil

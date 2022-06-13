@@ -1,12 +1,9 @@
 package arseeding
 
 import (
-	"fmt"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar"
-	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
-	"math/big"
 )
 
 func (s *Arseeding) runTask() {
@@ -51,7 +48,7 @@ func (s *Arseeding) syncTask(arId string) (err error) {
 		return
 	}
 
-	err = s.fetchAndStoreTx(arId)
+	err = s.FetchAndStoreTx(arId)
 	if err == nil {
 		s.taskMg.IncSuccessed(arId, schema.TaskTypeSync)
 	}
@@ -70,7 +67,7 @@ func (s *Arseeding) broadcastTxTask(arId string) (err error) {
 	}
 
 	if !s.store.IsExistTxMeta(arId) { // if the arId not exist local db, then wait sync to local
-		if err = s.fetchAndStoreTx(arId); err != nil {
+		if err = s.FetchAndStoreTx(arId); err != nil {
 			log.Error("processBroadcast FetchAndStoreTx failed", "err", err, "arId", arId)
 			return err
 		}
@@ -121,70 +118,6 @@ func (s *Arseeding) broadcastTxMetaTask(arId string) (err error) {
 	}
 	s.taskMg.BroadcastTxMeta(arId, schema.TaskTypeBroadcastMeta, txMeta, s.cache.GetPeers())
 	return
-}
-
-func (s *Arseeding) fetchAndStoreTx(arId string) (err error) {
-	// 1. sync arTxMeta
-	arTxMeta := &types.Transaction{}
-	arTxMeta, err = s.store.LoadTxMeta(arId)
-	if err != nil {
-		// get txMeta from arweave network
-		arTxMeta, err = s.arCli.GetUnconfirmedTx(arId) // this api can return all tx (unconfirmed and confirmed)
-		if err != nil {
-			// get tx from peers
-			arTxMeta, err = s.taskMg.GetUnconfirmedTxFromPeers(arId, schema.TaskTypeSync, s.cache.GetPeers())
-			if err != nil {
-				return err
-			}
-		}
-	}
-	if len(arTxMeta.ID) == 0 { // arTxMeta can not be null
-		return fmt.Errorf("get arTxMeta failed; arId: %s", arId)
-	}
-
-	// if arTxMeta not exist local, store it
-	if !s.store.IsExistTxMeta(arId) {
-		// store txMeta
-		if err := s.store.SaveTxMeta(*arTxMeta); err != nil {
-			log.Error("s.store.SaveTxMeta(arTx)", "err", err, "arTx", arTxMeta.ID)
-			return err
-		}
-		// store txDataEndOffset
-		if err := s.syncAddTxDataEndOffset(arTxMeta.DataRoot, arTxMeta.DataSize); err != nil {
-			log.Error("s.syncAddTxDataEndOffset(arTxMeta.DataRoot,arTxMeta.DataSize)", "err", err, "arId", arId)
-			return err
-		}
-	}
-
-	// 2. sync data
-	size, ok := new(big.Int).SetString(arTxMeta.DataSize, 10)
-	if !ok {
-		return fmt.Errorf("new(big.Int).SetString(arTxMeta.DataSize,10) failed; dataSize: %s", arTxMeta.DataSize)
-	}
-
-	if size.Cmp(big.NewInt(0)) <= 0 {
-		// not need to sync tx data
-		return nil
-	}
-
-	// get data
-	var data []byte
-	data, err = getData(arTxMeta.DataRoot, arTxMeta.DataSize, s.store) // get data from local
-	if err == nil {
-		return nil // local exist data
-	}
-	// need get tx data from arweave network
-	data, err = s.arCli.GetTransactionDataByGateway(arId)
-	if err != nil {
-		data, err = s.taskMg.GetTxDataFromPeers(arId, schema.TaskTypeSync, s.cache.GetPeers())
-		if err != nil {
-			log.Error("get data failed", "err", err, "arId", arId)
-			return err
-		}
-	}
-
-	// store data to local
-	return setTxDataChunks(*arTxMeta, data, s.store)
 }
 
 func (s *Arseeding) setProcessedTask(arId string, tktype string) error {
