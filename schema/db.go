@@ -18,10 +18,11 @@ const (
 	ExpiredPayment = "expired"
 
 	// ReceiptEverTx Status
-	UnSpent  = "unspent"
-	Spent    = "spent"
-	UnRefund = "unrefund"
-	Refund   = "refund"
+	UnSpent   = "unspent"
+	Spent     = "spent"
+	UnRefund  = "unrefund"
+	Refund    = "refunded"
+	RefundErr = "refundErr"
 
 	MaxPerOnChainSize = 500 * 1024 * 1024 // 500 MB
 )
@@ -55,6 +56,7 @@ type ReceiptEverTx struct {
 	Data     string
 
 	Status string //  "unspent","spent", "unrefund", "refund"
+	ErrMsg string
 }
 
 type TokenPrice struct {

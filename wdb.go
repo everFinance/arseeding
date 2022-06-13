@@ -58,8 +58,12 @@ func (w *Wdb) GetNeedOnChainOrders() ([]schema.Order, error) {
 	return res, err
 }
 
-func (w *Wdb) UpdateOnChainStatus(itemId, status string) error {
-	return w.Db.Where("item_id = ?", itemId).Update("on_chain_status", status).Error
+func (w *Wdb) UpdateOrdOnChainStatus(itemId, status string, tx *gorm.DB) error {
+	db := w.Db
+	if tx != nil {
+		db = tx
+	}
+	return db.Model(&schema.Order{}).Where("item_id = ?", itemId).Update("on_chain_status", status).Error
 }
 
 func (w *Wdb) InsertPrices(tps []schema.TokenPrice) error {
@@ -103,16 +107,27 @@ func (w *Wdb) UpdateReceiptStatus(rawId uint64, status string, tx *gorm.DB) erro
 	return db.Model(&schema.ReceiptEverTx{}).Where("raw_id = ?", rawId).Update("status", status).Error
 }
 
-func (w *Wdb) InsertOnChainTx(tx schema.OnChainTx) error {
+func (w *Wdb) UpdateRefundErr(rawId uint64, errMsg string) error {
+	data := make(map[string]string)
+	data["status"] = schema.RefundErr
+	data["err_msg"] = errMsg
+	return w.Db.Model(&schema.ReceiptEverTx{}).Where("raw_id = ?", rawId).Updates(data).Error
+}
+
+func (w *Wdb) InsertArTx(tx schema.OnChainTx) error {
 	return w.Db.Create(&tx).Error
 }
 
-func (w *Wdb) GetPendingOnChainTx() ([]schema.OnChainTx, error) {
+func (w *Wdb) GetPendingArTx() ([]schema.OnChainTx, error) {
 	res := make([]schema.OnChainTx, 0, 10)
 	err := w.Db.Where("status = ?", schema.PendingOnChain).Find(&res).Error
 	return res, err
 }
 
-func (w *Wdb) UpdateOnChainTxStatus(arId, status string) error {
-	return w.Db.Model(&schema.OnChainTx{}).Where("ar_id = ?", arId).Update("status", status).Error
+func (w *Wdb) UpdateArTxStatus(arId, status string, tx *gorm.DB) error {
+	db := w.Db
+	if tx != nil {
+		db = tx
+	}
+	return db.Model(&schema.OnChainTx{}).Where("ar_id = ?", arId).Update("status", status).Error
 }

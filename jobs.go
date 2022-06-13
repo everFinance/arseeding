@@ -29,7 +29,7 @@ func (s *Arseeding) runJobs() {
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptAndOrder)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
 	s.scheduler.Every(30).Seconds().SingletonMode().Do(s.onChainBundleItems)
-	s.scheduler.Every(5).Minute().SingletonMode().Do(s.watcherOnChainTx)
+	s.scheduler.Every(5).Minute().SingletonMode().Do(s.watchArTx)
 	go s.watchEverReceiptTxs()
 
 	// manager jobStatus
@@ -217,7 +217,7 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 		if err != nil {
 			log.Error("s.wdb.GetSignerOrder", "err", err, "signer", signer, "symbol", urt.Symbol, "fee", urt.Amount)
 			if err == gorm.ErrRecordNotFound {
-				// update receipt taskMap is unrefund
+				// update receipt status is unrefund and waiting refund
 				if err = s.wdb.UpdateReceiptStatus(urt.RawId, schema.UnRefund, nil); err != nil {
 					log.Error("s.wdb.UpdateReceiptStatus", "err", err, "id", urt.RawId)
 				}
@@ -268,7 +268,7 @@ func (s *Arseeding) refundReceipt() {
 	}
 
 	for _, rpt := range recpts {
-		// update rpt taskMap is refund
+		// update rpt status is refund
 		if err := s.wdb.UpdateReceiptStatus(rpt.RawId, schema.Refund, nil); err != nil {
 			log.Error("s.wdb.UpdateReceiptStatus(rpt.ID,schema.Refund,nil)", "err", err, "id", rpt.RawId)
 			continue
@@ -280,15 +280,15 @@ func (s *Arseeding) refundReceipt() {
 			continue
 		}
 		everTx, err := s.paySdk.Transfer(rpt.Symbol, amount, rpt.From, rpt.EverHash)
-		if err != nil {
+		if err != nil { // notice: if refund failed, then need manual check and refund
 			log.Error("s.paySdk.Transfer", "err", err)
-			// update receipt taskMap is unrefund
-			if err := s.wdb.UpdateReceiptStatus(rpt.RawId, schema.UnRefund, nil); err != nil {
-				log.Error("s.wdb.UpdateReceiptStatus(rpt.ID,schema.UnRefund,nil)", "err", err, "id", rpt.RawId)
+			// update receipt status is unrefund
+			if err := s.wdb.UpdateRefundErr(rpt.RawId, err.Error()); err != nil {
+				log.Error("s.wdb.UpdateRefundErr(rpt.RawId, err.Error())", "err", err, "id", rpt.RawId)
 			}
 			continue
 		}
-		log.Info("refund receipt success", "receipt everHash", rpt.EverHash, "refund everHash", everTx.HexHash())
+		log.Info("refund receipt success...", "receipt everHash", rpt.EverHash, "refund everHash", everTx.HexHash())
 	}
 }
 
@@ -344,58 +344,79 @@ func (s *Arseeding) onChainBundleItems() {
 	}
 	log.Info("send bundle arTx", "arTx", arTx.ID)
 
+	// todo post to local arseeding for broadcast
+
 	// insert arTx record
 	itemIdsJs, err := json.Marshal(filterItemIds)
 	if err != nil {
 		log.Error("json.Marshal(filterItemIds)", "err", err, "ids", filterItemIds)
 		return
 	}
-	if err = s.wdb.InsertOnChainTx(schema.OnChainTx{
+	if err = s.wdb.InsertArTx(schema.OnChainTx{
 		ArId:      arTx.ID,
 		CurHeight: s.arInfo.Height,
 		Status:    schema.PendingOnChain,
 		ItemIds:   itemIdsJs,
 	}); err != nil {
-		log.Error("s.wdb.InsertOnChainTx", "err", err)
+		log.Error("s.wdb.InsertArTx", "err", err)
 		return
 	}
 
 	// update order onChainStatus to pending
 	for _, item := range items {
-		if err := s.wdb.UpdateOnChainStatus(item.Id, schema.PendingOnChain); err != nil {
-			log.Error("s.wdb.UpdateOnChainStatus(item.Id,schema.PendingOnChain)", "err", err, "itemId", item.Id)
+		if err = s.wdb.UpdateOrdOnChainStatus(item.Id, schema.PendingOnChain, nil); err != nil {
+			log.Error("s.wdb.UpdateOrdOnChainStatus(item.Id,schema.PendingOnChain)", "err", err, "itemId", item.Id)
 		}
 	}
 }
 
-func (s *Arseeding) watcherOnChainTx() {
-	txs, err := s.wdb.GetPendingOnChainTx()
+func (s *Arseeding) watchArTx() {
+	txs, err := s.wdb.GetPendingArTx()
 	if err != nil {
-		log.Error("s.wdb.GetPendingOnChainTx()", "err", err)
+		log.Error("s.wdb.GetPendingArTx()", "err", err)
 		return
 	}
 
 	for _, tx := range txs {
 		if s.arInfo.Height-tx.CurHeight > 50 {
 			// arTx has expired
-			if err = s.wdb.UpdateOnChainTxStatus(tx.ArId, schema.FailedOnChain); err != nil {
-				log.Error("UpdateOnChainTxStatus(tx.ArId,schema.FailedOnChain)", "err", err)
+			if err = s.wdb.UpdateArTxStatus(tx.ArId, schema.FailedOnChain, nil); err != nil {
+				log.Error("UpdateArTxStatus(tx.ArId,schema.FailedOnChain)", "err", err)
 			}
 			continue
 		}
 
-		// check onchain taskMap
+		// check onchain status
 		arTxStatus, err := s.arCli.GetTransactionStatus(tx.ArId)
 		if err != nil {
 			log.Error("s.arCli.GetTransactionStatus(tx.ArId)", "err", err, "arId", tx.ArId)
 			continue
 		}
-		// update taskMap success
+
+		// update status success
 		if arTxStatus.NumberOfConfirmations > 3 {
-			if err = s.wdb.UpdateOnChainTxStatus(tx.ArId, schema.SuccOnChain); err != nil {
-				log.Error("UpdateOnChainTxStatus(tx.ArId,schema.SuccOnChain)", "err", err)
+			dbTx := s.wdb.Db.Begin()
+			if err = s.wdb.UpdateArTxStatus(tx.ArId, schema.SuccOnChain, dbTx); err != nil {
+				log.Error("UpdateArTxStatus(tx.ArId,schema.SuccOnChain)", "err", err)
+				dbTx.Rollback()
 			}
-			// todo update order onChain taskMap
+
+			// update order onchain status
+			bundleItemIds := make([]string, 0)
+			if err = json.Unmarshal(tx.ItemIds, &bundleItemIds); err != nil {
+				log.Error("json.Unmarshal(tx.ItemIds,&bundleItemIds)", "err", err, "itemsJs", tx.ItemIds)
+				dbTx.Rollback()
+				return
+			}
+
+			for _, itemId := range bundleItemIds {
+				if err = s.wdb.UpdateOrdOnChainStatus(itemId, schema.SuccOnChain, dbTx); err != nil {
+					log.Error("s.wdb.UpdateOrdOnChainStatus(itemId,schema.SuccOnChain,dbTx)", "err", err, "item", itemId)
+					dbTx.Rollback()
+					return
+				}
+			}
+			dbTx.Commit()
 		}
 	}
 }

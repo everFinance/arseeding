@@ -187,6 +187,7 @@ func (m *TaskManager) GetTxDataFromPeers(arId, taskType string, peers []string) 
 
 func (m *TaskManager) BroadcastTxMeta(arId, taskType string, tx *types.Transaction, peers []string) {
 	pNode := goar.NewTempConn()
+	pNode.SetTimeout(10 * time.Second)
 	for _, peer := range peers {
 		pNode.SetTempConnUrl("http://" + peer)
 		status, code, _ := pNode.SubmitTransaction(&types.Transaction{
