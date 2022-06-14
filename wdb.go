@@ -108,7 +108,7 @@ func (w *Wdb) UpdateReceiptStatus(rawId uint64, status string, tx *gorm.DB) erro
 }
 
 func (w *Wdb) UpdateRefundErr(rawId uint64, errMsg string) error {
-	data := make(map[string]string)
+	data := make(map[string]interface{})
 	data["status"] = schema.RefundErr
 	data["err_msg"] = errMsg
 	return w.Db.Model(&schema.ReceiptEverTx{}).Where("raw_id = ?", rawId).Updates(data).Error
@@ -118,9 +118,9 @@ func (w *Wdb) InsertArTx(tx schema.OnChainTx) error {
 	return w.Db.Create(&tx).Error
 }
 
-func (w *Wdb) GetPendingArTx() ([]schema.OnChainTx, error) {
+func (w *Wdb) GetArTxByStatus(status string) ([]schema.OnChainTx, error) {
 	res := make([]schema.OnChainTx, 0, 10)
-	err := w.Db.Where("status = ?", schema.PendingOnChain).Find(&res).Error
+	err := w.Db.Where("status = ?", status).Find(&res).Error
 	return res, err
 }
 
@@ -130,4 +130,12 @@ func (w *Wdb) UpdateArTxStatus(arId, status string, tx *gorm.DB) error {
 		db = tx
 	}
 	return db.Model(&schema.OnChainTx{}).Where("ar_id = ?", arId).Update("status", status).Error
+}
+
+func (w *Wdb) UpdateArTx(id uint, arId string, curHeight int64, status string) error {
+	data := make(map[string]interface{})
+	data["ar_id"] = arId
+	data["cur_height"] = curHeight
+	data["status"] = status
+	return w.Db.Model(&schema.OnChainTx{}).Where("id = ?", id).Updates(data).Error
 }

@@ -2,7 +2,8 @@ package arseeding
 
 import (
 	"github.com/everFinance/arseeding/schema"
-	"github.com/everFinance/everpay/sdk"
+	"github.com/everFinance/arseeding/sdk"
+	paySdk "github.com/everFinance/everpay/sdk"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/gin-gonic/gin"
@@ -25,8 +26,9 @@ type Arseeding struct {
 
 	cache *Cache
 
-	// ANS-104
-	paySdk              *sdk.SDK
+	// ANS-104 bundle
+	arseedCli           *sdk.ArSeedCli
+	everpaySdk          *paySdk.SDK
 	wdb                 *Wdb
 	bundler             *goar.Wallet
 	arInfo              types.NetworkInfo
@@ -55,7 +57,7 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 		panic(err)
 	}
 
-	paySdk, err := sdk.New(bundler.Signer, payUrl)
+	everpaySdk, err := paySdk.New(bundler.Signer, payUrl)
 	if err != nil {
 		panic(err)
 	}
@@ -69,7 +71,8 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 		arCli:               arCli,
 		taskMg:              jobmg,
 		scheduler:           gocron.NewScheduler(time.UTC),
-		paySdk:              paySdk,
+		arseedCli:           sdk.New("http://127.0.0.1:8080"), // todo
+		everpaySdk:          everpaySdk,
 		wdb:                 wdb,
 		bundler:             bundler,
 		arInfo:              types.NetworkInfo{},
