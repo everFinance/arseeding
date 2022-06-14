@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 	"math/big"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -131,36 +132,61 @@ func (s *Arseeding) updatePeerList() {
 	visPeer := make(map[string]bool, 0) // record already handled peer
 	updatedPeers := make([]string, 0)
 	pNode := goar.NewTempConn()
+	var mu sync.Mutex
 	for _, peer := range s.cache.GetPeers() {
-		pNode.SetTempConnUrl("http://" + peer)
-		newPeers, err := pNode.GetPeers()
-		if err != nil {
-			log.Warn("bad peer")
-			continue
-		}
-		for _, newPeer := range newPeers {
-			if _, ok := visPeer[newPeer]; ok {
-				continue
+		go func(peer string) {
+			pNode.SetTempConnUrl("http://" + peer)
+			pNode.SetTimeout(time.Second * 20)
+			newPeers, err := pNode.GetPeers()
+			if err != nil {
+				// log.Warn("bad peer")
+				return
 			}
-			if checkAvailable(newPeer) {
-				updatedPeers = append(updatedPeers, newPeer)
+			for _, newPeer := range newPeers {
+				mu.Lock()
+				if _, ok := visPeer[newPeer]; !ok {
+					updatedPeers = append(updatedPeers, newPeer)
+					visPeer[newPeer] = true
+				}
+				mu.Unlock()
 			}
-			visPeer[newPeer] = true
-		}
+		}(peer)
+	}
+	time.Sleep(time.Second * 20)
+
+	submitPeers := make([]string, 0)
+
+	if len(updatedPeers) > 1000 {
+		updatedPeers = updatedPeers[:1000]
 	}
 
+	// submit a legal Tx to peers, if the response is timely and acceptable, then the peer is good for submit tx
+	for _, peer := range updatedPeers {
+		go func(peer string) {
+			pNode.SetTempConnUrl("http://" + peer)
+			pNode.SetTimeout(time.Second * 20)
+			status, code, err := pNode.SubmitTransaction(s.cache.GetConstTx())
+			if err != nil {
+				return
+			}
+			if code == 200 || code == 208 || strings.Contains(status, "anchor") || strings.Contains(status, "already") {
+				mu.Lock()
+				submitPeers = append(submitPeers, peer)
+				mu.Unlock()
+			}
+		}(peer)
+	}
+	time.Sleep(time.Second * 20)
 	s.cache.UpdatePeers(updatedPeers)
 	err := s.store.SavePeers(updatedPeers)
 	if err != nil {
 		log.Warn("save new peer list fail")
 	}
-}
-
-// check the peer is available and health
-// return true temporary
-// TODO
-func checkAvailable(peer string) bool {
-	return true
+	s.cache.UpdateSubmitPeers(updatedPeers)
+	err = s.store.SaveSubmitPeers(submitPeers)
+	if err != nil {
+		log.Warn("save new submitPeer list fail")
+	}
 }
 
 func (s *Arseeding) watchEverReceiptTxs() {
