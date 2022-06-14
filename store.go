@@ -34,6 +34,11 @@ var (
 	// bundle bucketName
 	BundleItemBinary = []byte("bundle-item-binary")
 	BundleItemMeta   = []byte("bundle-item-meta")
+
+	// parse arTx data to bundle items
+	BundleWaitParseArIdBucket = []byte("bundle-wait-parse-arId-bucket") // key: arId, val: "0x01"
+	BundleArIdToItemIdsBucket = []byte("bundle-arId-to-itemIds-bucket") // key: arId, val: json.marshal(itemIds)
+
 )
 
 type Store struct {
@@ -70,7 +75,9 @@ func NewStore(boltDirPath string) (*Store, error) {
 			ConstantsBucket,
 			TaskIdPendingPoolBucket,
 			TaskBucket,
-			BundleItemBinary}
+			BundleItemBinary,
+			BundleItemMeta,
+			BundleWaitParseArIdBucket}
 		return createBuckets(tx, bucketNames...)
 	}); err != nil {
 		return nil, err
@@ -417,4 +424,58 @@ func (s *Store) LoadItemMeta(itemId string) (meta types.BundleItem, err error) {
 		return json.Unmarshal(metaBy, &meta)
 	})
 	return
+}
+
+// bundle items to arTx
+
+func (s *Store) SaveWaitParseBundleArId(arId string) error {
+	return s.BoltDb.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(BundleWaitParseArIdBucket).Put([]byte(arId), []byte("0x01"))
+	})
+}
+
+func (s *Store) LoadWaitParseBundleArIds() (arIds []string, err error) {
+	err = s.BoltDb.View(func(tx *bolt.Tx) error {
+		return tx.Bucket(BundleWaitParseArIdBucket).ForEach(func(k, v []byte) error {
+			arIds = append(arIds, string(k))
+			return nil
+		})
+	})
+	return
+}
+
+func (s *Store) DelParsedBundleArId(arId string) error {
+	return s.BoltDb.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(BundleWaitParseArIdBucket).Delete([]byte(arId))
+	})
+}
+
+func (s *Store) SaveArIdToItemIds(arId string, itemIds []string) error {
+	return s.BoltDb.Update(func(tx *bolt.Tx) error {
+		itemIdsJs, err := json.Marshal(itemIds)
+		if err != nil {
+			return err
+		}
+		return tx.Bucket(BundleArIdToItemIdsBucket).Put([]byte(arId), itemIdsJs)
+	})
+}
+
+func (s *Store) LoadArIdToItemIds(arId string) (itemIds []string, err error) {
+	err = s.BoltDb.View(func(tx *bolt.Tx) error {
+		val := tx.Bucket(BundleArIdToItemIdsBucket).Get([]byte(arId))
+		if val == nil {
+			return ErrNotExist
+		} else {
+			return json.Unmarshal(val, &itemIds)
+		}
+	})
+	return
+}
+
+func (s *Store) ExistArIdToItemIds(arId string) bool {
+	_, err := s.LoadArIdToItemIds(arId)
+	if err == ErrNotExist {
+		return false
+	}
+	return true
 }

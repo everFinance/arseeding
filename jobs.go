@@ -33,6 +33,7 @@ func (s *Arseeding) runJobs() {
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.watchArTx)
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.retryOnChainArTx)
 	go s.watchEverReceiptTxs()
+	s.scheduler.Every(1).Minute().SingletonMode().Do(s.parseAndSaveBundleTx)
 
 	// manager jobStatus
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseJobs)
@@ -458,4 +459,34 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 	}
 
 	return
+}
+
+func (s *Arseeding) parseAndSaveBundleTx() {
+	arIds, err := s.store.LoadWaitParseBundleArIds()
+	if err != nil {
+		log.Error("s.store.LoadWaitParseBundleArIds()", "err", err)
+		return
+	}
+	for _, arId := range arIds {
+		// get tx data
+		arTxMeta, err := s.store.LoadTxMeta(arId)
+		if err != nil {
+			log.Error("s.store.LoadTxMeta(arId)", "err", err, "arId", arId)
+			continue
+		}
+
+		data, err := getData(arTxMeta.DataRoot, arTxMeta.DataSize, s.store)
+		if err != nil {
+			log.Error("get data failed, if is not_exist_record,then wait submit chunks fully", "err", err, "arId", arId)
+			continue
+		}
+		if err := s.ParseAndSaveBundleItems(arId, data); err != nil {
+			log.Error("ParseAndSaveBundleItems", "err", err, "arId", arId)
+			continue
+		}
+		// del wait db
+		if err = s.store.DelParsedBundleArId(arId); err != nil {
+			log.Error("DelParsedBundleArId", "err", err, "arId", arId)
+		}
+	}
 }

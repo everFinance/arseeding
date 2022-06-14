@@ -82,7 +82,10 @@ func (s *Arseeding) SaveSubmitTx(arTx types.Transaction) error {
 			return err
 		}
 	}
-	log.Debug("success process a new arTx", "arTx", arTx.ID)
+	// parse ANS-104 bundle data
+	if isBundleTx(arTx.Tags) {
+		return s.store.SaveWaitParseBundleArId(arTx.ID)
+	}
 	return nil
 }
 
@@ -147,7 +150,15 @@ func (s *Arseeding) FetchAndStoreTx(arId string) (err error) {
 	}
 
 	// store data to local
-	return setTxDataChunks(*arTxMeta, data, s.store)
+	if err = setTxDataChunks(*arTxMeta, data, s.store); err != nil {
+		return err
+	}
+
+	// parse ANS-104 bundle data
+	if isBundleTx(arTxMeta.Tags) {
+		return s.store.SaveWaitParseBundleArId(arId)
+	}
+	return nil
 }
 
 func (s *Arseeding) syncAddTxDataEndOffset(dataRoot, dataSize string) error {
@@ -283,4 +294,21 @@ func verifyChunk(chunk types.GetChunk) (err error, ok bool) {
 	}
 	_, ok = utils.ValidatePath(dataRoot, offset, 0, dataSize, path)
 	return
+}
+
+func isBundleTx(txTags []types.Tag) bool {
+	var (
+		fcount = 0
+		vcount = 0
+	)
+	tags, _ := utils.TagsDecode(txTags)
+	for _, tg := range tags {
+		if tg.Name == "Bundle-Format" && tg.Value == "binary" {
+			fcount++
+		}
+		if tg.Name == "Bundle-Version" && tg.Value == "2.0.0" {
+			vcount++
+		}
+	}
+	return fcount != 0 && vcount != 0
 }

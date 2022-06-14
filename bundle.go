@@ -18,33 +18,13 @@ func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string) (s
 	}
 
 	// store item
-	if !s.store.IsExistItemBinary(item.Id) {
-		boltTx, err := s.store.BoltDb.Begin(true)
-		if err != nil {
-			log.Error("s.store.BoltDb.Begin(true)", "err", err)
-			return schema.Order{}, err
-		}
-
-		if err = s.store.SaveItemBinary(item.Id, item.ItemBinary, boltTx); err != nil {
-			boltTx.Rollback()
-			log.Error("saveItemBinary failed", "err", err, "itemId", item.Id)
-			return schema.Order{}, err
-		}
-
-		if err = s.store.SaveItemMeta(item, boltTx); err != nil {
-			boltTx.Rollback()
-			return schema.Order{}, err
-		}
-		// commit
-		if err := boltTx.Commit(); err != nil {
-			boltTx.Rollback()
-			return schema.Order{}, err
-		}
+	if err := s.saveItem(item); err != nil {
+		return schema.Order{}, err
 	}
 
 	// calc fee
 	size := int64(len(item.ItemBinary))
-	respFee, err := s.calcItemFee(currency, size)
+	respFee, err := s.CalcItemFee(currency, size)
 	if err != nil {
 		return schema.Order{}, err
 	}
@@ -78,7 +58,7 @@ func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string) (s
 	return order, nil
 }
 
-func (s *Arseeding) calcItemFee(currency string, itemSize int64) (*schema.RespFee, error) {
+func (s *Arseeding) CalcItemFee(currency string, itemSize int64) (*schema.RespFee, error) {
 	perFee, ok := s.bundlePerFeeMap[strings.ToUpper(currency)]
 	if !ok {
 		return nil, fmt.Errorf("not support currency: %s", currency)
@@ -121,4 +101,56 @@ func (s *Arseeding) GetBundlePerFees() (map[string]schema.Fee, error) {
 		}
 	}
 	return res, nil
+}
+
+func (s *Arseeding) ParseAndSaveBundleItems(arId string, data []byte) error {
+	if s.store.ExistArIdToItemIds(arId) {
+		return nil
+	}
+
+	bundle, err := utils.DecodeBundle(data)
+	if err != nil {
+		return err
+	}
+	itemIds := make([]string, 0, len(bundle.Items))
+	// save items
+	for _, item := range bundle.Items {
+		if err = s.saveItem(item); err != nil {
+			log.Error("s.saveItem(item)", "err", err, "arId", arId)
+			return err
+		}
+		itemIds = append(itemIds, item.Id)
+	}
+
+	// save arId to itemIds
+	return s.store.SaveArIdToItemIds(arId, itemIds)
+}
+
+func (s *Arseeding) saveItem(item types.BundleItem) error {
+	if s.store.IsExistItemBinary(item.Id) {
+		return nil
+	}
+
+	boltTx, err := s.store.BoltDb.Begin(true)
+	if err != nil {
+		log.Error("s.store.BoltDb.Begin(true)", "err", err)
+		return err
+	}
+
+	if err = s.store.SaveItemBinary(item.Id, item.ItemBinary, boltTx); err != nil {
+		boltTx.Rollback()
+		log.Error("saveItemBinary failed", "err", err, "itemId", item.Id)
+		return err
+	}
+
+	if err = s.store.SaveItemMeta(item, boltTx); err != nil {
+		boltTx.Rollback()
+		return err
+	}
+	// commit
+	if err = boltTx.Commit(); err != nil {
+		boltTx.Rollback()
+		return err
+	}
+	return nil
 }

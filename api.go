@@ -550,7 +550,7 @@ func (s *Arseeding) bundleFee(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, err)
 		return
 	}
-	respFee, err := s.calcItemFee(symbol, int64(numSize))
+	respFee, err := s.CalcItemFee(symbol, int64(numSize))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 		return
