@@ -48,14 +48,14 @@ func (s *Arseeding) runAPI(port string) {
 		}
 
 		// broadcast && sync tasks
-		// v1.POST("/job/broadcast/:arid", s.broadcast)
-		// v1.POST("/job/sync/:arid", s.sync)
+		v1.POST("/job/:taskType/:arid", s.postTask) // todo need delete when update pay-server
 		v1.POST("/task/:taskType/:arid", s.postTask)
 		v1.POST("/task/kill/:taskType/:arid", s.killTask)
 		v1.GET("/task/:taskType/:arid", s.getTask)
 		v1.GET("/task/cache", s.getCacheTasks)
 
 		// ANS-104 bundle Data api
+		v1.GET("/bundle/bundler", s.getBundler)
 		v1.POST("/bundle/tx/:currency", s.submitItem)
 		v1.GET("/bundle/tx/:id", s.getItemMeta) // get item meta, without data
 		v1.GET("/bundle/fees", s.bundleFees)
@@ -370,38 +370,6 @@ func (s *Arseeding) postTask(c *gin.Context) {
 	c.JSON(http.StatusOK, "ok")
 }
 
-func (s *Arseeding) broadcast(c *gin.Context) {
-	arid := c.Param("arid")
-	txHash, err := utils.Base64Decode(arid)
-	if err != nil || len(txHash) != 32 {
-		c.JSON(http.StatusBadRequest, "arId incorrect")
-		return
-	}
-
-	if err = s.registerTask(arid, schema.TaskTypeBroadcast); err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
-		return
-	}
-
-	c.JSON(http.StatusOK, "ok")
-}
-
-func (s *Arseeding) sync(c *gin.Context) {
-	arid := c.Param("arid")
-	txHash, err := utils.Base64Decode(arid)
-	if err != nil || len(txHash) != 32 {
-		c.JSON(http.StatusBadRequest, "arId incorrect")
-		return
-	}
-
-	if err = s.registerTask(arid, schema.TaskTypeSync); err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
-		return
-	}
-
-	c.JSON(http.StatusOK, "ok")
-}
-
 func (s *Arseeding) killTask(c *gin.Context) {
 	arid := c.Param("arid")
 	tktype := c.Param("taskType")
@@ -469,6 +437,10 @@ func (s *Arseeding) registerTask(arId, tktype string) error {
 
 	s.taskMg.PutToTkChan(arId, tktype)
 	return nil
+}
+
+func (s *Arseeding) getBundler(c *gin.Context) {
+	c.JSON(http.StatusOK, s.bundler.Signer.Address)
 }
 
 func (s *Arseeding) submitItem(c *gin.Context) {

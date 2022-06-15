@@ -33,6 +33,7 @@ func (s *Arseeding) runJobs() {
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.watchArTx)
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.retryOnChainArTx)
 	go s.watchEverReceiptTxs()
+	s.scheduler.Every(1).Minute().SingletonMode().Do(s.processExpiredOrd)
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.parseAndSaveBundleTx)
 
 	// manager jobStatus
@@ -228,26 +229,7 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 			continue
 		}
 
-		// check order time expired
-		everTxNonce := urt.Nonce
-		if ord.PaymentExpiredTime*1000 < everTxNonce {
-			// expired
-			dbTx := s.wdb.Db.Begin()
-			if err = s.wdb.UpdateOrderPay(ord.ID, urt.EverHash, schema.ExpiredPayment, dbTx); err != nil {
-				log.Error("s.wdb.UpdateOrderPay(ord.ID,schema.ExpiredPayment,dbTx)", "err", err)
-				dbTx.Rollback()
-				continue
-			}
-
-			if err = s.wdb.UpdateReceiptStatus(urt.RawId, schema.UnRefund, dbTx); err != nil {
-				log.Error("s.wdb.UpdateReceiptStatus(urt.ID,schema.UnRefund,dbTx)", "err", err)
-				dbTx.Rollback()
-				continue
-			}
-			dbTx.Commit()
-		}
-
-		// update order payment taskMap
+		// update order payment status
 		dbTx := s.wdb.Db.Begin()
 		if err = s.wdb.UpdateOrderPay(ord.ID, urt.EverHash, schema.SuccPayment, dbTx); err != nil {
 			log.Error("s.wdb.UpdateOrderPay(ord.ID,schema.SuccPayment,dbTx)", "err", err)
@@ -459,6 +441,24 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 	}
 
 	return
+}
+
+func (s *Arseeding) processExpiredOrd() {
+	ords, err := s.wdb.GetExpiredOrders()
+	if err != nil {
+		log.Error("GetExpiredOrders()", "err", err)
+		return
+	}
+	for _, ord := range ords {
+		if err = s.wdb.UpdateOrdToExpiredStatus(ord.ID); err != nil {
+			log.Error("UpdateOrdToExpiredStatus", "err", err, "id", ord.ID)
+			continue
+		}
+		// delete bundle item from store
+		if err = s.DelItem(ord.ItemId); err != nil {
+			log.Error("DelItem", "err", err, "itemId", ord.ItemId)
+		}
+	}
 }
 
 func (s *Arseeding) parseAndSaveBundleTx() {

@@ -77,7 +77,8 @@ func NewStore(boltDirPath string) (*Store, error) {
 			TaskBucket,
 			BundleItemBinary,
 			BundleItemMeta,
-			BundleWaitParseArIdBucket}
+			BundleWaitParseArIdBucket,
+			BundleArIdToItemIdsBucket}
 		return createBuckets(tx, bucketNames...)
 	}); err != nil {
 		return nil, err
@@ -392,6 +393,18 @@ func (s *Store) LoadItemBinary(itemId string) (itemBinary []byte, err error) {
 	return
 }
 
+func (s *Store) DelItemBinary(itemId string, dbTx *bolt.Tx) (err error) {
+	if dbTx == nil {
+		dbTx, err = s.BoltDb.Begin(true)
+		if err != nil {
+			return
+		}
+		defer dbTx.Commit()
+	}
+	key := []byte(itemId)
+	return dbTx.Bucket(BundleItemBinary).Delete(key)
+}
+
 func (s *Store) SaveItemMeta(item types.BundleItem, dbTx *bolt.Tx) (err error) {
 	if dbTx == nil {
 		dbTx, err = s.BoltDb.Begin(true)
@@ -424,6 +437,18 @@ func (s *Store) LoadItemMeta(itemId string) (meta types.BundleItem, err error) {
 		return json.Unmarshal(metaBy, &meta)
 	})
 	return
+}
+
+func (s *Store) DelItemMeta(itemId string, dbTx *bolt.Tx) (err error) {
+	if dbTx == nil {
+		dbTx, err = s.BoltDb.Begin(true)
+		if err != nil {
+			return
+		}
+		defer dbTx.Commit()
+	}
+	key := []byte(itemId)
+	return dbTx.Bucket(BundleItemMeta).Delete(key)
 }
 
 // bundle items to arTx

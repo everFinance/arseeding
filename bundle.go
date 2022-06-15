@@ -139,11 +139,38 @@ func (s *Arseeding) saveItem(item types.BundleItem) error {
 
 	if err = s.store.SaveItemBinary(item.Id, item.ItemBinary, boltTx); err != nil {
 		boltTx.Rollback()
-		log.Error("saveItemBinary failed", "err", err, "itemId", item.Id)
 		return err
 	}
 
 	if err = s.store.SaveItemMeta(item, boltTx); err != nil {
+		boltTx.Rollback()
+		return err
+	}
+	// commit
+	if err = boltTx.Commit(); err != nil {
+		boltTx.Rollback()
+		return err
+	}
+	return nil
+}
+
+func (s *Arseeding) DelItem(itemId string) error {
+	if !s.store.IsExistItemBinary(itemId) {
+		return nil
+	}
+
+	boltTx, err := s.store.BoltDb.Begin(true)
+	if err != nil {
+		log.Error("s.store.BoltDb.Begin(true)", "err", err)
+		return err
+	}
+
+	if err = s.store.DelItemBinary(itemId, boltTx); err != nil {
+		boltTx.Rollback()
+		return err
+	}
+
+	if err = s.store.DelItemMeta(itemId, boltTx); err != nil {
 		boltTx.Rollback()
 		return err
 	}

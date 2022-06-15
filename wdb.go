@@ -6,6 +6,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
+	"time"
 )
 
 type Wdb struct {
@@ -39,6 +40,17 @@ func (w *Wdb) GetUnPaidOrder(signer, currency, fee string) (schema.Order, error)
 	err := w.Db.Model(&schema.Order{}).Where("signer = ? and payment_status = ?"+
 		" and currency = ? and fee = ?", signer, schema.UnPayment, currency, fee).First(&res).Error
 	return res, err
+}
+
+func (w *Wdb) GetExpiredOrders() ([]schema.Order, error) {
+	now := time.Now().Unix()
+	ords := make([]schema.Order, 0, 10)
+	err := w.Db.Model(&schema.Order{}).Where("payment_status = ? and payment_expired_time < ?", schema.UnPayment, now).Find(&ords).Error
+	return ords, err
+}
+
+func (w *Wdb) UpdateOrdToExpiredStatus(id uint) error {
+	return w.Db.Model(&schema.Order{}).Where("id = ?", id).Update("payment_status", schema.ExpiredPayment).Error
 }
 
 func (w *Wdb) UpdateOrderPay(id uint, everHash string, paymentStatus string, tx *gorm.DB) error {
