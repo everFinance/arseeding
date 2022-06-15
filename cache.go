@@ -13,8 +13,8 @@ type Cache struct {
 	anchor      string
 	fee         schema.ArFee
 	peers       []string
-	submitPeers []string // submit Tx or chunk to those peer
-	constTx     *types.Transaction
+	submitPeers []string           // submit Tx or chunk to those peer
+	constTx     *types.Transaction // a legal arTx used to test a peer is available
 	lock        sync.RWMutex
 }
 
@@ -175,4 +175,16 @@ func fetchArFee(arCli *goar.Client, peers []string) (schema.ArFee, error) {
 		}
 	}
 	return schema.ArFee{Base: basePrice, PerChunk: deltaPrice - basePrice}, nil
+}
+
+func fetchConstTx(arCli *goar.Client, peers []string) (*types.Transaction, error) {
+	arId := "e8NNxYmPRVgESMA6cu31OAIe-3wvpWbu9Ng3FhK4FbU"
+	tx, err := arCli.GetUnconfirmedTx(arId)
+	if err != nil {
+		tx, err = arCli.GetUnconfirmedTxFromPeers(arId, peers...)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return tx, nil
 }

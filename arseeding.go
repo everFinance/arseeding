@@ -100,12 +100,18 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 	if err != nil {
 		panic(err)
 	}
+
+	constTx, err := fetchConstTx(arCli, peers)
+	if err != nil {
+		panic(err)
+	}
 	a.cache = &Cache{
-		arInfo: arInfo,
-		anchor: anchor,
-		fee:    fee,
-		peers:  peers,
-		lock:   sync.RWMutex{},
+		arInfo:  arInfo,
+		anchor:  anchor,
+		constTx: constTx,
+		fee:     fee,
+		peers:   peers,
+		lock:    sync.RWMutex{},
 	}
 	return a
 }
