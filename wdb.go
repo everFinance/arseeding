@@ -92,6 +92,12 @@ func (w *Wdb) GetPrices() ([]schema.TokenPrice, error) {
 	return res, err
 }
 
+func (w *Wdb) GetArPrice() (float64, error) {
+	res := schema.TokenPrice{}
+	err := w.Db.Where("symbol = ?", "AR").First(&res).Error
+	return res.Price, err
+}
+
 func (w *Wdb) InsertReceiptTx(tx schema.ReceiptEverTx) error {
 	return w.Db.Clauses(clause.OnConflict{DoNothing: true}).Create(&tx).Error
 }

@@ -8,21 +8,21 @@ import (
 )
 
 type Cache struct {
-	arInfo *types.NetworkInfo
+	arInfo types.NetworkInfo
 	anchor string
 	fee    schema.ArFee
 	peers  []string
 	lock   sync.RWMutex
 }
 
-func (c *Cache) GetInfo() *types.NetworkInfo {
+func (c *Cache) GetInfo() types.NetworkInfo {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	info := c.arInfo
 	return info
 }
 
-func (c *Cache) UpdateInfo(info *types.NetworkInfo) {
+func (c *Cache) UpdateInfo(info types.NetworkInfo) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.arInfo = info

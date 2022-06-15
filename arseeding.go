@@ -5,7 +5,6 @@ import (
 	"github.com/everFinance/arseeding/sdk"
 	paySdk "github.com/everFinance/everpay/sdk"
 	"github.com/everFinance/goar"
-	"github.com/everFinance/goar/types"
 	"github.com/gin-gonic/gin"
 	"github.com/go-co-op/gocron"
 	"sync"
@@ -31,7 +30,6 @@ type Arseeding struct {
 	everpaySdk          *paySdk.SDK
 	wdb                 *Wdb
 	bundler             *goar.Wallet
-	arInfo              types.NetworkInfo
 	bundlePerFeeMap     map[string]schema.Fee // key: tokenSymbol, val: fee per chunk_size(256KB)
 	paymentExpiredRange int64                 // default 1 hour
 	expectedRange       int64                 // default 50 block
@@ -75,7 +73,6 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 		everpaySdk:          everpaySdk,
 		wdb:                 wdb,
 		bundler:             bundler,
-		arInfo:              types.NetworkInfo{},
 		bundlePerFeeMap:     make(map[string]schema.Fee),
 		paymentExpiredRange: int64(3600),
 		expectedRange:       50,
@@ -104,7 +101,7 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 		panic(err)
 	}
 	a.cache = &Cache{
-		arInfo: arInfo,
+		arInfo: *arInfo,
 		anchor: anchor,
 		fee:    fee,
 		peers:  peers,

@@ -7,7 +7,7 @@ import (
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"github.com/shopspring/decimal"
-	"math/big"
+	"math"
 	"strings"
 	"time"
 )
@@ -45,7 +45,7 @@ func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string) (s
 		Decimals:           respFee.Decimals,
 		Fee:                respFee.FinalFee,
 		PaymentExpiredTime: time.Now().Unix() + s.paymentExpiredRange,
-		ExpectedBlock:      s.arInfo.Height + s.expectedRange,
+		ExpectedBlock:      s.cache.GetInfo().Height + s.expectedRange,
 		PaymentStatus:      schema.UnPayment,
 		PaymentId:          "",
 		OnChainStatus:      schema.WaitOnChain,
@@ -80,6 +80,10 @@ func (s *Arseeding) CalcItemFee(currency string, itemSize int64) (*schema.RespFe
 }
 
 func (s *Arseeding) GetBundlePerFees() (map[string]schema.Fee, error) {
+	arPrice, err := s.wdb.GetArPrice()
+	if err != nil {
+		return nil, err
+	}
 	tps, err := s.wdb.GetPrices()
 	if err != nil {
 		return nil, err
@@ -90,9 +94,14 @@ func (s *Arseeding) GetBundlePerFees() (map[string]schema.Fee, error) {
 		if tp.Price <= 0.0 {
 			continue
 		}
-		price := decimal.NewFromBigInt(utils.ARToWinston(big.NewFloat(tp.Price)), 0)
-		baseFee := decimal.NewFromInt(arFee.Base).Div(price)
-		perChunkFee := decimal.NewFromInt(arFee.PerChunk).Div(price)
+
+		// fee = 1e(tpDecimals) * arPrice * arBaseFee / 1e(arDeciamls) / tpPrice
+		baseFee := decimal.NewFromFloat(math.Pow10(tp.Decimals)).Mul(decimal.NewFromFloat(arPrice)).Mul(decimal.NewFromInt(arFee.Base)).
+			Div(decimal.NewFromFloat(math.Pow10(12))).Div(decimal.NewFromFloat(tp.Price)).Round(0)
+
+		perChunkFee := decimal.NewFromFloat(math.Pow10(tp.Decimals)).Mul(decimal.NewFromFloat(arPrice)).Mul(decimal.NewFromInt(arFee.PerChunk)).
+			Div(decimal.NewFromFloat(math.Pow10(12))).Div(decimal.NewFromFloat(tp.Price)).Round(0)
+
 		res[strings.ToUpper(tp.Symbol)] = schema.Fee{
 			Currency: tp.Symbol,
 			Decimals: tp.Decimals,

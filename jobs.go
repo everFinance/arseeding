@@ -30,7 +30,7 @@ func (s *Arseeding) runJobs() {
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptAndOrder)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.onChainBundleItems)
-	s.scheduler.Every(5).Minute().SingletonMode().Do(s.watchArTx)
+	s.scheduler.Every(3).Minute().SingletonMode().Do(s.watchArTx)
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.retryOnChainArTx)
 	go s.watchEverReceiptTxs()
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.processExpiredOrd)
@@ -68,9 +68,9 @@ func (s *Arseeding) updateTokenPrice() {
 		if tp.ManualSet {
 			continue
 		}
-		price, err := config.GetTokenPriceByRedstone(tp.Symbol, "AR")
+		price, err := config.GetTokenPriceByRedstone(tp.Symbol, "USDC")
 		if err != nil {
-			log.Error("config.GetTokenPriceByRedstone(tp.Symbol,\"AR\")", "err", err, "symbol", tp.Symbol)
+			log.Error("config.GetTokenPriceByRedstone(tp.Symbol,\"USDC\")", "err", err, "symbol", tp.Symbol)
 			continue
 		}
 		// update tokenPrice
@@ -117,8 +117,8 @@ func (s *Arseeding) updateAnchor() {
 
 func (s *Arseeding) updateInfo() {
 	info, err := fetchArInfo(s.arCli, s.cache.GetPeers())
-	if err == nil {
-		s.cache.UpdateInfo(info)
+	if err == nil && info != nil {
+		s.cache.UpdateInfo(*info)
 	}
 }
 
@@ -219,7 +219,7 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 		signer := urt.From
 		ord, err := s.wdb.GetUnPaidOrder(signer, urt.Symbol, urt.Amount)
 		if err != nil {
-			log.Error("s.wdb.GetSignerOrder", "err", err, "signer", signer, "symbol", urt.Symbol, "fee", urt.Amount)
+			log.Error("s.wdb.GetUnPaidOrder", "err", err, "signer", signer, "symbol", urt.Symbol, "fee", urt.Amount)
 			if err == gorm.ErrRecordNotFound {
 				// update receipt status is unrefund and waiting refund
 				if err = s.wdb.UpdateReceiptStatus(urt.RawId, schema.UnRefund, nil); err != nil {
@@ -307,7 +307,7 @@ func (s *Arseeding) onChainBundleItems() {
 	}
 	if err = s.wdb.InsertArTx(schema.OnChainTx{
 		ArId:      arTx.ID,
-		CurHeight: s.arInfo.Height,
+		CurHeight: s.cache.GetInfo().Height,
 		Status:    schema.PendingOnChain,
 		ItemIds:   onChainItemIdsJs,
 	}); err != nil {
@@ -331,7 +331,7 @@ func (s *Arseeding) watchArTx() {
 	}
 
 	for _, tx := range txs {
-		if s.arInfo.Height-tx.CurHeight > 50 {
+		if s.cache.GetInfo().Height-tx.CurHeight > 50 {
 			// arTx has expired
 			if err = s.wdb.UpdateArTxStatus(tx.ArId, schema.FailedOnChain, nil); err != nil {
 				log.Error("UpdateArTxStatus(tx.ArId,schema.FailedOnChain)", "err", err)
@@ -342,7 +342,7 @@ func (s *Arseeding) watchArTx() {
 		// check onchain status
 		arTxStatus, err := s.arCli.GetTransactionStatus(tx.ArId)
 		if err != nil {
-			log.Error("s.arCli.GetTransactionStatus(tx.ArId)", "err", err, "arId", tx.ArId)
+			log.Warn("watchArTx s.arCli.GetTransactionStatus(tx.ArId)", "err", err, "arId", tx.ArId)
 			continue
 		}
 
@@ -390,7 +390,7 @@ func (s *Arseeding) retryOnChainArTx() {
 			return
 		}
 		// update onChain
-		if err = s.wdb.UpdateArTx(tx.ID, arTx.ID, s.arInfo.Height, schema.PendingOnChain); err != nil {
+		if err = s.wdb.UpdateArTx(tx.ID, arTx.ID, s.cache.GetInfo().Height, schema.PendingOnChain); err != nil {
 			log.Error("s.wdb.UpdateArTx", "err", err, "id", tx.ID, "arId", arTx.ID)
 		}
 	}

@@ -62,7 +62,7 @@ type ReceiptEverTx struct {
 type TokenPrice struct {
 	Symbol    string `gorm:"primarykey"` // token symbol
 	Decimals  int
-	Price     float64 // unit is AR
+	Price     float64 // unit is USD
 	ManualSet bool    // manual set
 	UpdatedAt time.Time
 }

@@ -28,5 +28,5 @@ type Fee struct {
 type RespFee struct {
 	Currency string `json:"currency"`
 	Decimals int    `json:"decimals"`
-	FinalFee string `json:"finalFee"`
+	FinalFee string `json:"finalFee"` // uint
 }
