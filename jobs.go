@@ -294,6 +294,7 @@ func (s *Arseeding) onChainBundleItems() {
 		totalSize += ord.Size
 	}
 
+	// todo need wait when itemIds always too less
 	arTx, onChainItemIds, err := s.onChainBundleTx(itemIds)
 	if err != nil {
 		return

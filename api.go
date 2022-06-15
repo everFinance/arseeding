@@ -34,7 +34,7 @@ func (s *Arseeding) runAPI(port string) {
 		v2 := r.Group("/")
 		{
 			v2.Use(proxyArweaveGateway)
-			v2.GET("/tx/:arid/taskMap")
+			v2.GET("/tx/:arid/status")
 			v2.GET("/price/:size/:target")
 			v2.GET("/block/hash/:hash")
 			v2.GET("/block/height/:height")
@@ -249,7 +249,7 @@ func (s *Arseeding) getTxField(c *gin.Context) {
 	case "signature":
 		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Signature))
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"taskMap": 400, "error": "invalid_field"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": 400, "error": "invalid_field"})
 	}
 }
 
