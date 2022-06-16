@@ -26,6 +26,7 @@ steps:
 #      - touch ~/.gitconfig
 #      - echo '[url "ssh://git@github.com/"]' >> ~/.gitconfig
 #      - echo '	insteadOf = https://github.com/' >> ~/.gitconfig
+      - cat ~/.gitconfig
       - go env -w CGO_ENABLED=0 GOPRIVATE=github.com/everFinance/everpay
       - go mod tidy
       - cd cmd
