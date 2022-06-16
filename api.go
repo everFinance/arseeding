@@ -57,7 +57,8 @@ func (s *Arseeding) runAPI(port string) {
 		// ANS-104 bundle Data api
 		v1.GET("/bundle/bundler", s.getBundler)
 		v1.POST("/bundle/tx/:currency", s.submitItem)
-		v1.GET("/bundle/tx/:id", s.getItemMeta) // get item meta, without data
+		v1.GET("/bundle/tx/:itemId", s.getItemMeta) // get item meta, without data
+		v1.GET("/bundle/itemIds/:arId", s.getItemIdsByArId)
 		v1.GET("/bundle/fees", s.bundleFees)
 		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
 		v1.GET("/:id", s.getDataByGW) // get arTx data or bundleItem data
@@ -504,14 +505,24 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 }
 
 func (s *Arseeding) getItemMeta(c *gin.Context) {
-	id := c.Param("id")
+	id := c.Param("itemId")
 	// could be bundle item id
 	meta, err := s.store.LoadItemMeta(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
-	c.JSON(200, meta)
+	c.JSON(http.StatusOK, meta)
+}
+
+func (s *Arseeding) getItemIdsByArId(c *gin.Context) {
+	arId := c.Param("arId")
+	itemIds, err := s.store.LoadArIdToItemIds(arId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+	c.JSON(http.StatusOK, itemIds)
 }
 
 func (s *Arseeding) bundleFee(c *gin.Context) {

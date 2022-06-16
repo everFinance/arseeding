@@ -29,7 +29,7 @@ func (s *Arseeding) runJobs() {
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundlePerFee)
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptAndOrder)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
-	s.scheduler.Every(1).Minute().SingletonMode().Do(s.onChainBundleItems)
+	s.scheduler.Every(1).Minute().SingletonMode().Do(s.onChainBundleItems) // can set a longer time, if the items are less. such as 5m
 	s.scheduler.Every(3).Minute().SingletonMode().Do(s.watchArTx)
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.retryOnChainArTx)
 	go s.watchEverReceiptTxs()
