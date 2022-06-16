@@ -1,6 +1,7 @@
 package arseeding
 
 import (
+	"encoding/json"
 	"errors"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar"
@@ -24,6 +25,34 @@ type PeerCount struct {
 	count int64
 }
 
+func NewCache(arCli *goar.Client, peerMap map[string]int64) *Cache {
+	c := &Cache{peerMap: peerMap}
+	peers := c.GetPeers()
+	arInfo, err := fetchArInfo(arCli, peers)
+	if err != nil {
+		panic(err)
+	}
+	c.UpdateInfo(arInfo)
+
+	fee, err := fetchArFee(arCli, peers)
+	if err != nil {
+		panic(err)
+	}
+	c.UpdateFee(fee)
+
+	anchor, err := fetchAnchor(arCli, peers)
+	if err != nil {
+		panic(err)
+	}
+	c.UpdateAnchor(anchor)
+
+	constTx := &types.Transaction{}
+	if err := json.Unmarshal([]byte(schema.ConstTx), constTx); err != nil {
+		panic(err)
+	}
+	c.constTx = constTx
+	return c
+}
 func (c *Cache) GetInfo() *types.NetworkInfo {
 	c.lock.RLock()
 	defer c.lock.RUnlock()

@@ -1,7 +1,6 @@
 package arseeding
 
 import (
-	"encoding/json"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay/sdk"
 	"github.com/everFinance/goar"
@@ -82,35 +81,9 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 	// init cache
 	peerMap, err := boltDb.LoadPeers()
 	if err != nil {
-		log.Warn("not available peer local")
 		peerMap = make(map[string]int64)
 	}
-	c := &Cache{peerMap: peerMap}
-	peers := c.GetPeers()
-	arInfo, err := fetchArInfo(arCli, peers)
-	if err != nil {
-		panic(err)
-	}
-	c.UpdateInfo(arInfo)
-
-	fee, err := fetchArFee(arCli, peers)
-	if err != nil {
-		panic(err)
-	}
-	c.UpdateFee(fee)
-
-	anchor, err := fetchAnchor(arCli, peers)
-	if err != nil {
-		panic(err)
-	}
-	c.UpdateAnchor(anchor)
-
-	constTx := &types.Transaction{}
-	if err := json.Unmarshal([]byte(schema.ConstTx), constTx); err != nil {
-		panic(err)
-	}
-	c.constTx = constTx
-	a.cache = c
+	a.cache = NewCache(arCli, peerMap)
 	return a
 }
 

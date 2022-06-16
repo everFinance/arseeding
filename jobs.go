@@ -127,64 +127,13 @@ func (s *Arseeding) updateArFee() {
 	}
 }
 
-// update peer list, check peer available, store in db
-// TODO update peerList concurrency
+// update peer list concurrency, check peer available, save in db
 func (s *Arseeding) updatePeerList() {
 	peers, err := s.arCli.GetPeers()
 	if err != nil {
 		return
 	}
-	pNode := goar.NewTempConn()
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	availablePeers := make(map[string]bool, 0)
-	p, err := ants.NewPoolWithFunc(100, func(peer interface{}) {
-		defer wg.Done()
-		pStr := peer.(string)
-		pNode.SetTempConnUrl("http://" + pStr)
-		pNode.SetTimeout(time.Second * 10)
-		_, code, err := pNode.SubmitTransaction(s.cache.GetConstTx())
-		if err != nil {
-			return
-		}
-		// if the resp like this ,we believe this peer is available
-		if code/100 == 2 || code == 400 { // strings.Contains(status, "anchor") || strings.Contains(status, "already") {
-			mu.Lock()
-			availablePeers[pStr] = true
-			mu.Unlock()
-		}
-	})
-	// submit a legal Tx to peers, if the response is timely and acceptable, then the peer is good for submit tx
-	for _, peer := range peers {
-		wg.Add(1)
-		err = p.Invoke(peer)
-		if err != nil {
-			log.Warn("concurrency err", "err", err)
-		}
-	}
-	wg.Wait()
-	p.Release()
-	peerMap := s.cache.GetPeerMap()
-	for peer, cnt := range peerMap {
-		if _, ok := availablePeers[peer]; !ok {
-			if cnt > 0 {
-				peerMap[peer] -= 1
-			}
-		} else {
-			peerMap[peer] += 1
-		}
-	}
-
-	for peer, _ := range availablePeers {
-		if _, ok := peerMap[peer]; !ok {
-			peerMap[peer] = 1
-		}
-	}
-	s.cache.UpdatePeers(peerMap)
-	err = s.store.SavePeers(peerMap)
-	if err != nil {
-		log.Warn("save new peer list fail")
-	}
+	updatePeers(s, peers)
 }
 
 func (s *Arseeding) watchEverReceiptTxs() {
@@ -421,5 +370,59 @@ func (s *Arseeding) watcherOnChainTx() {
 			}
 			// todo update order onChain taskMap
 		}
+	}
+}
+
+func updatePeers(s *Arseeding, peers []string) {
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	availablePeers := make(map[string]bool, 0)
+	p, err := ants.NewPoolWithFunc(100, func(peer interface{}) {
+		defer wg.Done()
+		pStr := peer.(string)
+		pNode := goar.NewTempConn()
+		pNode.SetTempConnUrl("http://" + pStr)
+		pNode.SetTimeout(time.Second * 10)
+		_, code, err := pNode.SubmitTransaction(s.cache.GetConstTx())
+		if err != nil {
+			return
+		}
+		// if the resp like this ,we believe this peer is available
+		if code/100 == 2 || code == 400 { // strings.Contains(status, "anchor") || strings.Contains(status, "already") {
+			mu.Lock()
+			availablePeers[pStr] = true
+			mu.Unlock()
+		}
+	})
+	// submit a legal Tx to peers, if the response is timely and acceptable, then the peer is good for submit tx
+	for _, peer := range peers {
+		wg.Add(1)
+		err = p.Invoke(peer)
+		if err != nil {
+			log.Warn("concurrency err", "err", err)
+		}
+	}
+	wg.Wait()
+	p.Release()
+	peerMap := s.cache.GetPeerMap()
+	for peer, cnt := range peerMap {
+		if _, ok := availablePeers[peer]; !ok {
+			if cnt > 0 {
+				peerMap[peer] -= 1
+			}
+		} else {
+			peerMap[peer] += 1
+		}
+	}
+
+	for peer, _ := range availablePeers {
+		if _, ok := peerMap[peer]; !ok {
+			peerMap[peer] = 1
+		}
+	}
+	s.cache.UpdatePeers(peerMap)
+	err = s.store.SavePeers(peerMap)
+	if err != nil {
+		log.Warn("save new peer list fail")
 	}
 }
