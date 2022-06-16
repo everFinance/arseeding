@@ -241,7 +241,7 @@ func (s *Store) IsExistChunk(chunkStartOffset uint64) bool {
 	return true
 }
 
-func (s *Store) SavePeers(peers []string) error {
+func (s *Store) SavePeers(peers map[string]int64) error {
 	peersB, err := json.Marshal(peers)
 	key := []byte("peer-list")
 	if err != nil {
@@ -257,7 +257,7 @@ func (s *Store) SavePeers(peers []string) error {
 	return err
 }
 
-func (s *Store) LoadPeers() (peers []string, err error) {
+func (s *Store) LoadPeers() (peers map[string]int64, err error) {
 	key := []byte("peer-list")
 	err = s.BoltDb.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(ConstantsBucket)

@@ -275,6 +275,7 @@ func (s *Arseeding) getTxPrice(c *gin.Context) {
 }
 
 func (s *Arseeding) getPeers(c *gin.Context) {
+	log.Debug("peers len", "len", len(s.cache.GetPeers()))
 	c.JSON(http.StatusOK, s.cache.GetPeers())
 }
 
