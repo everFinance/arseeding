@@ -50,7 +50,10 @@ func (w *Wdb) GetExpiredOrders() ([]schema.Order, error) {
 }
 
 func (w *Wdb) UpdateOrdToExpiredStatus(id uint) error {
-	return w.Db.Model(&schema.Order{}).Where("id = ?", id).Update("payment_status", schema.ExpiredPayment).Error
+	data := make(map[string]interface{})
+	data["payment_status"] = schema.ExpiredPayment
+	data["on_chain_status"] = schema.FailedOnChain
+	return w.Db.Model(&schema.Order{}).Where("id = ?", id).Updates(data).Error
 }
 
 func (w *Wdb) UpdateOrderPay(id uint, everHash string, paymentStatus string, tx *gorm.DB) error {
