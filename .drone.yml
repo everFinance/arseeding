@@ -28,6 +28,7 @@ steps:
       - echo '	insteadOf = https://github.com/' >> /root/.gitconfig
       - cat /root/.gitconfig
       - go env -w CGO_ENABLED=0 GOPRIVATE=github.com/everFinance/*
+      - go env
       - go mod tidy
       - cd cmd
       - go build -o arseeding
