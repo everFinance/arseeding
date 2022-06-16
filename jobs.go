@@ -374,6 +374,18 @@ func (s *Arseeding) watcherOnChainTx() {
 }
 
 func updatePeers(s *Arseeding, peers []string) {
+	availablePeers := filtPeers(peers, s.cache.GetConstTx())
+
+	peerMap := updatePeerMap(s.cache.GetPeerMap(), availablePeers)
+
+	s.cache.UpdatePeers(peerMap)
+	err := s.store.SavePeers(peerMap)
+	if err != nil {
+		log.Warn("save new peer list fail")
+	}
+}
+
+func filtPeers(peers []string, constTx *types.Transaction) map[string]bool {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	availablePeers := make(map[string]bool, 0)
@@ -383,12 +395,12 @@ func updatePeers(s *Arseeding, peers []string) {
 		pNode := goar.NewTempConn()
 		pNode.SetTempConnUrl("http://" + pStr)
 		pNode.SetTimeout(time.Second * 10)
-		_, code, err := pNode.SubmitTransaction(s.cache.GetConstTx())
+		_, code, err := pNode.SubmitTransaction(constTx)
 		if err != nil {
 			return
 		}
 		// if the resp like this ,we believe this peer is available
-		if code/100 == 2 || code == 400 { // strings.Contains(status, "anchor") || strings.Contains(status, "already") {
+		if code/100 == 2 || code/100 == 4 { // strings.Contains(status, "anchor") || strings.Contains(status, "already") {
 			mu.Lock()
 			availablePeers[pStr] = true
 			mu.Unlock()
@@ -404,7 +416,10 @@ func updatePeers(s *Arseeding, peers []string) {
 	}
 	wg.Wait()
 	p.Release()
-	peerMap := s.cache.GetPeerMap()
+	return availablePeers
+}
+
+func updatePeerMap(peerMap map[string]int64, availablePeers map[string]bool) map[string]int64 {
 	for peer, cnt := range peerMap {
 		if _, ok := availablePeers[peer]; !ok {
 			if cnt > 0 {
@@ -420,9 +435,5 @@ func updatePeers(s *Arseeding, peers []string) {
 			peerMap[peer] = 1
 		}
 	}
-	s.cache.UpdatePeers(peerMap)
-	err = s.store.SavePeers(peerMap)
-	if err != nil {
-		log.Warn("save new peer list fail")
-	}
+	return peerMap
 }

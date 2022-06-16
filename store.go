@@ -271,46 +271,8 @@ func (s *Store) LoadPeers() (peers map[string]int64, err error) {
 	return
 }
 
-func (s *Store) SaveSubmitPeers(peers []string) error {
-	peersB, err := json.Marshal(peers)
-	key := []byte("submit-peer-list")
-	if err != nil {
-		return err
-	}
-	err = s.BoltDb.Update(func(tx *bolt.Tx) error {
-		chunkBkt := tx.Bucket(ConstantsBucket)
-		if err := chunkBkt.Put(key, peersB); err != nil {
-			return err
-		}
-		return nil
-	})
-	return err
-}
-
-func (s *Store) LoadSubmitPeers() (peers []string, err error) {
-	key := []byte("submit-peer-list")
-	err = s.BoltDb.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(ConstantsBucket)
-		val := bkt.Get(key)
-		if val == nil {
-			return ErrNotExist
-		}
-		err = json.Unmarshal(val, &peers)
-		return err
-	})
-	return
-}
-
 func (s *Store) IsExistPeers() bool {
 	_, err := s.LoadPeers()
-	if err == ErrNotExist {
-		return false
-	}
-	return true
-}
-
-func (s *Store) IsExistSubmitPeers() bool {
-	_, err := s.LoadSubmitPeers()
 	if err == ErrNotExist {
 		return false
 	}
