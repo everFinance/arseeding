@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/everFinance/everpay v1.3.7
-	github.com/everFinance/goar v1.4.3-0.20220613013958-333a19085f70
+	github.com/everFinance/goar v1.4.3-0.20220616032616-7431bd870b3e
 	github.com/getsentry/sentry-go v0.11.0
 	github.com/gin-gonic/gin v1.7.4
 	github.com/go-co-op/gocron v1.11.0
@@ -67,7 +67,6 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/nbio/st v0.0.0-20140626010706-e9e8d9816f32 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/onsi/ginkgo v1.16.4 // indirect
 	github.com/onsi/gomega v1.15.0 // indirect
