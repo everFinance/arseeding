@@ -79,34 +79,11 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 	}
 
 	// init cache
-	peers, err := boltDb.LoadPeers()
-	if err == ErrNotExist {
-		peers, err = arCli.GetPeers()
-	}
+	peerMap, err := boltDb.LoadPeers()
 	if err != nil {
-		panic(err)
+		peerMap = make(map[string]int64)
 	}
-
-	arInfo, err := fetchArInfo(arCli, peers)
-	if err != nil {
-		panic(err)
-	}
-
-	fee, err := fetchArFee(arCli, peers)
-	if err != nil {
-		panic(err)
-	}
-	anchor, err := fetchAnchor(arCli, peers)
-	if err != nil {
-		panic(err)
-	}
-	a.cache = &Cache{
-		arInfo: *arInfo,
-		anchor: anchor,
-		fee:    fee,
-		peers:  peers,
-		lock:   sync.RWMutex{},
-	}
+	a.cache = NewCache(arCli, peerMap)
 	return a
 }
 

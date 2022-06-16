@@ -11,9 +11,11 @@ import (
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
+	"github.com/panjf2000/ants/v2"
 	"gorm.io/gorm"
 	"math/big"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,7 +24,7 @@ func (s *Arseeding) runJobs() {
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updateAnchor)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updateArFee)
 	s.scheduler.Every(30).Seconds().SingletonMode().Do(s.updateInfo)
-	s.scheduler.Every(30).Minute().SingletonMode().Do(s.updatePeerList)
+	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updatePeerMap)
 
 	// about bundle
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateTokenPrice)
@@ -129,42 +131,24 @@ func (s *Arseeding) updateArFee() {
 	}
 }
 
-// update peer list, check peer available, store in db
-// TODO update peerList concurrency
-func (s *Arseeding) updatePeerList() {
-	visPeer := make(map[string]bool, 0) // record already handled peer
-	updatedPeers := make([]string, 0)
-	pNode := goar.NewTempConn()
-	for _, peer := range s.cache.GetPeers() {
-		pNode.SetTempConnUrl("http://" + peer)
-		newPeers, err := pNode.GetPeers()
-		if err != nil {
-			log.Warn("bad peer")
-			continue
-		}
-		for _, newPeer := range newPeers {
-			if _, ok := visPeer[newPeer]; ok {
-				continue
-			}
-			if checkAvailable(newPeer) {
-				updatedPeers = append(updatedPeers, newPeer)
-			}
-			visPeer[newPeer] = true
-		}
+// update peer list concurrency, check peer available, save in db
+func (s *Arseeding) updatePeerMap() {
+	peers, err := s.arCli.GetPeers()
+	if err != nil {
+		return
 	}
 
-	s.cache.UpdatePeers(updatedPeers)
-	err := s.store.SavePeers(updatedPeers)
-	if err != nil {
+	availablePeers := filterPeers(peers, s.cache.GetConstTx())
+	if len(availablePeers) == 0 {
+		return
+	}
+
+	peerMap := updatePeerMap(s.cache.GetPeerMap(), availablePeers)
+
+	s.cache.UpdatePeers(peerMap)
+	if err = s.store.SavePeers(peerMap); err != nil {
 		log.Warn("save new peer list fail")
 	}
-}
-
-// check the peer is available and health
-// return true temporary
-// TODO
-func checkAvailable(peer string) bool {
-	return true
 }
 
 func (s *Arseeding) watchEverReceiptTxs() {
@@ -488,4 +472,57 @@ func (s *Arseeding) parseAndSaveBundleTx() {
 			log.Error("DelParsedBundleArId", "err", err, "arId", arId)
 		}
 	}
+}
+
+func filterPeers(peers []string, constTx *types.Transaction) map[string]bool {
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	availablePeers := make(map[string]bool, 0)
+	p, err := ants.NewPoolWithFunc(50, func(peer interface{}) {
+		defer wg.Done()
+		pStr := peer.(string)
+		pNode := goar.NewTempConn()
+		pNode.SetTempConnUrl("http://" + pStr)
+		pNode.SetTimeout(time.Second * 10)
+		_, code, err := pNode.SubmitTransaction(constTx)
+		if err != nil {
+			return
+		}
+		// if the resp like this ,we believe this peer is available
+		if code/100 == 2 || code/100 == 4 {
+			mu.Lock()
+			availablePeers[pStr] = true
+			mu.Unlock()
+		}
+	})
+	// submit a legal Tx to peers, if the response is timely and acceptable, then the peer is good for submit tx
+	for _, peer := range peers {
+		wg.Add(1)
+		err = p.Invoke(peer)
+		if err != nil {
+			log.Warn("concurrency err", "err", err)
+		}
+	}
+	wg.Wait()
+	p.Release()
+	return availablePeers
+}
+
+func updatePeerMap(oldPeerMap map[string]int64, availablePeers map[string]bool) map[string]int64 {
+	for peer, cnt := range oldPeerMap {
+		if _, ok := availablePeers[peer]; !ok {
+			if cnt > 0 {
+				oldPeerMap[peer] -= 1
+			}
+		} else {
+			oldPeerMap[peer] += 1
+		}
+	}
+
+	for peer, _ := range availablePeers {
+		if _, ok := oldPeerMap[peer]; !ok {
+			oldPeerMap[peer] = 1
+		}
+	}
+	return oldPeerMap
 }
