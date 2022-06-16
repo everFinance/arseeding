@@ -69,13 +69,13 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string)
 		arCli:               arCli,
 		taskMg:              jobmg,
 		scheduler:           gocron.NewScheduler(time.UTC),
-		arseedCli:           sdk.New("http://127.0.0.1:8080"), // todo
+		arseedCli:           sdk.New("http://127.0.0.1:8080"),
 		everpaySdk:          everpaySdk,
 		wdb:                 wdb,
 		bundler:             bundler,
 		bundlePerFeeMap:     make(map[string]schema.Fee),
-		paymentExpiredRange: int64(3600),
-		expectedRange:       50,
+		paymentExpiredRange: schema.DefaultPaymentExpiredRange,
+		expectedRange:       schema.DefaultExpectedRange,
 	}
 
 	// init cache
