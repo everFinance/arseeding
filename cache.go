@@ -116,10 +116,10 @@ func (c *Cache) GetPeers() []string {
 	return peers
 }
 
-func (c *Cache) UpdatePeers(peers map[string]int64) {
+func (c *Cache) UpdatePeers(peerMap map[string]int64) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.peerMap = peers
+	c.peerMap = peerMap
 }
 
 func (c *Cache) GetConstTx() *types.Transaction {

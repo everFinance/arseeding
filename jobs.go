@@ -23,7 +23,7 @@ func (s *Arseeding) runJobs() {
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updateAnchor)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updateArFee)
 	s.scheduler.Every(30).Seconds().SingletonMode().Do(s.updateInfo)
-	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updatePeerList)
+	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updatePeerMap)
 
 	// about bundle
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateTokenPrice)
@@ -128,12 +128,23 @@ func (s *Arseeding) updateArFee() {
 }
 
 // update peer list concurrency, check peer available, save in db
-func (s *Arseeding) updatePeerList() {
+func (s *Arseeding) updatePeerMap() {
 	peers, err := s.arCli.GetPeers()
 	if err != nil {
 		return
 	}
-	updatePeers(s, peers)
+
+	availablePeers := filterPeers(peers, s.cache.GetConstTx())
+	if len(availablePeers) == 0 {
+		return
+	}
+
+	peerMap := updatePeerMap(s.cache.GetPeerMap(), availablePeers)
+
+	s.cache.UpdatePeers(peerMap)
+	if err = s.store.SavePeers(peerMap); err != nil {
+		log.Warn("save new peer list fail")
+	}
 }
 
 func (s *Arseeding) watchEverReceiptTxs() {
@@ -373,23 +384,11 @@ func (s *Arseeding) watcherOnChainTx() {
 	}
 }
 
-func updatePeers(s *Arseeding, peers []string) {
-	availablePeers := filtPeers(peers, s.cache.GetConstTx())
-
-	peerMap := updatePeerMap(s.cache.GetPeerMap(), availablePeers)
-
-	s.cache.UpdatePeers(peerMap)
-	err := s.store.SavePeers(peerMap)
-	if err != nil {
-		log.Warn("save new peer list fail")
-	}
-}
-
-func filtPeers(peers []string, constTx *types.Transaction) map[string]bool {
+func filterPeers(peers []string, constTx *types.Transaction) map[string]bool {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	availablePeers := make(map[string]bool, 0)
-	p, err := ants.NewPoolWithFunc(100, func(peer interface{}) {
+	p, err := ants.NewPoolWithFunc(50, func(peer interface{}) {
 		defer wg.Done()
 		pStr := peer.(string)
 		pNode := goar.NewTempConn()
@@ -400,7 +399,7 @@ func filtPeers(peers []string, constTx *types.Transaction) map[string]bool {
 			return
 		}
 		// if the resp like this ,we believe this peer is available
-		if code/100 == 2 || code/100 == 4 { // strings.Contains(status, "anchor") || strings.Contains(status, "already") {
+		if code/100 == 2 || code/100 == 4 {
 			mu.Lock()
 			availablePeers[pStr] = true
 			mu.Unlock()
@@ -419,21 +418,21 @@ func filtPeers(peers []string, constTx *types.Transaction) map[string]bool {
 	return availablePeers
 }
 
-func updatePeerMap(peerMap map[string]int64, availablePeers map[string]bool) map[string]int64 {
-	for peer, cnt := range peerMap {
+func updatePeerMap(oldPeerMap map[string]int64, availablePeers map[string]bool) map[string]int64 {
+	for peer, cnt := range oldPeerMap {
 		if _, ok := availablePeers[peer]; !ok {
 			if cnt > 0 {
-				peerMap[peer] -= 1
+				oldPeerMap[peer] -= 1
 			}
 		} else {
-			peerMap[peer] += 1
+			oldPeerMap[peer] += 1
 		}
 	}
 
 	for peer, _ := range availablePeers {
-		if _, ok := peerMap[peer]; !ok {
-			peerMap[peer] = 1
+		if _, ok := oldPeerMap[peer]; !ok {
+			oldPeerMap[peer] = 1
 		}
 	}
-	return peerMap
+	return oldPeerMap
 }
