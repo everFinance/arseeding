@@ -20,11 +20,6 @@ type Cache struct {
 	lock    sync.RWMutex
 }
 
-type PeerCount struct {
-	peer  string
-	count int64
-}
-
 func NewCache(arCli *goar.Client, peerMap map[string]int64) *Cache {
 	c := &Cache{peerMap: peerMap}
 	peers := c.GetPeers()
@@ -32,7 +27,7 @@ func NewCache(arCli *goar.Client, peerMap map[string]int64) *Cache {
 	if err != nil {
 		panic(err)
 	}
-	c.UpdateInfo(arInfo)
+	c.UpdateInfo(*arInfo)
 
 	fee, err := fetchArFee(arCli, peers)
 	if err != nil {
@@ -53,6 +48,7 @@ func NewCache(arCli *goar.Client, peerMap map[string]int64) *Cache {
 	c.constTx = constTx
 	return c
 }
+
 func (c *Cache) GetInfo() types.NetworkInfo {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -91,27 +87,29 @@ func (c *Cache) UpdateFee(price schema.ArFee) {
 	defer c.lock.Unlock()
 	c.fee = price
 }
+
 func (c *Cache) GetPeerMap() map[string]int64 {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.peerMap
 }
+
 func (c *Cache) GetPeers() []string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	sortArray := make([]PeerCount, 0)
+	sortArray := make([]schema.PeerCount, 0)
 	for peerIp, count := range c.peerMap {
-		sortArray = append(sortArray, PeerCount{
-			peer:  peerIp,
-			count: count,
+		sortArray = append(sortArray, schema.PeerCount{
+			Peer:  peerIp,
+			Count: count,
 		})
 	}
 	sort.Slice(sortArray, func(i, j int) bool {
-		return sortArray[i].count > sortArray[j].count
+		return sortArray[i].Count > sortArray[j].Count
 	})
 	peers := make([]string, 0)
 	for _, peerCnt := range sortArray {
-		peers = append(peers, peerCnt.peer)
+		peers = append(peers, peerCnt.Peer)
 	}
 	return peers
 }
