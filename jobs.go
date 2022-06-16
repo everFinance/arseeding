@@ -29,7 +29,7 @@ func (s *Arseeding) runJobs() {
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundlePerFee)
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptAndOrder)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
-	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.onChainBundleItems)
+	s.scheduler.Every(1).Minute().SingletonMode().Do(s.onChainBundleItems)
 	s.scheduler.Every(3).Minute().SingletonMode().Do(s.watchArTx)
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.retryOnChainArTx)
 	go s.watchEverReceiptTxs()
@@ -294,7 +294,7 @@ func (s *Arseeding) onChainBundleItems() {
 		totalSize += ord.Size
 	}
 
-	// todo need wait when itemIds always too less
+	// send arTx to arweave
 	arTx, onChainItemIds, err := s.onChainBundleTx(itemIds)
 	if err != nil {
 		return
@@ -332,18 +332,15 @@ func (s *Arseeding) watchArTx() {
 	}
 
 	for _, tx := range txs {
-		if s.cache.GetInfo().Height-tx.CurHeight > 50 {
-			// arTx has expired
-			if err = s.wdb.UpdateArTxStatus(tx.ArId, schema.FailedOnChain, nil); err != nil {
-				log.Error("UpdateArTxStatus(tx.ArId,schema.FailedOnChain)", "err", err)
-			}
-			continue
-		}
-
 		// check onchain status
 		arTxStatus, err := s.arCli.GetTransactionStatus(tx.ArId)
 		if err != nil {
-			log.Warn("watchArTx s.arCli.GetTransactionStatus(tx.ArId)", "err", err, "arId", tx.ArId)
+			if err != goar.ErrPendingTx && s.cache.GetInfo().Height-tx.CurHeight > 50 {
+				// arTx has expired
+				if err = s.wdb.UpdateArTxStatus(tx.ArId, schema.FailedOnChain, nil); err != nil {
+					log.Error("UpdateArTxStatus(tx.ArId,schema.FailedOnChain)", "err", err)
+				}
+			}
 			continue
 		}
 
@@ -353,6 +350,7 @@ func (s *Arseeding) watchArTx() {
 			if err = s.wdb.UpdateArTxStatus(tx.ArId, schema.SuccOnChain, dbTx); err != nil {
 				log.Error("UpdateArTxStatus(tx.ArId,schema.SuccOnChain)", "err", err)
 				dbTx.Rollback()
+				continue
 			}
 
 			// update order onchain status
@@ -360,14 +358,14 @@ func (s *Arseeding) watchArTx() {
 			if err = json.Unmarshal(tx.ItemIds, &bundleItemIds); err != nil {
 				log.Error("json.Unmarshal(tx.ItemIds,&bundleItemIds)", "err", err, "itemsJs", tx.ItemIds)
 				dbTx.Rollback()
-				return
+				continue
 			}
 
 			for _, itemId := range bundleItemIds {
 				if err = s.wdb.UpdateOrdOnChainStatus(itemId, schema.SuccOnChain, dbTx); err != nil {
 					log.Error("s.wdb.UpdateOrdOnChainStatus(itemId,schema.SuccOnChain,dbTx)", "err", err, "item", itemId)
 					dbTx.Rollback()
-					return
+					continue
 				}
 			}
 			dbTx.Commit()
