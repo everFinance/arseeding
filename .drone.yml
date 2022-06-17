@@ -27,6 +27,7 @@ steps:
       - echo '[url "ssh://git@github.com/"]' >> /root/.gitconfig
       - echo '	insteadOf = https://github.com/' >> /root/.gitconfig
       - cat /root/.gitconfig
+      - ls /root/.ssh
       - git clone git@github.com:everFinance/everpay.git
       - ls -ahl
       - go env -w CGO_ENABLED=0 GOPRIVATE=github.com/everFinance/*
