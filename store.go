@@ -267,6 +267,7 @@ func (s *Store) SavePeers(peers map[string]int64) error {
 
 func (s *Store) LoadPeers() (peers map[string]int64, err error) {
 	key := []byte("peer-list")
+	peers = make(map[string]int64, 0)
 	err = s.BoltDb.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(ConstantsBucket)
 		val := bkt.Get(key)
@@ -342,6 +343,7 @@ func (s *Store) SaveTask(taskId string, tk schema.Task) error {
 }
 
 func (s *Store) LoadTask(taskId string) (tk *schema.Task, err error) {
+	tk = &schema.Task{}
 	err = s.BoltDb.View(func(tx *bolt.Tx) error {
 		val := tx.Bucket(TaskBucket).Get([]byte(taskId))
 		if val == nil {
@@ -382,6 +384,7 @@ func (s *Store) IsExistItemBinary(itemId string) bool {
 
 func (s *Store) LoadItemBinary(itemId string) (itemBinary []byte, err error) {
 	key := []byte(itemId)
+	itemBinary = make([]byte, 0)
 
 	err = s.BoltDb.View(func(tx *bolt.Tx) error {
 		itemBinary = tx.Bucket(BundleItemBinary).Get(key)
@@ -429,6 +432,7 @@ func (s *Store) SaveItemMeta(item types.BundleItem, dbTx *bolt.Tx) (err error) {
 
 func (s *Store) LoadItemMeta(itemId string) (meta types.BundleItem, err error) {
 	key := []byte(itemId)
+	meta = types.BundleItem{}
 	err = s.BoltDb.View(func(tx *bolt.Tx) error {
 		metaBy := tx.Bucket(BundleItemMeta).Get(key)
 		if metaBy == nil {
@@ -460,6 +464,7 @@ func (s *Store) SaveWaitParseBundleArId(arId string) error {
 }
 
 func (s *Store) LoadWaitParseBundleArIds() (arIds []string, err error) {
+	arIds = make([]string, 0)
 	err = s.BoltDb.View(func(tx *bolt.Tx) error {
 		return tx.Bucket(BundleWaitParseArIdBucket).ForEach(func(k, v []byte) error {
 			arIds = append(arIds, string(k))
@@ -486,6 +491,7 @@ func (s *Store) SaveArIdToItemIds(arId string, itemIds []string) error {
 }
 
 func (s *Store) LoadArIdToItemIds(arId string) (itemIds []string, err error) {
+	itemIds = make([]string, 0)
 	err = s.BoltDb.View(func(tx *bolt.Tx) error {
 		val := tx.Bucket(BundleArIdToItemIdsBucket).Get([]byte(arId))
 		if val == nil {
