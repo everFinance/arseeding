@@ -111,7 +111,8 @@ func (c *Cache) GetPeers() []string {
 	for _, peerCnt := range sortArray {
 		peers = append(peers, peerCnt.Peer)
 	}
-	return peers
+	// add arweave.net gateway
+	return append([]string{"arweave.net"}, peers...)
 }
 
 func (c *Cache) UpdatePeers(peerMap map[string]int64) {

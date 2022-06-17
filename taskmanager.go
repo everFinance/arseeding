@@ -155,10 +155,8 @@ func (m *TaskManager) GetUnconfirmedTxFromPeers(arId, taskType string, peers []s
 		pNode.SetTempConnUrl("http://" + peer)
 		tx, err := pNode.GetUnconfirmedTx(arId)
 		if err != nil {
-			fmt.Printf("get tx error:%v, peer: %s, arTx: %s\n", err, peer, arId)
 			continue
 		}
-		fmt.Printf("success get unconfirmed tx; peer: %s, arTx: %s\n", peer, arId)
 		return tx, nil
 	}
 
@@ -174,7 +172,6 @@ func (m *TaskManager) GetTxDataFromPeers(arId, taskType string, peers []string) 
 		pNode.SetTempConnUrl("http://" + peer)
 		data, err := pNode.DownloadChunkData(arId)
 		if err != nil {
-			log.Error("get tx data", "err", err, "peer", peer)
 			m.IncFailed(arId, taskType)
 			continue
 		}
@@ -204,8 +201,8 @@ func (m *TaskManager) BroadcastTxMeta(arId, taskType string, tx *types.Transacti
 			Reward:    tx.Reward,
 			Signature: tx.Signature,
 		})
-		if code != 200 && code != 208 {
-			log.Debug("BroadcastTxMeta submit tx failed", "err", status, "arId", arId, "code", code, "peerIp", peer)
+
+		if code != 200 && code != 208 && !strings.Contains(status, "Transaction is already in the mempool.") {
 			m.IncFailed(arId, taskType)
 		} else {
 			// success send
@@ -234,7 +231,7 @@ func (m *TaskManager) BroadcastData(arId, taskType string, tx *types.Transaction
 
 		// post tx
 		if !txPosted {
-			status, code, _ := pNode.SubmitTransaction(&types.Transaction{
+			pNode.SubmitTransaction(&types.Transaction{
 				Format:    tx.Format,
 				ID:        tx.ID,
 				LastTx:    tx.LastTx,
@@ -248,14 +245,10 @@ func (m *TaskManager) BroadcastData(arId, taskType string, tx *types.Transaction
 				Reward:    tx.Reward,
 				Signature: tx.Signature,
 			})
-			if code != 200 && code != 208 {
-				log.Debug("BroadcastData submit tx failed", "err", status, "arId", arId, "code", code, "peerIp", peer)
-			}
 		}
 
 		uploader.TxPosted = true // only broadcast tx data
 		if err = uploader.Once(); err != nil {
-			log.Debug("uploader.Once()", "err", err, "peerIp", peer)
 			m.IncFailed(arId, taskType)
 		} else {
 			// success send
@@ -264,7 +257,6 @@ func (m *TaskManager) BroadcastData(arId, taskType string, tx *types.Transaction
 
 		// listen close taskMap
 		if m.IsClosed(arId, taskType) {
-			log.Debug("task is closed", "arId", arId, "taskType", taskType)
 			return
 		}
 	}
