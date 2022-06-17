@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/everFinance/everpay v1.3.7
-	github.com/everFinance/goar v1.4.3-0.20220616032616-7431bd870b3e
+	github.com/everFinance/goar v1.4.3-0.20220617070557-83e42ab1abad
 	github.com/getsentry/sentry-go v0.11.0
 	github.com/gin-gonic/gin v1.7.4
 	github.com/go-co-op/gocron v1.11.0
