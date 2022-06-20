@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
+	"github.com/everFinance/everpay-go/account"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"github.com/gin-gonic/gin"
@@ -61,6 +62,7 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/bundle/itemIds/:arId", s.getItemIdsByArId)
 		v1.GET("/bundle/fees", s.bundleFees)
 		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
+		v1.GET("bundle/orders/:signer", s.getOrders)
 		v1.GET("/:id", s.getDataByGW) // get arTx data or bundleItem data
 	}
 
@@ -458,7 +460,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	defer c.Request.Body.Close()
 
 	itemBinary := make([]byte, 0, 256*1024)
-	buf := make([]byte, 20*1024) // todo add to temp file
+	buf := make([]byte, 256*1024) // todo add to temp file
 	for {
 		if len(itemBinary) > schema.AllowMaxItemSize {
 			err := fmt.Errorf("allow max item size is 100 MB")
@@ -540,6 +542,28 @@ func (s *Arseeding) bundleFee(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, respFee)
+}
+
+func (s *Arseeding) getOrders(c *gin.Context) {
+	signer := c.Param("signer")
+	_, signerAddr, err := account.IDCheck(signer)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, err)
+		return
+	}
+
+	cursorId, err := strconv.ParseInt(c.DefaultQuery("cursorId", "0"), 64, 10)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, err)
+		return
+	}
+	num := 200
+	orders, err := s.wdb.GetOrdersBySigner(signerAddr, cursorId, num)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+	c.JSON(http.StatusOK, orders)
 }
 
 func (s *Arseeding) bundleFees(c *gin.Context) {

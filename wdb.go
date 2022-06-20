@@ -6,6 +6,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
+	"math"
 	"time"
 )
 
@@ -79,6 +80,15 @@ func (w *Wdb) UpdateOrdOnChainStatus(itemId, status string, tx *gorm.DB) error {
 		db = tx
 	}
 	return db.Model(&schema.Order{}).Where("item_id = ?", itemId).Update("on_chain_status", status).Error
+}
+
+func (w *Wdb) GetOrdersBySigner(signer string, cursorId int64, num int) ([]schema.Order, error) {
+	if cursorId <= 0 {
+		cursorId = math.MaxInt64
+	}
+	records := make([]schema.Order, 0, num)
+	err := w.Db.Where("signer = ? and id < ?", signer, cursorId).Order("id DESC").Limit(num).Find(&records).Error
+	return records, err
 }
 
 func (w *Wdb) InsertPrices(tps []schema.TokenPrice) error {

@@ -30,7 +30,7 @@ const (
 type Order struct {
 	gorm.Model
 	ItemId   string // bundleItem id
-	Signer   string // item signer
+	Signer   string `gorm:"index:idx1"` // item signer
 	SignType int
 
 	Size               int64
