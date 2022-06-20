@@ -552,7 +552,7 @@ func (s *Arseeding) getOrders(c *gin.Context) {
 		return
 	}
 
-	cursorId, err := strconv.ParseInt(c.DefaultQuery("cursorId", "0"), 64, 10)
+	cursorId, err := strconv.ParseInt(c.DefaultQuery("cursorId", "0"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, err)
 		return
