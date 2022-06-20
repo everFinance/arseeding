@@ -3,15 +3,15 @@ package example
 import (
 	"errors"
 	"fmt"
-	"github.com/everFinance/arseeding"
 	"github.com/everFinance/arseeding/schema"
+	"github.com/everFinance/everpay-go/common"
 	"github.com/panjf2000/ants/v2"
 	"gopkg.in/h2non/gentleman.v2"
 	"sync"
 	"time"
 )
 
-var log = arseeding.NewLog("example")
+var log = common.NewLog("example")
 
 func MustBatchSyncTxIds(txIds []string, seedCli *gentleman.Client) (successTxIds []string) {
 	var wg sync.WaitGroup

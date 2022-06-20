@@ -3,13 +3,13 @@ package everpay_sync
 import (
 	"errors"
 	"fmt"
-	"github.com/everFinance/arseeding"
+	"github.com/everFinance/everpay-go/common"
 	"github.com/everFinance/goar"
 )
 
 var (
 	ErrNotNeedSync = errors.New("not need sync")
-	log            = arseeding.NewLog("example_everpay")
+	log            = common.NewLog("example_everpay")
 )
 
 func fetchTxIds(arOwner string, processedArTxId string, c *goar.Client) ([]string, error) {

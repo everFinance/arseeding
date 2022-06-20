@@ -1,7 +1,7 @@
 package arweave_pool_broadcast
 
 import (
-	"github.com/everFinance/arseeding"
+	"github.com/everFinance/everpay-go/common"
 	"github.com/everFinance/goar"
 	"github.com/go-co-op/gocron"
 	"gopkg.in/h2non/gentleman.v2"
@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var log = arseeding.NewLog("arweave_pool_broadcast")
+var log = common.NewLog("arweave_pool_broadcast")
 
 type BcPool struct {
 	arCli     *goar.Client

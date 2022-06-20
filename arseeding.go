@@ -3,6 +3,7 @@ package arseeding
 import (
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/arseeding/sdk"
+	"github.com/everFinance/everpay-go/common"
 	paySdk "github.com/everFinance/everpay-go/sdk"
 	"github.com/everFinance/goar"
 	"github.com/gin-gonic/gin"
@@ -11,7 +12,7 @@ import (
 	"time"
 )
 
-var log = NewLog("arseeding")
+var log = common.NewLog("arseeding")
 
 type Arseeding struct {
 	store           *Store
