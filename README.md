@@ -1,21 +1,24 @@
 # Arseeding
 Arseeding is a lightweight arweave data seed node. It is mainly used to synchronize, cache and broadcast transaction && data.
 
-Important: arseeding is compatible with all http api interfaces of arweave node.   
+Important: arseeding is compatible with all http api interfaces of arweave node and also provide bundle transaction api   
 Related articles: [arseeding server design](https://medium.com/everfinance/arseeding-server-design-4e684176555a)
 
 ## Introduction
 - `cmd` is the service starter
-- `api-job` implements the service logic of the api interface for sync and broadcast.
-- `api` register api and compatible with the implementation logic of all api's of arweave node.
-- `job-manager` is the sync and broadcast job manager.
-- `jobs` is the implementation of timed tasks. This includes timed tasks that handle syncJobs and broadcastJobs.
-- `service` logic related to the submitTx and submitChunk interfaces.
+- `sdk` is used to call the arseeding api
+- `bundle` is used to handle bundle items and get items info
+- `cache` is used to cache important arweave info and reply to request quickly
+- `api` register api and compatible with the implementation logic of all api's of arweave node and provide bundle service
+- `jobs` is the implementation of timed jobs. This includes timed jobs that update some important info and roll up bundle Tx to arweave.
+- `task` concurrent processing syncTasks,broadcastTasks and broadcastMetaTasks.
+- `submit` includes the verification of transactions and chunks, and stores them in the bolt db.
+- `wdb` store bundle transaction and its status
 - `store` bolt db wrap.
 
 ## Run
 ```
-PORT=':8080' go run cmd/main.go
+PORT=':8080' KEY_PATH='yourKeyfilePath' go run cmd/main.go
 ```
 
 ## Development
@@ -23,7 +26,7 @@ PORT=':8080' go run cmd/main.go
 
 ```
 make all
-PORT=':8080' ./build/arseeding
+PORT=':8080' KEY_PATH='yourKeyfilePath' ./build/arseeding
 ```
 
 ### Docker build
@@ -33,50 +36,86 @@ docker build .
 ```
 
 ## API
-arseeding is compatible with all http api interfaces of arweave node:
+arseeding is compatible with all http api interfaces of arweave node and also provide bundle api:
 ```
-    v1.POST("tx", s.submitTx)
-    v1.POST("chunk", s.submitChunk)
-    v1.GET("tx/:arid/offset", s.getTxOffset)
-    v1.GET("/tx/:arid", s.getTx)
-    v1.GET("chunk/:offset", s.getChunk)
-    v1.GET("tx/:arid/:field", s.getTxField)
-    // proxy
-    v2 := r.Group("/")
     {
-        v2.Use(proxyArweaveGateway)
-        v2.GET("/info")
-        v2.GET("/tx/:arid/status")
-        v2.GET("/:arid")
-        v2.GET("/price/:size")
-        v2.GET("/price/:size/:target")
-        v2.GET("/block/hash/:hash")
-        v2.GET("/block/height/:height")
-        v2.GET("/current_block")
-        v2.GET("/wallet/:address/balance")
-        v2.GET("/wallet/:address/last_tx")
-        v2.GET("/peers")
-        v2.GET("/tx_anchor")
-        v2.POST("/arql")
-        v2.POST("/graphql")
-        v2.GET("/tx/pending")
-        v2.GET("/unconfirmed_tx/:arId")
-    }
+        v1.POST("tx", s.submitTx)
+		v1.POST("chunk", s.submitChunk)
+		v1.GET("tx/:arid/offset", s.getTxOffset)
+		v1.GET("/tx/:arid", s.getTx)
+		v1.GET("chunk/:offset", s.getChunk)
+		v1.GET("tx/:arid/:field", s.getTxField)
+		v1.GET("/info", s.getInfo)
+		v1.GET("/tx_anchor", s.getAnchor)
+		v1.GET("/price/:size", s.getTxPrice)
+		v1.GET("/peers", s.getPeers)
+		// proxy
+		v2 := r.Group("/")
+		{
+			v2.Use(proxyArweaveGateway)
+			v2.GET("/tx/:arid/status")
+			v2.GET("/price/:size/:target")
+			v2.GET("/block/hash/:hash")
+			v2.GET("/block/height/:height")
+			v2.GET("/current_block")
+			v2.GET("/wallet/:address/balance")
+			v2.GET("/wallet/:address/last_tx")
+			v2.POST("/arql")
+			v2.POST("/graphql")
+			v2.GET("/tx/pending")
+			v2.GET("/unconfirmed_tx/:arId")
+		}
+
+		// broadcast && sync tasks
+		v1.POST("/job/:taskType/:arid", s.postTask) // todo need delete when update pay-server
+		v1.POST("/task/:taskType/:arid", s.postTask)
+		v1.POST("/task/kill/:taskType/:arid", s.killTask)
+		v1.GET("/task/:taskType/:arid", s.getTask)
+		v1.GET("/task/cache", s.getCacheTasks)
+
+		// ANS-104 bundle Data api
+		v1.GET("/bundle/bundler", s.getBundler)
+		v1.POST("/bundle/tx/:currency", s.submitItem)
+		v1.GET("/bundle/tx/:itemId", s.getItemMeta) // get item meta, without data
+		v1.GET("/bundle/itemIds/:arId", s.getItemIdsByArId)
+		v1.GET("/bundle/fees", s.bundleFees)
+		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
+		v1.GET("/:id", s.getDataByGW) // get arTx data or bundleItem data
+	}
 ```
 note:    
 when use `submitTx` and `submitChunk`, arseeding caches the tx and data and also submits it to the arweave gateway.   
 
 sync and broadcast api:
 ```
-    v1.POST("/job/broadcast/:arid", s.broadcast)
-    v1.POST("/job/sync/:arid", s.sync)
-    v1.POST("/job/kill/:arid/:tktype", s.killJob)
-    v1.GET("/job/:arid/:tktype", s.getJob)
-    v1.GET("/cache/jobs", s.getCacheJobs)
+	v1.POST("/job/:taskType/:arid", s.postTask) 
+	v1.POST("/task/:taskType/:arid", s.postTask)
+	v1.POST("/task/kill/:taskType/:arid", s.killTask)
+	v1.GET("/task/:taskType/:arid", s.getTask)
+	v1.GET("/task/cache", s.getCacheTasks)
 ```
-`killJob` This interface can be used to stop a broadcast job when enough nodes have been broadcast via `getJob`   
-`tktype` is 'sync' or 'broadcast'   
-`getCacheJobs` return all pending jobs
+`killTask` This interface can be used to stop a broadcast task when enough nodes have been broadcast via `getTask`   
+`taskType` is 'sync' or 'broadcast' or 'broadcast_meta'
+
+`getCacheTasks` return all pending tasks
+
+bundle api:
+```
+    v1.GET("/bundle/bundler", s.getBundler)
+	v1.POST("/bundle/tx/:currency", s.submitItem)
+	v1.GET("/bundle/tx/:itemId", s.getItemMeta)
+	v1.GET("/bundle/itemIds/:arId", s.getItemIdsByArId)
+	v1.GET("/bundle/fees", s.bundleFees)
+	v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
+	v1.GET("/:id", s.getDataByGW)
+```
+`getBundler` return a bundle service provider address
+
+`submitItem` submit a bundle item([goar](https://github.com/everFinance/goar/blob/bundle/bundleItem.go) is a useful tool to assemble a bundle item)
+
+`bundleFees` return fees you need to pay for submit your bundle item to arweave and store it forever 
+
+`getDataByGW` get arTx data or bundleItem data
 
 ## Usage
 ### compatible arweave sdk
@@ -115,11 +154,11 @@ By default arseeding does not contain this data, so will return 'not found' erro
 
 2. So we need to use arseeding `sync` api
 ```
-curl --request POST 'http://127.0.0.1:8080/job/sync/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
+curl --request POST 'http://127.0.0.1:8080/task/sync/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
 ```
-3. Use `getJob` api to watcher the job status
+3. Use `getTask` api to watcher the job status
 ```
- curl 'http://127.0.0.1:8080/job/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/sync'
+ curl 'http://127.0.0.1:8080/task/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/sync'
 ```
 resp:
 ```
@@ -141,11 +180,11 @@ If you want your tx or data to be broadcast to all nodes, the bardcast function 
 e.g:
 1. Register for tx that require broadcasting
 ```
-curl --request POST 'http://127.0.0.1:8080/job/broadcast/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
+curl --request POST 'http://127.0.0.1:8080/task/broadcast/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
 ```
-2. Use `getJob` api to watcher the job status
+2. Use `getTask` api to watcher the job status
 ```
-curl GET 'http://127.0.0.1:8080/job/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/broadcast'
+curl GET 'http://127.0.0.1:8080/task/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/broadcast'
 ```
 resp:
 ```
@@ -165,8 +204,39 @@ resp:
 
 3. If the goal is to successfully broadcast to 200 nodes, then this broadcast task can be closed
 ```
-curl --request POST 'http://127.0.0.1:8080/job/kill/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/broadcast'
+curl --request POST 'http://127.0.0.1:8080/task/kill/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/broadcast'
 ```
+
+### Bundle Usage
+Arseeding implement ANS-104 bundle Data API, [goar](https://github.com/everFinance/goar/tree/bundle) is a useful tool to assemble bundle item and interact with these APIs
+
+`e.g:`
+```
+    // connect arseeding server by goar sdk
+    signer, err := goar.NewSignerFromPath("test-keyfile.json")
+	arseedUrl := "http://127.0.0.1:8080"
+	itemSdk, err := goar.NewItemSdk(signer, arseedUrl)
+	
+    // now just use itemSdk to create a bundle item
+    item, err := itemSdk.CreateAndSignItem(dataFiled, target, anchor, tags)
+    
+    // submit bundle item to arseeding
+    resp, err := itemSdk.SubmitItem(item, "AR") // "AR" can be replace with any Token that the bundlr support
+    // you will get info about how much you should pay, bundlr address, bundle id that can be used query your item from resp struct
+```
+resp:
+```
+{
+    ItemId             string
+    Bundler            string
+    Currency           string
+    Fee                string
+    PaymentExpiredTime int64
+    ExpectedBlock      int64
+}
+```
+
+
 
 ## Example
 [everPay rollup txs sync](https://github.com/everFinance/arseeding/tree/main/example/everpay-sync): get all everpay rollup txIds from the arweave node, and then post to the arseeding service using the `sync` interface.
