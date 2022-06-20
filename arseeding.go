@@ -3,7 +3,7 @@ package arseeding
 import (
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/arseeding/sdk"
-	paySdk "github.com/everFinance/everpay/sdk"
+	paySdk "github.com/everFinance/everpay-go/sdk"
 	"github.com/everFinance/goar"
 	"github.com/gin-gonic/gin"
 	"github.com/go-co-op/gocron"
