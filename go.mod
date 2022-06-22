@@ -5,10 +5,8 @@ go 1.17
 require (
 	github.com/everFinance/everpay-go v0.0.1
 	github.com/everFinance/goar v1.4.3-0.20220617100500-6f9a9357bad2
-	github.com/getsentry/sentry-go v0.11.0
 	github.com/gin-gonic/gin v1.7.4
 	github.com/go-co-op/gocron v1.11.0
-	github.com/inconshreveable/log15 v0.0.0-20201112154412-8562bdadbbac
 	github.com/panjf2000/ants/v2 v2.4.7
 	github.com/shopspring/decimal v1.2.0
 	github.com/stretchr/testify v1.7.0
@@ -36,6 +34,7 @@ require (
 	github.com/everFinance/gojwk v1.0.0 // indirect
 	github.com/everFinance/ttcrsa v1.1.3 // indirect
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff // indirect
+	github.com/getsentry/sentry-go v0.11.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect
 	github.com/go-ole/go-ole v1.2.1 // indirect
@@ -53,6 +52,7 @@ require (
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
 	github.com/holiman/uint256 v1.2.0 // indirect
 	github.com/huin/goupnp v1.0.2 // indirect
+	github.com/inconshreveable/log15 v0.0.0-20201112154412-8562bdadbbac // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2-0.20160603034137-1fa385a6f458 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.4 // indirect

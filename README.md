@@ -18,7 +18,7 @@ Related articles: [arseeding server design](https://medium.com/everfinance/arsee
 
 ## Run
 ```
-PORT=':8080' KEY_PATH='yourKeyfilePath' go run cmd/main.go
+PORT=':8080' KEY_PATH='yourKeyfilePath' MYSQL='mysq dsn' PAY='everpay api url' go run cmd/main.go
 ```
 
 ## Development
@@ -26,7 +26,7 @@ PORT=':8080' KEY_PATH='yourKeyfilePath' go run cmd/main.go
 
 ```
 make all
-PORT=':8080' KEY_PATH='yourKeyfilePath' ./build/arseeding
+PORT=':8080' KEY_PATH='yourKeyfilePath' MYSQL='mysq dsn' PAY='everpay api url' ./build/arseeding
 ```
 
 ### Docker build
@@ -67,7 +67,6 @@ arseeding is compatible with all http api interfaces of arweave node and also pr
 		}
 
 		// broadcast && sync tasks
-		v1.POST("/job/:taskType/:arid", s.postTask) // todo need delete when update pay-server
 		v1.POST("/task/:taskType/:arid", s.postTask)
 		v1.POST("/task/kill/:taskType/:arid", s.killTask)
 		v1.GET("/task/:taskType/:arid", s.getTask)
@@ -80,15 +79,15 @@ arseeding is compatible with all http api interfaces of arweave node and also pr
 		v1.GET("/bundle/itemIds/:arId", s.getItemIdsByArId)
 		v1.GET("/bundle/fees", s.bundleFees)
 		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
+		v1.GET("bundle/orders/:signer", s.getOrders)
 		v1.GET("/:id", s.getDataByGW) // get arTx data or bundleItem data
 	}
 ```
 note:    
-when use `submitTx` and `submitChunk`, arseeding caches the tx and data and also submits it to the arweave gateway.   
+when use `submitTx` and `submitChunk`, arseeding cache the tx and data and also submits it to the arweave gateway.   
 
 sync and broadcast api:
 ```
-	v1.POST("/job/:taskType/:arid", s.postTask) 
 	v1.POST("/task/:taskType/:arid", s.postTask)
 	v1.POST("/task/kill/:taskType/:arid", s.killTask)
 	v1.GET("/task/:taskType/:arid", s.getTask)
@@ -107,6 +106,7 @@ bundle api:
 	v1.GET("/bundle/itemIds/:arId", s.getItemIdsByArId)
 	v1.GET("/bundle/fees", s.bundleFees)
 	v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
+	v1.GET("bundle/orders/:signer", s.getOrders)
 	v1.GET("/:id", s.getDataByGW)
 ```
 `getBundler` return a bundle service provider address
@@ -114,6 +114,8 @@ bundle api:
 `submitItem` submit a bundle item([goar](https://github.com/everFinance/goar/blob/bundle/bundleItem.go) is a useful tool to assemble a bundle item)
 
 `bundleFees` return fees you need to pay for submit your bundle item to arweave and store it forever 
+
+`getOrders` return `signer address` all order   
 
 `getDataByGW` get arTx data or bundleItem data
 
@@ -135,8 +137,8 @@ arNode := "http://127.0.0.1:8080" // arseeding service url
 arClient := goar.NewClient(arNode) 
 ```
 ### Different
-Arseeding is a light node, so it does not store all the data in the arweave network, so when requesting tx or tx data, it is likely that the data will not be available, even if the data already exists in the arweave network.    
-In the case we use the `sync` api of arseeding to synchronize the tx to the service.   
+Arseeding is a light node, so it does not store all the data in the arweave network, so when requesting tx data, it is likely that the data will not be available, even if the data already exists in the arweave network.    
+In the case we use the `/task/sync/:arid` api of arseeding to synchronize the tx to the service.   
 e.g:
 1. User want to get a tx
 ``` 
@@ -145,8 +147,6 @@ e.g:
  // connect arseeding server by goar sdk
  arClient := goar.NewClient("http://127.0.0.1:8080") 
  
- tx, err := arClient.GetTransactionById(arId)
- // or 
  data, err := arClient.GetTransactionData(arId)
  // err: not found
 ```
@@ -158,7 +158,7 @@ curl --request POST 'http://127.0.0.1:8080/task/sync/yK_x7-bKBOe1GK3sEHWIQ4QZRib
 ```
 3. Use `getTask` api to watcher the job status
 ```
- curl 'http://127.0.0.1:8080/task/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/sync'
+ curl 'http://127.0.0.1:8080/task/sync/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
 ```
 resp:
 ```
@@ -184,7 +184,7 @@ curl --request POST 'http://127.0.0.1:8080/task/broadcast/yK_x7-bKBOe1GK3sEHWIQ4
 ```
 2. Use `getTask` api to watcher the job status
 ```
-curl GET 'http://127.0.0.1:8080/task/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/broadcast'
+curl GET 'http://127.0.0.1:8080/task/broadcast/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
 ```
 resp:
 ```
@@ -204,7 +204,7 @@ resp:
 
 3. If the goal is to successfully broadcast to 200 nodes, then this broadcast task can be closed
 ```
-curl --request POST 'http://127.0.0.1:8080/task/kill/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8/broadcast'
+curl --request POST 'http://127.0.0.1:8080/task/kill/broadcast/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
 ```
 
 ### Bundle Usage
