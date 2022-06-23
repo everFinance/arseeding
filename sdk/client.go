@@ -124,7 +124,7 @@ func (a *ArSeedCli) GetBundler() (string, error) {
 	return addr, err
 }
 
-func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string) (*types.BundlerResp, error) {
+func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string) (*schema.RespOrder, error) {
 	req := a.SCli.Post()
 	req.Path(fmt.Sprintf("/bundle/tx/%s", currency))
 	req.SetHeader("content-type", "application/octet-stream")
@@ -139,7 +139,7 @@ func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string) (*types.Bundl
 	if !resp.Ok {
 		return nil, fmt.Errorf("send to bundler request failed; http code: %d, errMsg:%s", resp.StatusCode, resp.String())
 	}
-	br := &types.BundlerResp{}
+	br := &schema.RespOrder{}
 	err = resp.JSON(br)
 	return br, err
 }
