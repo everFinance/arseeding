@@ -62,7 +62,7 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/bundle/itemIds/:arId", s.getItemIdsByArId)
 		v1.GET("/bundle/fees", s.bundleFees)
 		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
-		v1.GET("bundle/orders/:signer", s.getOrders)
+		v1.GET("/bundle/orders/:signer", s.getOrders)
 		v1.GET("/:id", s.getDataByGW) // get arTx data or bundleItem data
 	}
 
