@@ -4,23 +4,13 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
-	"errors"
+	"github.com/everFinance/arseeding/rawdb"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
-	bolt "go.etcd.io/bbolt"
-	"os"
-	"path"
-	"time"
+	"github.com/everFinance/goar/utils"
 )
 
-const (
-	boltAllocSize = 8 * 1024 * 1024
-
-	defaultDirPath = "./data/bolt"
-	boltName       = "seed.db"
-)
-
-var (
+/*var (
 	// bucket
 	ChunkBucket           = []byte("chunk-bucket")              // key: chunkStartOffset, val: chunk
 	TxDataEndOffSetBucket = []byte("tx-data-end-offset-bucket") // key: dataRoot+dataSize; val: txDataEndOffSet
@@ -39,170 +29,117 @@ var (
 	BundleWaitParseArIdBucket = []byte("bundle-wait-parse-arId-bucket") // key: arId, val: "0x01"
 	BundleArIdToItemIdsBucket = []byte("bundle-arId-to-itemIds-bucket") // key: arId, val: json.marshal(itemIds)
 
-)
+)*/
 
 type Store struct {
-	BoltDb *bolt.DB
+	KVDb rawdb.KeyValueDB
 }
 
-func NewStore(boltDirPath string) (*Store, error) {
-	if len(boltDirPath) == 0 {
-		boltDirPath = defaultDirPath
-	}
-	if err := os.MkdirAll(boltDirPath, os.ModePerm); err != nil {
-		return nil, err
-	}
-
-	boltDB, err := bolt.Open(path.Join(boltDirPath, boltName), 0660, &bolt.Options{Timeout: 2 * time.Second, InitialMmapSize: 10e6})
-	if err != nil {
-		if err == bolt.ErrTimeout {
-			return nil, errors.New("cannot obtain database lock, database may be in use by another process")
+func NewStore(boltDirPath string, s3Flag bool, accKey, secretKey, region, bucketPrefix string) (*Store, error) {
+	if !s3Flag {
+		Db, err := rawdb.NewBoltDB(boltDirPath)
+		if err != nil {
+			return nil, err
 		}
-		return nil, err
+		return &Store{KVDb: Db}, nil
 	}
-	boltDB.AllocSize = boltAllocSize
+	Db, _ := rawdb.NewS3DB(accKey, secretKey, region, bucketPrefix)
+	return &Store{
+		KVDb: Db,
+	}, nil
 
-	kv := &Store{
-		BoltDb: boltDB,
-	}
-
-	// create bucket
-	if err := kv.BoltDb.Update(func(tx *bolt.Tx) error {
-		bucketNames := [][]byte{
-			ChunkBucket,
-			TxDataEndOffSetBucket,
-			TxMetaBucket,
-			ConstantsBucket,
-			TaskIdPendingPoolBucket,
-			TaskBucket,
-			BundleItemBinary,
-			BundleItemMeta,
-			BundleWaitParseArIdBucket,
-			BundleArIdToItemIdsBucket}
-		return createBuckets(tx, bucketNames...)
-	}); err != nil {
-		return nil, err
-	}
-
-	return kv, nil
 }
 
 func (s *Store) Close() error {
-	return s.BoltDb.Close()
+	return s.KVDb.Close()
 }
 
-func createBuckets(tx *bolt.Tx, buckets ...[]byte) error {
-	for _, bucket := range buckets {
-		if _, err := tx.CreateBucketIfNotExists(bucket); err != nil {
-			return err
-		}
+func (s *Store) AtomicSyncDataEndOffset(preEndOffset, newEndOffset uint64, dataRoot, dataSize string) error {
+	// must use tx db
+	if err := s.SaveAllDataEndOffset(newEndOffset); err != nil {
+		log.Error("s.store.SaveAllDataEndOffset(newEndOffset)", "err", err)
+		return err
+	}
+	log.Debug("Endoffset", "len", newEndOffset)
+	// SaveTxDataEndOffSet
+	if err := s.SaveTxDataEndOffSet(dataRoot, dataSize, newEndOffset); err != nil {
+		_ = s.RollbackAllDataEndOffset(preEndOffset)
+		return err
 	}
 	return nil
 }
 
-// about tx
+func (s *Store) SaveAllDataEndOffset(allDataEndOffset uint64) (err error) {
+	key := "allDataEndOffset"
+	val := []byte(itob(allDataEndOffset))
 
-func (s *Store) SaveAllDataEndOffset(allDataEndOffset uint64, dbTx *bolt.Tx) (err error) {
-	if dbTx == nil {
-		dbTx, err = s.BoltDb.Begin(true)
-		if err != nil {
-			return
-		}
-		defer dbTx.Commit()
-	}
-	key := []byte("allDataEndOffset")
-	val := itob(allDataEndOffset)
+	return s.KVDb.Put(schema.ConstantsBucket, key, val)
+}
 
-	bkt, err := dbTx.CreateBucketIfNotExists(ConstantsBucket)
-	if err != nil {
-		return err
-	}
-	return bkt.Put(key, val)
+func (s *Store) RollbackAllDataEndOffset(preDataEndOffset uint64) (err error) {
+	key := "allDataEndOffset"
+	val := []byte(itob(preDataEndOffset))
+
+	return s.KVDb.Put(schema.ConstantsBucket, key, val)
 }
 
 func (s *Store) LoadAllDataEndOffset() (offset uint64) {
-	key := []byte("allDataEndOffset")
-	_ = s.BoltDb.View(func(tx *bolt.Tx) error {
-		val := tx.Bucket(ConstantsBucket).Get(key)
-		if val == nil {
-			offset = 0
-		} else {
-			offset = btoi(val)
-		}
-		return nil
-	})
+	key := "allDataEndOffset"
+	data, err := s.KVDb.Get(schema.ConstantsBucket, key)
+	if err != nil || data == nil {
+		offset = 0
+		return
+	}
+	log.Debug("aaa", "len", len(data))
+	offset = btoi(string(data))
 	return
 }
 
 func (s *Store) SaveTxMeta(arTx types.Transaction) error {
 	arTx.Data = "" // only store tx meta, not include data
-	key := []byte(arTx.ID)
+	key := arTx.ID
 	val, err := json.Marshal(&arTx)
 	if err != nil {
 		return err
 	}
-	return s.BoltDb.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(TxMetaBucket)
-		return bkt.Put(key, val)
-	})
+	return s.KVDb.Put(schema.TxMetaBucket, key, val)
 }
 
 func (s *Store) LoadTxMeta(arId string) (arTx *types.Transaction, err error) {
-	key := []byte(arId)
 	arTx = &types.Transaction{}
-	err = s.BoltDb.View(func(tx *bolt.Tx) error {
-		val := tx.Bucket(TxMetaBucket).Get(key)
-		if val == nil {
-			return ErrNotExist
-		} else {
-			err = json.Unmarshal(val, arTx)
-			return err
-		}
-	})
+	data, err := s.KVDb.Get(schema.TxMetaBucket, arId)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(data, arTx)
 	return
 }
 
 func (s *Store) IsExistTxMeta(arId string) bool {
 	_, err := s.LoadTxMeta(arId)
-	if err == ErrNotExist {
+	if err == schema.ErrNotExist {
 		return false
 	}
 	return true
 }
 
-func (s *Store) SaveTxDataEndOffSet(dataRoot, dataSize string, txDataEndOffset uint64, dbTx *bolt.Tx) (err error) {
-	if dbTx == nil {
-		dbTx, err = s.BoltDb.Begin(true)
-		if err != nil {
-			return
-		}
-		defer dbTx.Commit()
-	}
-
-	bkt, err := dbTx.CreateBucketIfNotExists(TxDataEndOffSetBucket)
-	if err != nil {
-		return err
-	}
-	return bkt.Put(generateOffSetKey(dataRoot, dataSize), itob(txDataEndOffset))
+func (s *Store) SaveTxDataEndOffSet(dataRoot, dataSize string, txDataEndOffset uint64) (err error) {
+	return s.KVDb.Put(schema.TxDataEndOffSetBucket, generateOffSetKey(dataRoot, dataSize), []byte(itob(txDataEndOffset)))
 }
 
 func (s *Store) LoadTxDataEndOffSet(dataRoot, dataSize string) (txDataEndOffset uint64, err error) {
-	err = s.BoltDb.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(TxDataEndOffSetBucket)
-		val := bkt.Get(generateOffSetKey(dataRoot, dataSize))
-		if val == nil {
-			return ErrNotExist
-		} else {
-			txDataEndOffset = btoi(val)
-		}
-		return nil
-	})
+	data, err := s.KVDb.Get(schema.TxDataEndOffSetBucket, generateOffSetKey(dataRoot, dataSize))
+	if err != nil {
+		return
+	}
+	log.Debug("aaa", "len", len(data))
+	txDataEndOffset = btoi(string(data))
 	return
 }
 
 func (s *Store) IsExistTxDataEndOffset(dataRoot, dataSize string) bool {
 	_, err := s.LoadTxDataEndOffSet(dataRoot, dataSize)
-	if err == ErrNotExist {
+	if err == schema.ErrNotExist {
 		return false
 	}
 	return true
@@ -213,37 +150,24 @@ func (s *Store) SaveChunk(chunkStartOffset uint64, chunk types.GetChunk) error {
 	if err != nil {
 		return err
 	}
-	err = s.BoltDb.Update(func(tx *bolt.Tx) error {
-		chunkBkt := tx.Bucket(ChunkBucket)
-		if err := chunkBkt.Put(itob(chunkStartOffset), chunkJs); err != nil {
-			return err
-		}
-		return nil
-	})
+	err = s.KVDb.Put(schema.ChunkBucket, itob(chunkStartOffset), chunkJs)
 
 	return err
 }
 
 func (s *Store) LoadChunk(chunkStartOffset uint64) (chunk *types.GetChunk, err error) {
 	chunk = &types.GetChunk{}
-	err = s.BoltDb.View(func(tx *bolt.Tx) error {
-		chunkBkt := tx.Bucket(ChunkBucket)
-		val := chunkBkt.Get(itob(chunkStartOffset))
-		if val == nil {
-			err = ErrNotExist
-			return err
-		} else {
-			err = json.Unmarshal(val, chunk)
-			return err
-		}
-	})
-
-	return chunk, err
+	data, err := s.KVDb.Get(schema.ChunkBucket, itob(chunkStartOffset))
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(data, chunk)
+	return
 }
 
 func (s *Store) IsExistChunk(chunkStartOffset uint64) bool {
 	_, err := s.LoadChunk(chunkStartOffset)
-	if err == ErrNotExist {
+	if err == schema.ErrNotExist {
 		return false
 	}
 	return true
@@ -251,84 +175,70 @@ func (s *Store) IsExistChunk(chunkStartOffset uint64) bool {
 
 func (s *Store) SavePeers(peers map[string]int64) error {
 	peersB, err := json.Marshal(peers)
-	key := []byte("peer-list")
+	key := "peer-list"
 	if err != nil {
 		return err
 	}
-	err = s.BoltDb.Update(func(tx *bolt.Tx) error {
-		chunkBkt := tx.Bucket(ConstantsBucket)
-		if err := chunkBkt.Put(key, peersB); err != nil {
-			return err
-		}
-		return nil
-	})
-	return err
+	return s.KVDb.Put(schema.ConstantsBucket, key, peersB)
 }
 
 func (s *Store) LoadPeers() (peers map[string]int64, err error) {
-	key := []byte("peer-list")
+	key := "peer-list"
 	peers = make(map[string]int64, 0)
-	err = s.BoltDb.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(ConstantsBucket)
-		val := bkt.Get(key)
-		if val == nil {
-			return ErrNotExist
-		}
-		err = json.Unmarshal(val, &peers)
-		return err
-	})
+	data, err := s.KVDb.Get(schema.ConstantsBucket, key)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(data, &peers)
 	return
 }
 
 func (s *Store) IsExistPeers() bool {
 	_, err := s.LoadPeers()
-	if err == ErrNotExist {
+	if err == schema.ErrNotExist {
 		return false
 	}
 	return true
 }
 
 // itob returns an 64-byte big endian representation of v.
-func itob(v uint64) []byte {
+func itob(v uint64) string {
 	b := make([]byte, 64)
 	binary.BigEndian.PutUint64(b, v)
-	return b
+	return utils.Base64Encode(b)
 }
 
-func btoi(b []byte) uint64 {
+func btoi(base64Str string) uint64 {
+	log.Warn("ggggg", "vvvvv", base64Str)
+	b, err := utils.Base64Decode(base64Str)
+	if err != nil {
+		panic(err)
+	}
 	return binary.BigEndian.Uint64(b)
 }
 
-func generateOffSetKey(dataRoot, dataSize string) []byte {
+func generateOffSetKey(dataRoot, dataSize string) string {
 	hash := sha256.Sum256([]byte(dataRoot + dataSize))
-	return hash[:]
+	return utils.Base64Encode(hash[:])
 }
 
 // about tasks
 
 func (s *Store) PutTaskPendingPool(taskId string) error {
-	return s.BoltDb.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(TaskIdPendingPoolBucket).Put([]byte(taskId), []byte("0x01"))
-	})
+	return s.KVDb.Put(schema.TaskIdPendingPoolBucket, taskId, []byte("0x01"))
 }
 
 func (s *Store) LoadAllPendingTaskIds() ([]string, error) {
 	taskIds := make([]string, 0)
-	err := s.BoltDb.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(TaskIdPendingPoolBucket)
-
-		return bkt.ForEach(func(k, v []byte) error {
-			taskIds = append(taskIds, string(k))
-			return nil
-		})
-	})
+	taskIds, err := s.KVDb.GetAllKey(schema.TaskIdPendingPoolBucket)
+	if err != nil {
+		return nil, err
+	}
 	return taskIds, err
 }
 
 func (s *Store) DelPendingPoolTaskId(taskId string) error {
-	return s.BoltDb.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(TaskIdPendingPoolBucket).Delete([]byte(taskId))
-	})
+	return s.KVDb.Delete(schema.TaskIdPendingPoolBucket, taskId)
 }
 
 func (s *Store) SaveTask(taskId string, tk schema.Task) error {
@@ -336,176 +246,121 @@ func (s *Store) SaveTask(taskId string, tk schema.Task) error {
 	if err != nil {
 		return err
 	}
-
-	return s.BoltDb.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(TaskBucket).Put([]byte(taskId), val)
-	})
+	return s.KVDb.Put(schema.TaskBucket, taskId, val)
 }
 
 func (s *Store) LoadTask(taskId string) (tk *schema.Task, err error) {
 	tk = &schema.Task{}
-	err = s.BoltDb.View(func(tx *bolt.Tx) error {
-		val := tx.Bucket(TaskBucket).Get([]byte(taskId))
-		if val == nil {
-			return ErrNotExist
-		} else {
-			err = json.Unmarshal(val, tk)
-			return err
-		}
-	})
+	data, err := s.KVDb.Get(schema.TaskBucket, taskId)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(data, tk)
 	return
 }
 
 // about bundle
-
-func (s *Store) SaveItemBinary(itemId string, itemBinary []byte, dbTx *bolt.Tx) (err error) {
-	if dbTx == nil {
-		dbTx, err = s.BoltDb.Begin(true)
-		if err != nil {
-			return
-		}
-		defer dbTx.Commit()
+func (s *Store) AtomicSaveItem(item types.BundleItem, itemId string, itemBinary []byte) (err error) {
+	if err = s.SaveItemBinary(itemId, itemBinary); err != nil {
+		return
 	}
+	if err = s.SaveItemMeta(item); err != nil {
+		_ = s.DelItemBinary(itemId)
+	}
+	return
+}
 
-	bkt, err := dbTx.CreateBucketIfNotExists(BundleItemBinary)
+func (s *Store) AtomicDelItem(itemId string) (err error) {
+	err = s.DelItemMeta(itemId)
 	if err != nil {
-		return err
+		return
 	}
-	return bkt.Put([]byte(itemId), itemBinary)
+	return s.DelItemBinary(itemId)
+}
+
+func (s *Store) SaveItemBinary(itemId string, itemBinary []byte) (err error) {
+	return s.KVDb.Put(schema.BundleItemBinary, itemId, itemBinary)
 }
 
 func (s *Store) IsExistItemBinary(itemId string) bool {
 	_, err := s.LoadItemBinary(itemId)
-	if err == ErrNotExist {
+	if err == schema.ErrNotExist {
 		return false
 	}
 	return true
 }
 
 func (s *Store) LoadItemBinary(itemId string) (itemBinary []byte, err error) {
-	key := []byte(itemId)
 	itemBinary = make([]byte, 0)
-
-	err = s.BoltDb.View(func(tx *bolt.Tx) error {
-		itemBinary = tx.Bucket(BundleItemBinary).Get(key)
-		if itemBinary == nil {
-			return ErrNotExist
-		}
-		return nil
-	})
+	itemBinary, err = s.KVDb.Get(schema.BundleItemBinary, itemId)
 	return
 }
 
-func (s *Store) DelItemBinary(itemId string, dbTx *bolt.Tx) (err error) {
-	if dbTx == nil {
-		dbTx, err = s.BoltDb.Begin(true)
-		if err != nil {
-			return
-		}
-		defer dbTx.Commit()
-	}
-	key := []byte(itemId)
-	return dbTx.Bucket(BundleItemBinary).Delete(key)
+func (s *Store) DelItemBinary(itemId string) (err error) {
+	return s.KVDb.Delete(schema.BundleItemBinary, itemId)
 }
 
-func (s *Store) SaveItemMeta(item types.BundleItem, dbTx *bolt.Tx) (err error) {
-	if dbTx == nil {
-		dbTx, err = s.BoltDb.Begin(true)
-		if err != nil {
-			return
-		}
-		defer dbTx.Commit()
-	}
-
-	bkt, err := dbTx.CreateBucketIfNotExists(BundleItemMeta)
-	if err != nil {
-		return err
-	}
+func (s *Store) SaveItemMeta(item types.BundleItem) (err error) {
 	item.Data = "" // without data
 	meta, err := json.Marshal(item)
 	if err != nil {
 		return err
 	}
 
-	return bkt.Put([]byte(item.Id), meta)
+	return s.KVDb.Put(schema.BundleItemMeta, item.Id, meta)
 }
 
 func (s *Store) LoadItemMeta(itemId string) (meta types.BundleItem, err error) {
-	key := []byte(itemId)
 	meta = types.BundleItem{}
-	err = s.BoltDb.View(func(tx *bolt.Tx) error {
-		metaBy := tx.Bucket(BundleItemMeta).Get(key)
-		if metaBy == nil {
-			return ErrNotExist
-		}
-		return json.Unmarshal(metaBy, &meta)
-	})
+	data, err := s.KVDb.Get(schema.BundleItemMeta, itemId)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(data, &meta)
 	return
 }
 
-func (s *Store) DelItemMeta(itemId string, dbTx *bolt.Tx) (err error) {
-	if dbTx == nil {
-		dbTx, err = s.BoltDb.Begin(true)
-		if err != nil {
-			return
-		}
-		defer dbTx.Commit()
-	}
-	key := []byte(itemId)
-	return dbTx.Bucket(BundleItemMeta).Delete(key)
+func (s *Store) DelItemMeta(itemId string) (err error) {
+	return s.KVDb.Delete(schema.BundleItemMeta, itemId)
 }
 
 // bundle items to arTx
 
 func (s *Store) SaveWaitParseBundleArId(arId string) error {
-	return s.BoltDb.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(BundleWaitParseArIdBucket).Put([]byte(arId), []byte("0x01"))
-	})
+	return s.KVDb.Put(schema.BundleWaitParseArIdBucket, arId, []byte("0x01"))
 }
 
 func (s *Store) LoadWaitParseBundleArIds() (arIds []string, err error) {
 	arIds = make([]string, 0)
-	err = s.BoltDb.View(func(tx *bolt.Tx) error {
-		return tx.Bucket(BundleWaitParseArIdBucket).ForEach(func(k, v []byte) error {
-			arIds = append(arIds, string(k))
-			return nil
-		})
-	})
+	arIds, err = s.KVDb.GetAllKey(schema.BundleWaitParseArIdBucket)
 	return
 }
 
 func (s *Store) DelParsedBundleArId(arId string) error {
-	return s.BoltDb.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(BundleWaitParseArIdBucket).Delete([]byte(arId))
-	})
+	return s.KVDb.Delete(schema.BundleWaitParseArIdBucket, arId)
 }
 
 func (s *Store) SaveArIdToItemIds(arId string, itemIds []string) error {
-	return s.BoltDb.Update(func(tx *bolt.Tx) error {
-		itemIdsJs, err := json.Marshal(itemIds)
-		if err != nil {
-			return err
-		}
-		return tx.Bucket(BundleArIdToItemIdsBucket).Put([]byte(arId), itemIdsJs)
-	})
+	itemIdsJs, err := json.Marshal(itemIds)
+	if err != nil {
+		return err
+	}
+	return s.KVDb.Put(schema.BundleArIdToItemIdsBucket, arId, itemIdsJs)
 }
 
 func (s *Store) LoadArIdToItemIds(arId string) (itemIds []string, err error) {
 	itemIds = make([]string, 0)
-	err = s.BoltDb.View(func(tx *bolt.Tx) error {
-		val := tx.Bucket(BundleArIdToItemIdsBucket).Get([]byte(arId))
-		if val == nil {
-			return ErrNotExist
-		} else {
-			return json.Unmarshal(val, &itemIds)
-		}
-	})
+	data, err := s.KVDb.Get(schema.BundleArIdToItemIdsBucket, arId)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(data, &itemIds)
 	return
 }
 
 func (s *Store) ExistArIdToItemIds(arId string) bool {
 	_, err := s.LoadArIdToItemIds(arId)
-	if err == ErrNotExist {
+	if err == schema.ErrNotExist {
 		return false
 	}
 	return true

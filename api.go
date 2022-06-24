@@ -160,7 +160,7 @@ func (s *Arseeding) getChunk(c *gin.Context) {
 
 	chunk, err := s.store.LoadChunk(chunkOffset)
 	if err != nil {
-		if err == ErrNotExist {
+		if err == schema.ErrNotExist {
 			c.Data(404, "text/html; charset=utf-8", []byte("Not Found"))
 			return
 		}
@@ -176,7 +176,7 @@ func (s *Arseeding) getTx(c *gin.Context) {
 	if err == nil {
 		c.JSON(http.StatusOK, arTx)
 		return
-	} else if err != ErrNotExist {
+	} else if err != schema.ErrNotExist {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -190,7 +190,7 @@ func (s *Arseeding) getTxField(c *gin.Context) {
 	field := c.Param("field")
 	txMeta, err := s.store.LoadTxMeta(arid)
 	if err != nil {
-		if err == ErrNotExist {
+		if err == schema.ErrNotExist {
 			c.JSON(404, "not found")
 			return
 		}
@@ -289,7 +289,7 @@ func txDataByMeta(txMeta *types.Transaction, db *Store) ([]byte, error) {
 	}
 	// When data is bigger than 12MiB return statusCode == 400, use chunk
 	if size > 50*128*1024 {
-		return nil, ErrDataTooBig
+		return nil, schema.ErrDataTooBig
 	}
 
 	data, err := getData(txMeta.DataRoot, txMeta.DataSize, db)
@@ -581,7 +581,7 @@ func (s *Arseeding) getDataByGW(c *gin.Context) {
 		}
 		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(txMeta.Tags, "Content-Type")), data)
 		return
-	} else if err != ErrNotExist {
+	} else if err != schema.ErrNotExist {
 		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
@@ -600,7 +600,7 @@ func (s *Arseeding) getDataByGW(c *gin.Context) {
 		}
 		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(item.Tags, "Content-Type")), data)
 		return
-	} else if err != ErrNotExist {
+	} else if err != schema.ErrNotExist {
 		c.JSON(http.StatusInternalServerError, err)
 		return
 	}

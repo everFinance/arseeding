@@ -48,7 +48,7 @@ func (s *Arseeding) SaveSubmitTx(arTx types.Transaction) error {
 
 	// 2. check meta exist
 	if s.store.IsExistTxMeta(arTx.ID) {
-		return ErrExistTx
+		return schema.ErrExistTx
 	}
 
 	// 3. save tx meta
@@ -115,6 +115,10 @@ func (s *Arseeding) FetchAndStoreTx(arId string) (err error) {
 			log.Error("s.store.SaveTxMeta(arTx)", "err", err, "arTx", arTxMeta.ID)
 			return err
 		}
+
+	}
+
+	if !s.store.IsExistTxDataEndOffset(arTxMeta.DataRoot, arTxMeta.DataSize) {
 		// store txDataEndOffset
 		if err := s.syncAddTxDataEndOffset(arTxMeta.DataRoot, arTxMeta.DataSize); err != nil {
 			log.Error("s.syncAddTxDataEndOffset(arTxMeta.DataRoot,arTxMeta.DataSize)", "err", err, "arId", arId)
@@ -178,33 +182,12 @@ func (s *Arseeding) syncAddTxDataEndOffset(dataRoot, dataSize string) error {
 	curEndOffset := s.store.LoadAllDataEndOffset()
 	newEndOffset := curEndOffset + txSize
 
-	// must use tx db
-	boltTx, err := s.store.BoltDb.Begin(true)
-	if err != nil {
-		log.Error("s.store.BoltDb.Begin(true)", "err", err)
-		return err
-	}
-	if err = s.store.SaveAllDataEndOffset(newEndOffset, boltTx); err != nil {
-		boltTx.Rollback()
-		log.Error("s.store.SaveAllDataEndOffset(newEndOffset)", "err", err)
-		return err
-	}
-	// SaveTxDataEndOffSet
-	if err = s.store.SaveTxDataEndOffSet(dataRoot, dataSize, newEndOffset, boltTx); err != nil {
-		boltTx.Rollback()
-		return err
-	}
-	// commit
-	if err := boltTx.Commit(); err != nil {
-		boltTx.Rollback()
-		return err
-	}
-	return nil
+	return s.store.AtomicSyncDataEndOffset(curEndOffset, newEndOffset, dataRoot, dataSize)
 }
 
 func setTxDataChunks(arTx types.Transaction, txData []byte, db *Store) error {
 	if len(txData) == 0 {
-		return ErrNullData
+		return schema.ErrNullData
 	}
 	chunks, err := generateChunks(arTx, txData)
 	if err != nil {
@@ -228,7 +211,7 @@ func setTxDataChunks(arTx types.Transaction, txData []byte, db *Store) error {
 
 func generateChunks(arTxMeta types.Transaction, data []byte) ([]*types.GetChunk, error) {
 	if len(data) == 0 {
-		return nil, ErrNullData
+		return nil, schema.ErrNullData
 	}
 	utils.PrepareChunks(&arTxMeta, data)
 

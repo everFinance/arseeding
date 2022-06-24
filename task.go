@@ -79,7 +79,7 @@ func (s *Arseeding) broadcastTxTask(arId string) (err error) {
 	}
 	txData, err := getData(txMeta.DataRoot, txMeta.DataSize, s.store)
 	if err != nil {
-		if err == ErrNotExist {
+		if err == schema.ErrNotExist {
 			if err = s.FetchAndStoreTx(arId); err != nil {
 				log.Error("processBroadcast FetchAndStoreTx failed", "err", err, "arId", arId)
 				return err
@@ -112,7 +112,7 @@ func (s *Arseeding) broadcastTxTask(arId string) (err error) {
 
 func (s *Arseeding) broadcastTxMetaTask(arId string) (err error) {
 	if !s.store.IsExistTxMeta(arId) {
-		return ErrNotExist
+		return schema.ErrNotExist
 	}
 	txMeta, err := s.store.LoadTxMeta(arId)
 	if err != nil {
