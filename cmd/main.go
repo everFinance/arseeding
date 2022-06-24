@@ -21,6 +21,7 @@ func main() {
 			&cli.StringFlag{Name: "pay", Value: "https://api-dev.everpay.io", Usage: "pay url", EnvVars: []string{"PAY"}},
 
 			&cli.StringFlag{Name: "port", Value: ":8080", EnvVars: []string{"PORT"}},
+			&cli.BoolFlag{Name: "no_fee", Value: false, EnvVars: []string{"NO_FEE"}},
 		},
 		Action: run,
 	}
@@ -35,7 +36,7 @@ func run(c *cli.Context) error {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
-	s := arseeding.New(c.String("db_dir"), c.String("mysql"), c.String("key_path"), c.String("ar_node"), c.String("pay"))
+	s := arseeding.New(c.String("db_dir"), c.String("mysql"), c.String("key_path"), c.String("ar_node"), c.String("pay"), c.Bool("no_fee"))
 	s.Run(c.String("port"))
 
 	<-signals

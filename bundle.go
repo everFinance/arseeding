@@ -22,12 +22,6 @@ func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string) (s
 		return schema.Order{}, err
 	}
 
-	// calc fee
-	size := int64(len(item.ItemBinary))
-	respFee, err := s.CalcItemFee(currency, size)
-	if err != nil {
-		return schema.Order{}, err
-	}
 	signerAddr, err := utils.ItemSignerAddr(item)
 	if err != nil {
 		return schema.Order{}, err
@@ -37,18 +31,27 @@ func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string) (s
 		return schema.Order{}, err
 	}
 	order := schema.Order{
-		ItemId:             item.Id,
-		Signer:             accId,
-		SignType:           item.SignatureType,
-		Size:               size,
-		Currency:           strings.ToUpper(currency),
-		Decimals:           respFee.Decimals,
-		Fee:                respFee.FinalFee,
-		PaymentExpiredTime: time.Now().Unix() + s.paymentExpiredRange,
-		ExpectedBlock:      s.cache.GetInfo().Height + s.expectedRange,
-		PaymentStatus:      schema.UnPayment,
-		PaymentId:          "",
-		OnChainStatus:      schema.WaitOnChain,
+		ItemId:        item.Id,
+		Signer:        accId,
+		SignType:      item.SignatureType,
+		Size:          int64(len(item.ItemBinary)),
+		ExpectedBlock: s.cache.GetInfo().Height + s.expectedRange,
+		OnChainStatus: schema.WaitOnChain,
+	}
+
+	// calc fee
+	if !s.NoFee {
+		respFee, err := s.CalcItemFee(currency, order.Size)
+		if err != nil {
+			return schema.Order{}, err
+		}
+		order.Decimals = respFee.Decimals
+		order.Fee = respFee.FinalFee
+		order.Currency = strings.ToUpper(currency)
+		order.PaymentExpiredTime = time.Now().Unix() + s.paymentExpiredRange
+		order.PaymentStatus = schema.UnPayment
+	} else {
+		order.PaymentStatus = schema.SuccPayment
 	}
 
 	// insert to mysql
