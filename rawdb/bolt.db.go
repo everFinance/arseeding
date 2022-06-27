@@ -11,9 +11,7 @@ import (
 
 const (
 	boltAllocSize = 8 * 1024 * 1024
-
-	defaultDirPath = "./data/bolt"
-	boltName       = "seed.db"
+	boltName      = "seed.db"
 )
 
 type BoltDB struct {
@@ -22,7 +20,7 @@ type BoltDB struct {
 
 func NewBoltDB(boltDirPath string) (*BoltDB, error) {
 	if len(boltDirPath) == 0 {
-		boltDirPath = defaultDirPath
+		return nil, errors.New("boltDb dir path can not null")
 	}
 	if err := os.MkdirAll(boltDirPath, os.ModePerm); err != nil {
 		return nil, err

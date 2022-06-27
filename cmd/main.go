@@ -22,7 +22,7 @@ func main() {
 			&cli.BoolFlag{Name: "s3_flag", Value: false, Usage: "run with s3 store", EnvVars: []string{"S3_FLAG"}},
 			&cli.StringFlag{Name: "s3_acc_key", Value: "AKIATZSGGOHIV4QTYNH5", Usage: "s3 access key", EnvVars: []string{"S3_ACC_KEY"}},
 			&cli.StringFlag{Name: "s3_secret_key", Value: "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", Usage: "s3 secret key", EnvVars: []string{"S3_SECRET_KEY"}},
-			&cli.StringFlag{Name: "s3_prefix", Value: "arseed", Usage: "s3 bucket name prefix", EnvVars: []string{"S3_BUCKET_PREFIX"}},
+			&cli.StringFlag{Name: "s3_prefix", Value: "arseed", Usage: "s3 bucket name prefix", EnvVars: []string{"S3_PREFIX"}},
 			&cli.StringFlag{Name: "s3_region", Value: "ap-northeast-1", Usage: "s3 bucket region", EnvVars: []string{"S3_REGION"}},
 
 			&cli.StringFlag{Name: "port", Value: ":8080", EnvVars: []string{"PORT"}},

@@ -37,7 +37,8 @@ type Arseeding struct {
 }
 
 func New(
-	boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string,
+	boltDirPath, dsn string,
+	arWalletKeyPath string, arNode, payUrl string,
 	s3Flag bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region string,
 ) *Arseeding {
 	var err error
