@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"github.com/everFinance/arseeding/rawdb"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
@@ -72,6 +73,7 @@ func (s *Store) LoadAllDataEndOffset() (offset uint64) {
 		offset = 0
 		return
 	}
+	fmt.Println("aaa", string(data))
 	offset = btoi(string(data))
 	return
 }
