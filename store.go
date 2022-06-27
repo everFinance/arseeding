@@ -64,7 +64,6 @@ func (s *Store) AtomicSyncDataEndOffset(preEndOffset, newEndOffset uint64, dataR
 		log.Error("s.store.SaveAllDataEndOffset(newEndOffset)", "err", err)
 		return err
 	}
-	log.Debug("Endoffset", "len", newEndOffset)
 	// SaveTxDataEndOffSet
 	if err := s.SaveTxDataEndOffSet(dataRoot, dataSize, newEndOffset); err != nil {
 		_ = s.RollbackAllDataEndOffset(preEndOffset)
@@ -94,7 +93,6 @@ func (s *Store) LoadAllDataEndOffset() (offset uint64) {
 		offset = 0
 		return
 	}
-	log.Debug("aaa", "len", len(data))
 	offset = btoi(string(data))
 	return
 }
@@ -136,7 +134,6 @@ func (s *Store) LoadTxDataEndOffSet(dataRoot, dataSize string) (txDataEndOffset 
 	if err != nil {
 		return
 	}
-	log.Debug("aaa", "len", len(data))
 	txDataEndOffset = btoi(string(data))
 	return
 }
@@ -213,7 +210,6 @@ func itob(v uint64) string {
 }
 
 func btoi(base64Str string) uint64 {
-	log.Warn("ggggg", "vvvvv", base64Str)
 	b, err := utils.Base64Decode(base64Str)
 	if err != nil {
 		panic(err)
