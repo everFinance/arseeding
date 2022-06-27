@@ -92,7 +92,7 @@ func (m *TaskManager) TaskBeginSet(arid, taskType string, totalPeer int) error {
 	id := assembleTaskId(arid, taskType)
 	tk, ok := m.taskMap[id]
 	if !ok {
-		return ErrNotFound
+		return schema.ErrNotFound
 	}
 	tk.Timestamp = time.Now().Unix()
 	tk.TotalPeer = totalPeer
@@ -120,7 +120,7 @@ func (m *TaskManager) CloseTask(arid, taskType string) error {
 	if ok {
 		tk.Close = true
 	} else {
-		return ErrNotFound
+		return schema.ErrNotFound
 	}
 	return nil
 }
@@ -149,7 +149,7 @@ func (m *TaskManager) GetUnconfirmedTxFromPeers(arId, taskType string, peers []s
 	pNode := goar.NewTempConn()
 	for _, peer := range peers {
 		if m.IsClosed(arId, taskType) {
-			return nil, ErrTaskClosed
+			return nil, schema.ErrTaskClosed
 		}
 
 		pNode.SetTempConnUrl("http://" + peer)
@@ -167,7 +167,7 @@ func (m *TaskManager) GetTxDataFromPeers(arId, taskType string, peers []string) 
 	pNode := goar.NewTempConn()
 	for _, peer := range peers {
 		if m.IsClosed(arId, taskType) {
-			return nil, ErrTaskClosed
+			return nil, schema.ErrTaskClosed
 		}
 		pNode.SetTempConnUrl("http://" + peer)
 		data, err := pNode.DownloadChunkData(arId)
@@ -179,7 +179,7 @@ func (m *TaskManager) GetTxDataFromPeers(arId, taskType string, peers []string) 
 		return data, nil
 	}
 
-	return nil, ErrFetchData
+	return nil, schema.ErrFetchData
 }
 
 func (m *TaskManager) BroadcastTxMeta(arId, taskType string, tx *types.Transaction, peers []string) {

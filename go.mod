@@ -3,6 +3,7 @@ module github.com/everFinance/arseeding
 go 1.17
 
 require (
+	github.com/aws/aws-sdk-go v1.27.0
 	github.com/everFinance/everpay-go v0.0.1
 	github.com/everFinance/goar v1.4.3-0.20220623100905-b412e87b5797
 	github.com/gin-gonic/gin v1.7.4
@@ -55,6 +56,7 @@ require (
 	github.com/jackpal/go-nat-pmp v1.0.2-0.20160603034137-1fa385a6f458 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.4 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.11 // indirect
 	github.com/karalabe/usb v0.0.0-20211005121534-4c5740d64559 // indirect
 	github.com/leodido/go-urn v1.2.0 // indirect

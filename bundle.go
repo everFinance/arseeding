@@ -142,28 +142,7 @@ func (s *Arseeding) saveItem(item types.BundleItem) error {
 	if s.store.IsExistItemBinary(item.Id) {
 		return nil
 	}
-
-	boltTx, err := s.store.BoltDb.Begin(true)
-	if err != nil {
-		log.Error("s.store.BoltDb.Begin(true)", "err", err)
-		return err
-	}
-
-	if err = s.store.SaveItemBinary(item.Id, item.ItemBinary, boltTx); err != nil {
-		boltTx.Rollback()
-		return err
-	}
-
-	if err = s.store.SaveItemMeta(item, boltTx); err != nil {
-		boltTx.Rollback()
-		return err
-	}
-	// commit
-	if err = boltTx.Commit(); err != nil {
-		boltTx.Rollback()
-		return err
-	}
-	return nil
+	return s.store.AtomicSaveItem(item, item.Id, item.ItemBinary)
 }
 
 func (s *Arseeding) DelItem(itemId string) error {
@@ -171,25 +150,5 @@ func (s *Arseeding) DelItem(itemId string) error {
 		return nil
 	}
 
-	boltTx, err := s.store.BoltDb.Begin(true)
-	if err != nil {
-		log.Error("s.store.BoltDb.Begin(true)", "err", err)
-		return err
-	}
-
-	if err = s.store.DelItemBinary(itemId, boltTx); err != nil {
-		boltTx.Rollback()
-		return err
-	}
-
-	if err = s.store.DelItemMeta(itemId, boltTx); err != nil {
-		boltTx.Rollback()
-		return err
-	}
-	// commit
-	if err = boltTx.Commit(); err != nil {
-		boltTx.Rollback()
-		return err
-	}
-	return nil
+	return s.store.AtomicDelItem(itemId)
 }

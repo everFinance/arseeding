@@ -1,4 +1,4 @@
-package arseeding
+package schema
 
 import (
 	"errors"
@@ -7,6 +7,7 @@ import (
 var (
 	ErrNotExist = errors.New("not_exist_record")
 	ErrNotFound = errors.New("not_found")
+	ErrExist    = errors.New("s3_bucket_exist")
 
 	ErrExistTx    = errors.New("tx_exist")
 	ErrTaskClosed = errors.New("task_closed")

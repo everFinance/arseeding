@@ -37,14 +37,24 @@ type Arseeding struct {
 	expectedRange       int64                 // default 50 block
 }
 
-func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string, noFee bool) *Arseeding {
-	boltDb, err := NewStore(boltDirPath)
+func New(
+	boltDirPath, dsn string,
+	arWalletKeyPath string, arNode, payUrl string,noFee bool,
+	s3Flag bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region string,
+) *Arseeding {
+	var err error
+	KVDb := &Store{}
+	if s3Flag {
+		KVDb, err = NewS3Store(s3AccKey, s3SecretKey, s3Region, s3BucketPrefix)
+	} else {
+		KVDb, err = NewBoltStore(boltDirPath)
+	}
 	if err != nil {
 		panic(err)
 	}
 
 	jobmg := NewTaskMg()
-	if err := jobmg.InitTaskMg(boltDb); err != nil {
+	if err := jobmg.InitTaskMg(KVDb); err != nil {
 		panic(err)
 	}
 
@@ -64,7 +74,7 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string,
 
 	arCli := goar.NewClient(arNode)
 	a := &Arseeding{
-		store:               boltDb,
+		store:               KVDb,
 		engine:              gin.Default(),
 		submitLocker:        sync.Mutex{},
 		endOffsetLocker:     sync.Mutex{},
@@ -82,7 +92,7 @@ func New(boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string,
 	}
 
 	// init cache
-	peerMap, err := boltDb.LoadPeers()
+	peerMap, err := KVDb.LoadPeers()
 	if err != nil {
 		peerMap = make(map[string]int64)
 	}
