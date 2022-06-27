@@ -35,19 +35,23 @@ type Store struct {
 	KVDb rawdb.KeyValueDB
 }
 
-func NewStore(boltDirPath string, s3Flag bool, accKey, secretKey, region, bucketPrefix string) (*Store, error) {
-	if !s3Flag {
-		Db, err := rawdb.NewBoltDB(boltDirPath)
-		if err != nil {
-			return nil, err
-		}
-		return &Store{KVDb: Db}, nil
+func NewS3Store(accKey, secretKey, region, bucketPrefix string) (*Store, error) {
+	Db, err := rawdb.NewS3DB(accKey, secretKey, region, bucketPrefix)
+	if err != nil {
+		return nil, err
 	}
-	Db, _ := rawdb.NewS3DB(accKey, secretKey, region, bucketPrefix)
 	return &Store{
 		KVDb: Db,
 	}, nil
 
+}
+
+func NewBoltStore(boltDirPath string) (*Store, error) {
+	Db, err := rawdb.NewBoltDB(boltDirPath)
+	if err != nil {
+		return nil, err
+	}
+	return &Store{KVDb: Db}, nil
 }
 
 func (s *Store) Close() error {

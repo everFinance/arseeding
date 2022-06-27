@@ -38,9 +38,15 @@ type Arseeding struct {
 
 func New(
 	boltDirPath, dsn string, arWalletKeyPath string, arNode, payUrl string,
-	s3Flag bool, accKey, secretKey, bucketPrefix, region string,
+	s3Flag bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region string,
 ) *Arseeding {
-	KVDb, err := NewStore(boltDirPath, s3Flag, accKey, secretKey, region, bucketPrefix)
+	var err error
+	KVDb := &Store{}
+	if s3Flag {
+		KVDb, err = NewS3Store(s3AccKey, s3SecretKey, s3Region, s3BucketPrefix)
+	} else {
+		KVDb, err = NewBoltStore(boltDirPath)
+	}
 	if err != nil {
 		panic(err)
 	}

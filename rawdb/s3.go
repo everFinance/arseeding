@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/everFinance/arseeding/schema"
 	"strings"
 )
@@ -43,19 +42,18 @@ func NewS3DB(accKey, secretKey, region, bktPrefix string) (*S3DB, error) {
 }
 
 func (s *S3DB) Put(bucket, key string, value []byte) (err error) {
-	bkt := strings.ToLower(s.bucketPrefix + bucket)
+	bkt := getS3Bucket(s.bucketPrefix, bucket)
 	uploadInfo := &s3manager.UploadInput{
 		Bucket: aws.String(bkt),
 		Key:    aws.String(key),
-		// Body:   strings.NewReader(string(value)),
-		Body: bytes.NewReader(value),
+		Body:   bytes.NewReader(value),
 	}
 	_, err = s.uploader.Upload(uploadInfo)
 	return
 }
 
 func (s *S3DB) Get(bucket, key string) (data []byte, err error) {
-	bkt := strings.ToLower(s.bucketPrefix + bucket)
+	bkt := getS3Bucket(s.bucketPrefix, bucket)
 	downloadInfo := &s3.GetObjectInput{
 		Bucket: aws.String(bkt),
 		Key:    aws.String(key),
@@ -70,7 +68,7 @@ func (s *S3DB) Get(bucket, key string) (data []byte, err error) {
 }
 
 func (s *S3DB) GetAllKey(bucket string) (keys []string, err error) {
-	bkt := strings.ToLower(s.bucketPrefix + bucket)
+	bkt := getS3Bucket(s.bucketPrefix, bucket)
 	resp, err := s.s3Api.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(bkt)})
 	if err != nil {
 		return
@@ -83,7 +81,7 @@ func (s *S3DB) GetAllKey(bucket string) (keys []string, err error) {
 }
 
 func (s *S3DB) Delete(bucket, key string) (err error) {
-	bkt := strings.ToLower(s.bucketPrefix + bucket)
+	bkt := getS3Bucket(s.bucketPrefix, bucket)
 	_, err = s.s3Api.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(bkt), Key: aws.String(key)})
 	return
 }
@@ -106,11 +104,15 @@ func createS3Bucket(svc s3iface.S3API, prefix string) error {
 		schema.BundleArIdToItemIdsBucket,
 	}
 	for _, bucketName := range bucketNames {
-		s3Bkt := strings.ToLower(prefix + bucketName) // s3 bucket name only accept lower case
+		s3Bkt := getS3Bucket(prefix, bucketName) // s3 bucket name only accept lower case
 		_, err := svc.CreateBucket(&s3.CreateBucketInput{Bucket: aws.String(s3Bkt)})
 		if err != nil && !strings.Contains(err.Error(), "already own") {
 			return err
 		}
 	}
 	return nil
+}
+
+func getS3Bucket(prefix, bktName string) string {
+	return strings.ToLower(prefix + "-" + bktName)
 }

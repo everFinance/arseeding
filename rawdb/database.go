@@ -1,5 +1,9 @@
 package rawdb
 
+import "github.com/everFinance/everpay-go/common"
+
+var log = common.NewLog("arseeding")
+
 type KeyValueDB interface {
 	Put(bucket, key string, value []byte) (err error)
 
