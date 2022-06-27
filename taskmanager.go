@@ -45,27 +45,27 @@ func (m *TaskManager) InitTaskMg(boltDb *Store) error {
 }
 
 func (m *TaskManager) AddTask(arid, taskType string) {
-	if m.exist(arid, taskType) {
+	m.locker.Lock()
+	defer m.locker.Unlock()
+
+	id := assembleTaskId(arid, taskType)
+	_, ok := m.taskMap[id]
+	if ok {
 		return
 	}
 
-	m.locker.Lock()
-	defer m.locker.Unlock()
-	m.taskMap[assembleTaskId(arid, taskType)] = &schema.Task{
+	m.taskMap[id] = &schema.Task{
 		ArId:     arid,
 		TaskType: taskType,
 	}
 }
 
 func (m *TaskManager) DelTask(arid, taskType string) {
+	m.locker.Lock()
+	defer m.locker.Unlock()
+
 	id := assembleTaskId(arid, taskType)
 	delete(m.taskMap, id)
-}
-
-func (m *TaskManager) exist(arid, taskType string) bool {
-	id := assembleTaskId(arid, taskType)
-	_, ok := m.taskMap[id]
-	return ok
 }
 
 func (m *TaskManager) IncSuccessed(arid, taskType string) {
@@ -126,6 +126,8 @@ func (m *TaskManager) CloseTask(arid, taskType string) error {
 }
 
 func (m *TaskManager) IsClosed(arid, taskType string) bool {
+	m.locker.RLock()
+	defer m.locker.RUnlock()
 	id := assembleTaskId(arid, taskType)
 	tk, ok := m.taskMap[id]
 	if ok {
