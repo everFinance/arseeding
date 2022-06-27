@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/everFinance/everpay-go/common"
 	"github.com/everFinance/goar"
+	"github.com/everFinance/goar/types"
+	"time"
 )
 
 var (
@@ -12,40 +14,42 @@ var (
 	log            = common.NewLog("example_everpay")
 )
 
-func fetchTxIds(arOwner string, processedArTxId string, c *goar.Client) ([]string, error) {
+func (e *EverPaySync) fetchTxIds(processedArTxId string) error {
 	// get ar tx
-	processArParentId, err := getParentIdByTags(processedArTxId, c)
-	if err != nil {
-		return nil, err
-	}
+	// processArParentId, err := getParentIdByTags(processedArTxId, e.arCli)
+	// if err != nil {
+	// 	return  err
+	// }
 
-	arOwnerLastTxId, err := getLastTxId(arOwner, processedArTxId, processArParentId, c)
-	if err != nil {
-		if err == ErrNotNeedSync {
-			return []string{}, nil
-		}
-		log.Warn("getLastTxId(arOwner, processedArTxId, c)", "err", err)
-		return []string{}, err
-	}
+	// arOwnerLastTxId, err := getLastTxId(e.rollupOwner, processedArTxId, processArParentId, e.arCli)
+	// if err != nil {
+	// 	if err == ErrNotNeedSync {
+	// 		return  nil
+	// 	}
+	// 	log.Warn("getLastTxId(arOwner, processedArTxId, c)", "err", err)
+	// 	return  err
+	// }
 
 	var (
 		parentTxId string
+		err        error
 	)
-	ids := make([]string, 0)
-	id := arOwnerLastTxId
+	id := processedArTxId
 	for {
-		log.Debug("Fetcher get parentTxId", "id", id, "IdsCount", len(ids), "processedArTxId", processedArTxId, "processArParentId", processArParentId)
-		ids = append(ids, id)
-		parentTxId, err = getParentIdByTags(id, c)
+		parentTxId, err = getParentIdByTags(id, e.arCli)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		if parentTxId == processedArTxId || parentTxId == processArParentId {
+		// if parentTxId == processedArTxId || parentTxId == processArParentId {
+		// 	break
+		// }
+		if parentTxId == "" {
 			break
 		}
 		id = parentTxId
+		e.arIdChan <- parentTxId
 	}
-	return ids, nil
+	return nil
 }
 
 func getLastTxId(arOwner string, processedArTxId string, processedParentArTxId string, c *goar.Client) (string, error) {
@@ -117,7 +121,18 @@ func getParentIdByTags(arId string, c *goar.Client) (string, error) {
 	if arId == "" {
 		return "", nil
 	}
-	tags, err := c.GetTransactionTags(arId)
+	var (
+		tags []types.Tag
+		err  error
+	)
+	for {
+		tags, err = c.GetTransactionTags(arId)
+		if err == nil || err != goar.ErrBadGateway {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+
 	if err != nil {
 		return "", err
 	}

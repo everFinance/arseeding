@@ -1,9 +1,9 @@
 package everpay_sync
 
 import (
+	"github.com/everFinance/arseeding/sdk"
 	"github.com/everFinance/goar"
 	"github.com/go-co-op/gocron"
-	"gopkg.in/h2non/gentleman.v2"
 	"time"
 )
 
@@ -12,21 +12,24 @@ type EverPaySync struct {
 	wdb         *Wdb
 	arCli       *goar.Client
 	rollupOwner string
-	gtmCli      *gentleman.Client
+	gtmCli      *sdk.ArSeedCli
 
 	scheduler *gocron.Scheduler
+	arIdChan  chan string
 }
 
 func New(dsn string, seedUrl string) *EverPaySync {
 	return &EverPaySync{
 		wdb:         NewWdb(dsn),
 		arCli:       goar.NewClient("https://arweave.net"),
-		rollupOwner: "uGx-QfBXSwABKxjha-00dI7vvfyqIYblY6Z5L6cyTFM",
-		gtmCli:      gentleman.New().URL(seedUrl),
+		rollupOwner: "dQzTM9hXV5MD1fRniOKI3MvPF_-8b2XDLmpfcMN9hi8",
+		gtmCli:      sdk.New(seedUrl),
 		scheduler:   gocron.NewScheduler(time.UTC),
+		arIdChan:    make(chan string),
 	}
 }
 
 func (e *EverPaySync) Run() {
 	go e.runJobs()
+	go e.FetchArIds()
 }

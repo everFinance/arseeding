@@ -1,10 +1,10 @@
 package arweave_pool_broadcast
 
 import (
+	"github.com/everFinance/arseeding/sdk"
 	"github.com/everFinance/everpay-go/common"
 	"github.com/everFinance/goar"
 	"github.com/go-co-op/gocron"
-	"gopkg.in/h2non/gentleman.v2"
 	"sync"
 	"time"
 )
@@ -13,7 +13,7 @@ var log = common.NewLog("arweave_pool_broadcast")
 
 type BcPool struct {
 	arCli     *goar.Client
-	seedCli   *gentleman.Client
+	seedCli   *sdk.ArSeedCli
 	scheduler *gocron.Scheduler
 
 	pendingTxMap map[string]struct{} // key: arId, val: {}
@@ -26,7 +26,7 @@ type BcPool struct {
 func New(seedUrl string) *BcPool {
 	return &BcPool{
 		arCli:        goar.NewClient("https://arweave.net"),
-		seedCli:      gentleman.New().URL(seedUrl),
+		seedCli:      sdk.New(seedUrl),
 		scheduler:    gocron.NewScheduler(time.UTC),
 		pendingTxMap: make(map[string]struct{}),
 		syncMap:      make(map[string]bool),

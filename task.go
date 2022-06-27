@@ -50,6 +50,7 @@ func (s *Arseeding) syncTask(arId string) (err error) {
 	err = s.FetchAndStoreTx(arId)
 	if err == nil {
 		s.taskMg.IncSuccessed(arId, schema.TaskTypeSync)
+		s.taskMg.CloseTask(arId, schema.TaskTypeSync)
 	}
 	return err
 }
