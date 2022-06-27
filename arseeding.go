@@ -31,6 +31,7 @@ type Arseeding struct {
 	everpaySdk          *paySdk.SDK
 	wdb                 *Wdb
 	bundler             *goar.Wallet
+	NoFee               bool                  // if true, means no bundle fee; default false
 	bundlePerFeeMap     map[string]schema.Fee // key: tokenSymbol, val: fee per chunk_size(256KB)
 	paymentExpiredRange int64                 // default 1 hour
 	expectedRange       int64                 // default 50 block
@@ -38,7 +39,7 @@ type Arseeding struct {
 
 func New(
 	boltDirPath, dsn string,
-	arWalletKeyPath string, arNode, payUrl string,
+	arWalletKeyPath string, arNode, payUrl string,noFee bool,
 	s3Flag bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region string,
 ) *Arseeding {
 	var err error
@@ -58,7 +59,7 @@ func New(
 	}
 
 	wdb := NewWdb(dsn)
-	if err = wdb.Migrate(); err != nil {
+	if err = wdb.Migrate(noFee); err != nil {
 		panic(err)
 	}
 	bundler, err := goar.NewWalletFromPath(arWalletKeyPath, arNode)
@@ -84,6 +85,7 @@ func New(
 		everpaySdk:          everpaySdk,
 		wdb:                 wdb,
 		bundler:             bundler,
+		NoFee:               noFee,
 		bundlePerFeeMap:     make(map[string]schema.Fee),
 		paymentExpiredRange: schema.DefaultPaymentExpiredRange,
 		expectedRange:       schema.DefaultExpectedRange,

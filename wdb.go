@@ -27,9 +27,15 @@ func NewWdb(dsn string) *Wdb {
 	return &Wdb{Db: db}
 }
 
-func (w *Wdb) Migrate() error {
-	return w.Db.AutoMigrate(&schema.Order{}, &schema.TokenPrice{},
-		&schema.ReceiptEverTx{}, &schema.OnChainTx{})
+func (w *Wdb) Migrate(noFee bool) error {
+	err := w.Db.AutoMigrate(&schema.Order{}, &schema.OnChainTx{})
+	if err != nil {
+		return err
+	}
+	if !noFee {
+		err = w.Db.AutoMigrate(&schema.TokenPrice{}, &schema.ReceiptEverTx{})
+	}
+	return err
 }
 
 func (w *Wdb) InsertOrder(order schema.Order) error {

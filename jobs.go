@@ -27,22 +27,68 @@ func (s *Arseeding) runJobs() {
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updatePeerMap)
 
 	// about bundle
-	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateTokenPrice)
-	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundlePerFee)
-	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptAndOrder)
-	s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
+	if !s.NoFee {
+		s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateTokenPrice)
+		s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundlePerFee)
+		go s.watchEverReceiptTxs()
+		s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptAndOrder)
+		s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
+		s.scheduler.Every(1).Minute().SingletonMode().Do(s.processExpiredOrd)
+	}
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.onChainBundleItems) // can set a longer time, if the items are less. such as 5m
 	s.scheduler.Every(3).Minute().SingletonMode().Do(s.watchArTx)
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.retryOnChainArTx)
-	go s.watchEverReceiptTxs()
-	s.scheduler.Every(1).Minute().SingletonMode().Do(s.processExpiredOrd)
+
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.parseAndSaveBundleTx)
 
-	// manager jobStatus
-	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseJobs)
+	// manager taskStatus
+	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseTasks)
 
 	s.scheduler.StartAsync()
 }
+
+func (s *Arseeding) updateAnchor() {
+	anchor, err := fetchAnchor(s.arCli, s.cache.GetPeers())
+	if err == nil {
+		s.cache.UpdateAnchor(anchor)
+	}
+}
+
+func (s *Arseeding) updateInfo() {
+	info, err := fetchArInfo(s.arCli, s.cache.GetPeers())
+	if err == nil && info != nil {
+		s.cache.UpdateInfo(*info)
+	}
+}
+
+func (s *Arseeding) updateArFee() {
+	txPrice, err := fetchArFee(s.arCli, s.cache.GetPeers())
+	if err == nil {
+		s.cache.UpdateFee(txPrice)
+	}
+}
+
+// update peer list concurrency, check peer available, save in db
+func (s *Arseeding) updatePeerMap() {
+	peers, err := s.arCli.GetPeers()
+	if err != nil {
+		return
+	}
+
+	availablePeers := filterPeers(peers, s.cache.GetConstTx())
+	if len(availablePeers) == 0 {
+		return
+	}
+
+	peerMap := updatePeerMap(s.cache.GetPeerMap(), availablePeers)
+
+	s.cache.UpdatePeers(peerMap)
+	if err = s.store.SavePeers(peerMap); err != nil {
+		log.Warn("save new peer list fail")
+	}
+}
+
+// bundle
 
 func (s *Arseeding) updateTokenPrice() {
 	// update symbol
@@ -91,63 +137,20 @@ func (s *Arseeding) updateBundlePerFee() {
 	s.bundlePerFeeMap = feeMap
 }
 
-func (s *Arseeding) watcherAndCloseJobs() {
-	jobs := s.taskMg.GetTasks()
+func (s *Arseeding) watcherAndCloseTasks() {
+	tasks := s.taskMg.GetTasks()
 	now := time.Now().Unix()
-	for _, job := range jobs {
-		if job.Close || job.Timestamp == 0 { // timestamp == 0  means do not start
+	for _, tk := range tasks {
+		if tk.Close || tk.Timestamp == 0 { // timestamp == 0  means do not start
 			continue
 		}
 		// spend time not more than 30 minutes
-		if now-job.Timestamp > 30*60 {
-			if err := s.taskMg.CloseTask(job.ArId, job.TaskType); err != nil {
-				log.Error("watcherAndCloseJobs closeJob", "err", err, "jobId", assembleTaskId(job.ArId, job.TaskType))
+		if now-tk.Timestamp > 30*60 {
+			if err := s.taskMg.CloseTask(tk.ArId, tk.TaskType); err != nil {
+				log.Error("watcherAndCloseTasks closeJob", "err", err, "jobId", assembleTaskId(tk.ArId, tk.TaskType))
 				continue
 			}
 		}
-	}
-}
-
-func (s *Arseeding) updateAnchor() {
-	anchor, err := fetchAnchor(s.arCli, s.cache.GetPeers())
-	if err == nil {
-		s.cache.UpdateAnchor(anchor)
-	}
-}
-
-// update arweave network info
-
-func (s *Arseeding) updateInfo() {
-	info, err := fetchArInfo(s.arCli, s.cache.GetPeers())
-	if err == nil && info != nil {
-		s.cache.UpdateInfo(*info)
-	}
-}
-
-func (s *Arseeding) updateArFee() {
-	txPrice, err := fetchArFee(s.arCli, s.cache.GetPeers())
-	if err == nil {
-		s.cache.UpdateFee(txPrice)
-	}
-}
-
-// update peer list concurrency, check peer available, save in db
-func (s *Arseeding) updatePeerMap() {
-	peers, err := s.arCli.GetPeers()
-	if err != nil {
-		return
-	}
-
-	availablePeers := filterPeers(peers, s.cache.GetConstTx())
-	if len(availablePeers) == 0 {
-		return
-	}
-
-	peerMap := updatePeerMap(s.cache.GetPeerMap(), availablePeers)
-
-	s.cache.UpdatePeers(peerMap)
-	if err = s.store.SavePeers(peerMap); err != nil {
-		log.Warn("save new peer list fail")
 	}
 }
 

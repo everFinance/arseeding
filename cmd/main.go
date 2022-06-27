@@ -26,6 +26,7 @@ func main() {
 			&cli.StringFlag{Name: "s3_region", Value: "ap-northeast-1", Usage: "s3 bucket region", EnvVars: []string{"S3_REGION"}},
 
 			&cli.StringFlag{Name: "port", Value: ":8080", EnvVars: []string{"PORT"}},
+			&cli.BoolFlag{Name: "no_fee", Value: false, EnvVars: []string{"NO_FEE"}},
 		},
 		Action: run,
 	}
@@ -41,7 +42,7 @@ func run(c *cli.Context) error {
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
 	s := arseeding.New(
-		c.String("db_dir"), c.String("mysql"), c.String("key_path"), c.String("ar_node"), c.String("pay"),
+		c.String("db_dir"), c.String("mysql"), c.String("key_path"), c.String("ar_node"), c.String("pay"), c.Bool("no_fee"),
 		c.Bool("s3_flag"), c.String("s3_accKey"), c.String("s3_secretKey"), c.String("s3_bucketPrefix"), c.String("s3_region"),
 	)
 	s.Run(c.String("port"))

@@ -1,6 +1,7 @@
 package sdk
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
@@ -66,7 +67,6 @@ func (a *ArSeedCli) postTask(taskType, arId string) error {
 	req.AddPath(fmt.Sprintf("/task/%s/%s", taskType, arId))
 	resp, err := req.Send()
 	if err != nil {
-		fmt.Printf("req.Send() error: %v\n", err)
 		return err
 	}
 	defer resp.Close()
@@ -81,7 +81,6 @@ func (a *ArSeedCli) getTask(taskType, arId string) (schema.Task, error) {
 	req.AddPath(fmt.Sprintf("/task/%s/%s", taskType, arId))
 	resp, err := req.Send()
 	if err != nil {
-		fmt.Printf("req.Send() error: %v\n", err)
 		return schema.Task{}, err
 	}
 	defer resp.Close()
@@ -98,7 +97,6 @@ func (a *ArSeedCli) killTask(taskType, arId string) error {
 	req.AddPath(fmt.Sprintf("/task/kill/%s/%s", taskType, arId))
 	resp, err := req.Send()
 	if err != nil {
-		fmt.Printf("req.Send() error: %v\n", err)
 		return err
 	}
 	defer resp.Close()
@@ -106,4 +104,114 @@ func (a *ArSeedCli) killTask(taskType, arId string) error {
 		return errors.New(fmt.Sprintf("resp failed: %s", resp.String()))
 	}
 	return nil
+}
+
+// bundle
+
+func (a *ArSeedCli) GetBundler() (string, error) {
+	req := a.SCli.Get()
+	req.Path("/bundle/bundler")
+	resp, err := req.Send()
+	if err != nil {
+		return "", err
+	}
+	defer resp.Close()
+	if !resp.Ok {
+		return "", errors.New(fmt.Sprintf("resp failed: %s", resp.String()))
+	}
+	addr := ""
+	err = resp.JSON(&addr)
+	return addr, err
+}
+
+func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string) (*schema.RespOrder, error) {
+	req := a.SCli.Post()
+	req.Path(fmt.Sprintf("/bundle/tx/%s", currency))
+	req.SetHeader("content-type", "application/octet-stream")
+
+	req.Body(bytes.NewReader(itemBinary))
+
+	resp, err := req.Send()
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Close()
+	if !resp.Ok {
+		return nil, fmt.Errorf("send to bundler request failed; http code: %d, errMsg:%s", resp.StatusCode, resp.String())
+	}
+	br := &schema.RespOrder{}
+	err = resp.JSON(br)
+	return br, err
+}
+
+func (a *ArSeedCli) GetItemMeta(itemId string) (types.BundleItem, error) {
+	req := a.SCli.Get()
+	req.Path(fmt.Sprintf("/bundle/tx/%s", itemId))
+
+	resp, err := req.Send()
+	if err != nil {
+		return types.BundleItem{}, err
+	}
+	defer resp.Close()
+	if !resp.Ok {
+		return types.BundleItem{}, errors.New(fmt.Sprintf("resp failed: %s", resp.String()))
+	}
+
+	item := types.BundleItem{}
+	err = resp.JSON(&item)
+	return item, err
+}
+
+func (a *ArSeedCli) GetItemIds(arId string) ([]string, error) {
+	req := a.SCli.Get()
+	req.Path(fmt.Sprintf("/bundle/itemIds/%s", arId))
+
+	resp, err := req.Send()
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Close()
+	if !resp.Ok {
+		return nil, errors.New(fmt.Sprintf("resp failed: %s", resp.String()))
+	}
+
+	ids := make([]string, 0)
+	err = resp.JSON(&ids)
+	return ids, err
+}
+
+func (a *ArSeedCli) BundleFee(size int64, currency string) (schema.RespFee, error) {
+	req := a.SCli.Get()
+	req.Path(fmt.Sprintf("/bundle/fee/%d/%s", size, currency))
+
+	resp, err := req.Send()
+	if err != nil {
+		return schema.RespFee{}, err
+	}
+	defer resp.Close()
+	if !resp.Ok {
+		return schema.RespFee{}, errors.New(fmt.Sprintf("resp failed: %s", resp.String()))
+	}
+
+	fee := schema.RespFee{}
+	err = resp.JSON(&fee)
+	return fee, err
+}
+
+func (a *ArSeedCli) GetOrders(addr string) ([]schema.Order, error) {
+	req := a.SCli.Get()
+	req.Path(fmt.Sprintf("/bundle/orders/%s", addr))
+
+	resp, err := req.Send()
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Close()
+	if !resp.Ok {
+		return nil, errors.New(fmt.Sprintf("resp failed: %s", resp.String()))
+	}
+
+	ords := make([]schema.Order, 0)
+	err = resp.JSON(&ords)
+	return ords, err
 }
