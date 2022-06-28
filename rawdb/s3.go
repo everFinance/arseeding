@@ -77,6 +77,9 @@ func (s *S3DB) GetAllKey(bucket string) (keys []string, err error) {
 	for _, item := range resp.Contents {
 		keys = append(keys, *item.Key)
 	}
+	if len(keys) == 0 {
+		err = schema.ErrNotExist
+	}
 	return
 }
 
