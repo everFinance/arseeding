@@ -22,7 +22,7 @@ func New(dsn string, seedUrl string) *EverPaySync {
 	return &EverPaySync{
 		wdb:         NewWdb(dsn),
 		arCli:       goar.NewClient("https://arweave.net"),
-		rollupOwner: "dQzTM9hXV5MD1fRniOKI3MvPF_-8b2XDLmpfcMN9hi8",
+		rollupOwner: "uGx-QfBXSwABKxjha-00dI7vvfyqIYblY6Z5L6cyTFM",
 		gtmCli:      sdk.New(seedUrl),
 		scheduler:   gocron.NewScheduler(time.UTC),
 		arIdChan:    make(chan string),

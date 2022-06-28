@@ -176,12 +176,10 @@ func (s *Arseeding) getTx(c *gin.Context) {
 	if err == nil {
 		c.JSON(http.StatusOK, arTx)
 		return
-	} else if err != schema.ErrNotExist {
-		c.JSON(http.StatusBadRequest, err.Error())
-		return
 	}
 
 	// get from arweave gateway
+	log.Debug("get from local failed, proxy to arweave gateway", "err", err, "arId", id)
 	proxyArweaveGateway(c)
 }
 
@@ -190,11 +188,8 @@ func (s *Arseeding) getTxField(c *gin.Context) {
 	field := c.Param("field")
 	txMeta, err := s.store.LoadTxMeta(arid)
 	if err != nil {
-		if err == schema.ErrNotExist {
-			c.JSON(404, "not found")
-			return
-		}
-		c.JSON(404, err.Error()) // not found
+		log.Debug("get from local failed, proxy to arweave gateway", "err", err, "arId", arid, "field", field)
+		proxyArweaveGateway(c)
 		return
 	}
 
@@ -581,10 +576,8 @@ func (s *Arseeding) getDataByGW(c *gin.Context) {
 		}
 		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(txMeta.Tags, "Content-Type")), data)
 		return
-	} else if err != schema.ErrNotExist {
-		c.JSON(http.StatusInternalServerError, err)
-		return
 	}
+
 	// not arId
 	itemBinary, err := s.store.LoadItemBinary(id)
 	if err == nil { // id is bundle item id
@@ -599,9 +592,6 @@ func (s *Arseeding) getDataByGW(c *gin.Context) {
 			return
 		}
 		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(item.Tags, "Content-Type")), data)
-		return
-	} else if err != schema.ErrNotExist {
-		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
 

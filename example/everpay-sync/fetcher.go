@@ -14,7 +14,7 @@ var (
 	log            = common.NewLog("example_everpay")
 )
 
-func (e *EverPaySync) fetchTxIds(processedArTxId string) error {
+func (e *EverPaySync) fetchTxIds(processedArTxId string) (err error) {
 	// get ar tx
 	// processArParentId, err := getParentIdByTags(processedArTxId, e.arCli)
 	// if err != nil {
@@ -30,9 +30,14 @@ func (e *EverPaySync) fetchTxIds(processedArTxId string) error {
 	// 	return  err
 	// }
 
+	if processedArTxId == "" {
+		processedArTxId, err = e.arCli.GetLastTransactionID(e.rollupOwner)
+		if err != nil {
+			return err
+		}
+	}
 	var (
 		parentTxId string
-		err        error
 	)
 	id := processedArTxId
 	for {
