@@ -450,7 +450,9 @@ func (s *Arseeding) processExpiredOrd() {
 func (s *Arseeding) parseAndSaveBundleTx() {
 	arIds, err := s.store.LoadWaitParseBundleArIds()
 	if err != nil {
-		log.Error("s.store.LoadWaitParseBundleArIds()", "err", err)
+		if err != schema.ErrNotExist {
+			log.Error("s.store.LoadWaitParseBundleArIds()", "err", err)
+		}
 		return
 	}
 	for _, arId := range arIds {

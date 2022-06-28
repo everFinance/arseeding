@@ -211,6 +211,9 @@ func (s *Store) LoadAllPendingTaskIds() ([]string, error) {
 	taskIds := make([]string, 0)
 	taskIds, err := s.KVDb.GetAllKey(schema.TaskIdPendingPoolBucket)
 	if err != nil {
+		if err == schema.ErrNotExist {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return taskIds, err
