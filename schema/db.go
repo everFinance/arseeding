@@ -73,4 +73,5 @@ type OnChainTx struct {
 	CurHeight int64
 	Status    string         // "pending","success"
 	ItemIds   datatypes.JSON // json.marshal(itemIds)
+	ItemNum   int
 }

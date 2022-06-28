@@ -298,6 +298,7 @@ func (s *Arseeding) onChainBundleItems() {
 		CurHeight: s.cache.GetInfo().Height,
 		Status:    schema.PendingOnChain,
 		ItemIds:   onChainItemIdsJs,
+		ItemNum:   len(onChainItemIds),
 	}); err != nil {
 		log.Error("s.wdb.InsertArTx", "err", err)
 		return
