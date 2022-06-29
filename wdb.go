@@ -97,10 +97,12 @@ func (w *Wdb) GetOrdersBySigner(signer string, cursorId int64, num int) ([]schem
 	return records, err
 }
 
-func (w *Wdb) ExistProcessedOrderItem(itemId string) bool {
-	res := schema.Order{}
+func (w *Wdb) ExistProcessedOrderItem(itemId string) (res schema.Order, exist bool) {
 	err := w.Db.Where("item_id = ? and (on_chain_status = ? or on_chain_status = ?)", itemId, schema.PendingOnChain, schema.SuccOnChain).First(&res).Error
-	return err == nil
+	if err == nil {
+		exist = true
+	}
+	return
 }
 
 func (w *Wdb) InsertPrices(tps []schema.TokenPrice) error {
