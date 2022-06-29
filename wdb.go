@@ -97,6 +97,12 @@ func (w *Wdb) GetOrdersBySigner(signer string, cursorId int64, num int) ([]schem
 	return records, err
 }
 
+func (w *Wdb) ExistProcessedOrderItem(itemId string) bool {
+	res := schema.Order{}
+	err := w.Db.Where("item_id = ? and (on_chain_status = ? or on_chain_status = ?)", itemId, schema.PendingOnChain, schema.SuccOnChain).First(&res).Error
+	return err == nil
+}
+
 func (w *Wdb) InsertPrices(tps []schema.TokenPrice) error {
 	return w.Db.Clauses(clause.OnConflict{DoNothing: true}).Create(&tps).Error
 }

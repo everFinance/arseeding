@@ -48,7 +48,7 @@ func TestSaveDelItem(t *testing.T) {
 	signer, err := goar.NewSignerFromPath("./test-keyfile.json") // your key file path
 	assert.NoError(t, err)
 	bundlSigner, err := goar.NewItemSigner(signer)
-
+	assert.NoError(t, err)
 	item, err := bundlSigner.CreateAndSignItem([]byte("data 01"), "", "", nil)
 	assert.NoError(t, err)
 	s, err := NewBoltStore(dbPath)

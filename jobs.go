@@ -277,6 +277,9 @@ func (s *Arseeding) onChainBundleItems() {
 		if totalSize >= schema.MaxPerOnChainSize {
 			break
 		}
+		if s.wdb.ExistProcessedOrderItem(ord.ItemId) {
+			continue
+		}
 		itemIds = append(itemIds, ord.ItemId)
 		totalSize += ord.Size
 	}
