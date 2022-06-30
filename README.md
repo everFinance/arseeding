@@ -38,113 +38,110 @@ docker build .
 ## API
 arseeding is compatible with all http api interfaces of arweave node and also provide bundle api:
 ```
+{
+    v1.POST("tx", s.submitTx)
+    v1.POST("chunk", s.submitChunk)
+    v1.GET("tx/:arid/offset", s.getTxOffset)
+    v1.GET("/tx/:arid", s.getTx)
+    v1.GET("chunk/:offset", s.getChunk)
+    v1.GET("tx/:arid/:field", s.getTxField)
+    v1.GET("/info", s.getInfo)
+    v1.GET("/tx_anchor", s.getAnchor)
+    v1.GET("/price/:size", s.getTxPrice)
+    v1.GET("/peers", s.getPeers)
+    // proxy
+    v2 := r.Group("/")
     {
-        v1.POST("tx", s.submitTx)
-		v1.POST("chunk", s.submitChunk)
-		v1.GET("tx/:arid/offset", s.getTxOffset)
-		v1.GET("/tx/:arid", s.getTx)
-		v1.GET("chunk/:offset", s.getChunk)
-		v1.GET("tx/:arid/:field", s.getTxField)
-		v1.GET("/info", s.getInfo)
-		v1.GET("/tx_anchor", s.getAnchor)
-		v1.GET("/price/:size", s.getTxPrice)
-		v1.GET("/peers", s.getPeers)
-		// proxy
-		v2 := r.Group("/")
-		{
-			v2.Use(proxyArweaveGateway)
-			v2.GET("/tx/:arid/status")
-			v2.GET("/price/:size/:target")
-			v2.GET("/block/hash/:hash")
-			v2.GET("/block/height/:height")
-			v2.GET("/current_block")
-			v2.GET("/wallet/:address/balance")
-			v2.GET("/wallet/:address/last_tx")
-			v2.POST("/arql")
-			v2.POST("/graphql")
-			v2.GET("/tx/pending")
-			v2.GET("/unconfirmed_tx/:arId")
-		}
+        v2.Use(proxyArweaveGateway)
+        v2.GET("/tx/:arid/status")
+        v2.GET("/price/:size/:target")
+        v2.GET("/block/hash/:hash")
+        v2.GET("/block/height/:height")
+        v2.GET("/current_block")
+        v2.GET("/wallet/:address/balance")
+        v2.GET("/wallet/:address/last_tx")
+        v2.POST("/arql")
+        v2.POST("/graphql")
+        v2.GET("/tx/pending")
+        v2.GET("/unconfirmed_tx/:arId")
+    }
 
-		// broadcast && sync tasks
-		v1.POST("/task/:taskType/:arid", s.postTask)
-		v1.POST("/task/kill/:taskType/:arid", s.killTask)
-		v1.GET("/task/:taskType/:arid", s.getTask)
-		v1.GET("/task/cache", s.getCacheTasks)
+    // broadcast && sync tasks
+    v1.POST("/task/:taskType/:arid", s.postTask)
+    v1.POST("/task/kill/:taskType/:arid", s.killTask)
+    v1.GET("/task/:taskType/:arid", s.getTask)
+    v1.GET("/task/cache", s.getCacheTasks)
 
-		// ANS-104 bundle Data api
-		v1.GET("/bundle/bundler", s.getBundler)
-		v1.POST("/bundle/tx/:currency", s.submitItem)
-		v1.GET("/bundle/tx/:itemId", s.getItemMeta) // get item meta, without data
-		v1.GET("/bundle/itemIds/:arId", s.getItemIdsByArId)
-		v1.GET("/bundle/fees", s.bundleFees)
-		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
-		v1.GET("bundle/orders/:signer", s.getOrders)
-		v1.GET("/:id", s.getDataByGW) // get arTx data or bundleItem data
-	}
+    // ANS-104 bundle Data api
+    v1.GET("/bundle/bundler", s.getBundler)
+    v1.POST("/bundle/tx/:currency", s.submitItem)
+    v1.GET("/bundle/tx/:itemId", s.getItemMeta) // get item meta, without data
+    v1.GET("/bundle/itemIds/:arId", s.getItemIdsByArId)
+    v1.GET("/bundle/fees", s.bundleFees)
+    v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
+    v1.GET("bundle/orders/:signer", s.getOrders)
+    v1.GET("/:id", s.getDataByGW) // get arTx data or bundleItem data
+}
 ```
 note:    
 when use `submitTx` and `submitChunk`, arseeding cache the tx and data and also submits it to the arweave gateway.   
 
 sync and broadcast api:
 ```
-	v1.POST("/task/:taskType/:arid", s.postTask)
-	v1.POST("/task/kill/:taskType/:arid", s.killTask)
-	v1.GET("/task/:taskType/:arid", s.getTask)
-	v1.GET("/task/cache", s.getCacheTasks)
+v1.POST("/task/:taskType/:arid", s.postTask)
+v1.POST("/task/kill/:taskType/:arid", s.killTask)
+v1.GET("/task/:taskType/:arid", s.getTask)
+v1.GET("/task/cache", s.getCacheTasks)
 ```
 `killTask` This interface can be used to stop a broadcast task when enough nodes have been broadcast via `getTask`   
 `taskType` is 'sync' or 'broadcast' or 'broadcast_meta'
 
 `getCacheTasks` return all pending tasks
 
-### bundle api describe:
+## bundle api describe:
 ```
-    v1.GET("/bundle/bundler", s.getBundler)
-	v1.POST("/bundle/tx/:currency", s.submitItem)
-	v1.GET("/bundle/tx/:itemId", s.getItemMeta)
-	v1.GET("/bundle/itemIds/:arId", s.getItemIdsByArId)
-	v1.GET("/bundle/fees", s.bundleFees)
-	v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
-	v1.GET("bundle/orders/:signer", s.getOrders)
-	v1.GET("/:id", s.getDataByGW)
+v1.GET("/bundle/bundler", s.getBundler)
+v1.POST("/bundle/tx/:currency", s.submitItem)
+v1.GET("/bundle/tx/:itemId", s.getItemMeta)
+v1.GET("/bundle/itemIds/:arId", s.getItemIdsByArId)
+v1.GET("/bundle/fees", s.bundleFees)
+v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
+v1.GET("bundle/orders/:signer", s.getOrders)
+v1.GET("/:id", s.getDataByGW)
 ```
-`getBundler` return a bundle service provider address
+### `getBundler`    
+return a bundle service provider address
 ```
 GET /bundle/bundler
 
 resp: "Fkj5J8CDLC9Jif4CzgtbiXJBnwXLSrp5AaIllleH_yY"
 ```
 
-`submitItem` submit a bundle item([goar](https://github.com/everFinance/goar/blob/bundle/bundleItem.go) is a useful tool to assemble a bundle item)
+### `submitItem`    
+submit a bundle item([goar](https://github.com/everFinance/goar/blob/bundle/bundleItem.go) is a useful tool to assemble a bundle item)
 ```
 POST /bundle/tx/:currency
+--header 'Content-Type: application/octet-stream'
+--data-binary 'data....'
 ```
-```
-parameter:
-```
-| name   |type| value        |optional|
-|--------|---|--------------|---|
-|currency|string| AR |true|
 note: 
-1. if config charge no fee ,don't need currency, 
-2. request header must be set "content-type"="application/octet-stream"
-3. request body can be created use goar // see example/bundle-item/bundle_test.go
+1. if config charge no fee ,don't need currency
+2. request body can be created use goar // see example/bundle-item/bundle_test.go
 ```
 resp:
 {
-                ItemId:             "qe1231212441",
-		Bundler:            "Fkj5J8CDLC9Jif4CzgtbiXJBnwXLSrp5AaIllleH_yY",
-		Currency:           "AR",
-		Decimals:           12,
-		Fee:                "113123",
-		PaymentExpiredTime: 122132421,
-		ExpectedBlock:      3144212,
+    ItemId:             "qe1231212441",
+    Bundler:            "Fkj5J8CDLC9Jif4CzgtbiXJBnwXLSrp5AaIllleH_yY",
+    Currency:           "AR",
+    Decimals:           12,
+    Fee:                "113123",
+    PaymentExpiredTime: 122132421,
+    ExpectedBlock:      3144212,
 }
 ```
 
-
-`bundleFees` return fees you need to pay for submit your bundle item to arweave and store it forever
+### `bundleFees`    
+return fees you need to pay for submit your bundle item to arweave and store it forever
 ```
 GET /bundle/fees
 
@@ -176,14 +173,11 @@ resp:
     },
 }
 ```
-`getItemMeta` return item meta, without data
+### `getItemMeta`    
+return item meta, without data
 ```
 GET /bundle/tx/:itemId
-```
-| name   |type| value | optional |
-|--------|---|----------|-------|
-| itemId |string| IlYC5sG61mhTOlG2Ued5LWxN4nuhyZh3ror0MBbPKy4 | false |
-```
+
 resp:
 {
     "signatureType": 3,
@@ -196,15 +190,11 @@ resp:
     "id": "IlYC5sG61mhTOlG2Ued5LWxN4nuhyZh3ror0MBbPKy4"
 }
 ```
-`getOrders` return `signer address` all order
+### `getOrders`    
+return `signer address` all order
 ```
 GET /bundle/orders/:signer
-```
-| name   |type| value | optional |
-|--------|---|----------|-------|
-| signer | string | Ii5wAMlLNz13n26nYY45mcZErwZLjICmYd46GZvn4ck | false |
 
-```
 resp:
 [
     {
@@ -225,55 +215,18 @@ resp:
         "PaymentId": "",
         "OnChainStatus": "failed"
     },
-    {
-        "ID": 32,
-        "CreatedAt": "2022-06-23T09:56:45.402Z",
-        "UpdatedAt": "2022-06-23T10:57:08.495Z",
-        "DeletedAt": null,
-        "ItemId": "BtAknheCYxMy_SoUbi8Mu1DuvWx9UDJzxvDSniu7Mf8",
-        "Signer": "Ii5wAMlLNz13n26nYY45mcZErwZLjICmYd46GZvn4ck",
-        "SignType": 1,
-        "Size": 1095,
-        "Currency": "USDT",
-        "Decimals": 6,
-        "Fee": "676",
-        "PaymentExpiredTime": 1655981805,
-        "ExpectedBlock": 960280,
-        "PaymentStatus": "expired",
-        "PaymentId": "",
-        "OnChainStatus": "failed"
-    },
-    {
-        "ID": 31,
-        "CreatedAt": "2022-06-23T09:56:06.875Z",
-        "UpdatedAt": "2022-06-23T10:56:08.499Z",
-        "DeletedAt": null,
-        "ItemId": "uNFlMoUE3yBbdM_EULhUftg8PY2umy3xSMHbnoguRJo",
-        "Signer": "Ii5wAMlLNz13n26nYY45mcZErwZLjICmYd46GZvn4ck",
-        "SignType": 1,
-        "Size": 1095,
-        "Currency": "USDT",
-        "Decimals": 6,
-        "Fee": "676",
-        "PaymentExpiredTime": 1655981766,
-        "ExpectedBlock": 960279,
-        "PaymentStatus": "expired",
-        "PaymentId": "",
-        "OnChainStatus": "failed"
-    },
+...
 ]
 ```
 
-`getDataByGW` get arTx data or bundleItem data
+### `getDataByGW`    
+get arTx data or bundleItem data
 ```
 GET /:id
-```
-| name |type| value | optional |
-|------|---|----------|-------|
-| id   | string | IlYC5sG61mhTOlG2Ued5LWxN4nuhyZh3ror0MBbPKy4 | false |
-```
+note: id could be itemId or arId
+
 resp:
-byte data
+    data
 ```
 ## Usage
 ### compatible arweave sdk

@@ -32,8 +32,7 @@ func TestItemUseCase(t *testing.T) {
 	}
 
 	// send bundle item to arseeding with arseeding sdk
-
-	res, err := arseedSdk.SubmitItem(item.ItemBinary, "AR") // "AR" is token symbol
+	res, err := arseedSdk.SubmitItem(item.ItemBinary, "USDC") // use "USDC" token payment fee
 	if err != nil {
 		t.Log(err)
 	}
