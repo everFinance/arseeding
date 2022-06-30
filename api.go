@@ -3,6 +3,7 @@ package arseeding
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/everFinance/arseeding/common"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay-go/account"
 	"github.com/everFinance/goar/types"
@@ -18,6 +19,7 @@ import (
 
 func (s *Arseeding) runAPI(port string) {
 	r := s.engine
+	r.Use(common.CORSMiddleware())
 	v1 := r.Group("/")
 	{
 		// Compatible arweave http api
