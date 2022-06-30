@@ -98,7 +98,7 @@ sync and broadcast api:
 
 `getCacheTasks` return all pending tasks
 
-bundle api:
+### bundle api describe:
 ```
     v1.GET("/bundle/bundler", s.getBundler)
 	v1.POST("/bundle/tx/:currency", s.submitItem)
@@ -110,15 +110,171 @@ bundle api:
 	v1.GET("/:id", s.getDataByGW)
 ```
 `getBundler` return a bundle service provider address
+```
+GET /bundle/bundler
+
+resp: "Fkj5J8CDLC9Jif4CzgtbiXJBnwXLSrp5AaIllleH_yY"
+```
 
 `submitItem` submit a bundle item([goar](https://github.com/everFinance/goar/blob/bundle/bundleItem.go) is a useful tool to assemble a bundle item)
+```
+POST /bundle/tx/:currency
+```
+```
+parameter:
+```
+| name   |type| value        |optional|
+|--------|---|--------------|---|
+|currency|string| AR |true|
+note: 
+1. if config charge no fee ,don't need currency, 
+2. request header must be set "content-type"="application/octet-stream"
+3. request body can be created use goar // see example/bundle-item/bundle_test.go
+```
+resp:
+{
+                ItemId:             "qe1231212441",
+		Bundler:            "Fkj5J8CDLC9Jif4CzgtbiXJBnwXLSrp5AaIllleH_yY",
+		Currency:           "AR",
+		Decimals:           12,
+		Fee:                "113123",
+		PaymentExpiredTime: 122132421,
+		ExpectedBlock:      3144212,
+}
+```
 
-`bundleFees` return fees you need to pay for submit your bundle item to arweave and store it forever 
 
-`getOrders` return `signer address` all order   
+`bundleFees` return fees you need to pay for submit your bundle item to arweave and store it forever
+```
+GET /bundle/fees
+
+resp:
+{
+    "AR": {
+        "currency": "AR",
+        "decimals": 12,
+        "base": "808920",
+        "perChunk": "66060288"
+    },
+    "DAI": {
+        "currency": "DAI",
+        "decimals": 18,
+        "base": "7174878265432",
+        "perChunk": "585934980689532"
+    },
+    "ETH": {
+        "currency": "ETH",
+        "decimals": 18,
+        "base": "6585336377",
+        "perChunk": "537790161708"
+    },
+    "USDC": {
+        "currency": "USDC",
+        "decimals": 6,
+        "base": "7",
+        "perChunk": "586"
+    },
+}
+```
+`getItemMeta` return item meta, without data
+```
+GET /bundle/tx/:itemId
+```
+| name   |type| value | optional |
+|--------|---|----------|-------|
+| itemId |string| IlYC5sG61mhTOlG2Ued5LWxN4nuhyZh3ror0MBbPKy4 | false |
+```
+resp:
+{
+    "signatureType": 3,
+    "signature": "DC469T6Fz3ByFCtEjnP9AdsLSDFqINxvbIqFw1qwk0ApHtpmytRWFHZeY2gBN9nXopzY7Sbi9u5U6UcpPrwPlxs",
+    "owner": "BCLR8qIeP8-kDAO6AifvSSzyCQJBwAtPYErCaX1LegK7GwXmyMvhzCmt1x6vLw4xixiOrI34ObhU2e1RGW5YNXo",
+    "target": "",
+    "anchor": "",
+    "tags": [],
+    "data": "",
+    "id": "IlYC5sG61mhTOlG2Ued5LWxN4nuhyZh3ror0MBbPKy4"
+}
+```
+`getOrders` return `signer address` all order
+```
+GET /bundle/orders/:signer
+```
+| name   |type| value | optional |
+|--------|---|----------|-------|
+| signer | string | Ii5wAMlLNz13n26nYY45mcZErwZLjICmYd46GZvn4ck | false |
+
+```
+resp:
+[
+    {
+        "ID": 33,
+        "CreatedAt": "2022-06-24T03:29:54.174Z",
+        "UpdatedAt": "2022-06-24T04:30:09.193Z",
+        "DeletedAt": null,
+        "ItemId": "5rEb7c6OjMQIYjl6P7AJIb4bB9CLMBSxhZ9N7BVbRCk",
+        "Signer": "Ii5wAMlLNz13n26nYY45mcZErwZLjICmYd46GZvn4ck",
+        "SignType": 1,
+        "Size": 1095,
+        "Currency": "USDT",
+        "Decimals": 6,
+        "Fee": "701",
+        "PaymentExpiredTime": 1656044994,
+        "ExpectedBlock": 960751,
+        "PaymentStatus": "expired",
+        "PaymentId": "",
+        "OnChainStatus": "failed"
+    },
+    {
+        "ID": 32,
+        "CreatedAt": "2022-06-23T09:56:45.402Z",
+        "UpdatedAt": "2022-06-23T10:57:08.495Z",
+        "DeletedAt": null,
+        "ItemId": "BtAknheCYxMy_SoUbi8Mu1DuvWx9UDJzxvDSniu7Mf8",
+        "Signer": "Ii5wAMlLNz13n26nYY45mcZErwZLjICmYd46GZvn4ck",
+        "SignType": 1,
+        "Size": 1095,
+        "Currency": "USDT",
+        "Decimals": 6,
+        "Fee": "676",
+        "PaymentExpiredTime": 1655981805,
+        "ExpectedBlock": 960280,
+        "PaymentStatus": "expired",
+        "PaymentId": "",
+        "OnChainStatus": "failed"
+    },
+    {
+        "ID": 31,
+        "CreatedAt": "2022-06-23T09:56:06.875Z",
+        "UpdatedAt": "2022-06-23T10:56:08.499Z",
+        "DeletedAt": null,
+        "ItemId": "uNFlMoUE3yBbdM_EULhUftg8PY2umy3xSMHbnoguRJo",
+        "Signer": "Ii5wAMlLNz13n26nYY45mcZErwZLjICmYd46GZvn4ck",
+        "SignType": 1,
+        "Size": 1095,
+        "Currency": "USDT",
+        "Decimals": 6,
+        "Fee": "676",
+        "PaymentExpiredTime": 1655981766,
+        "ExpectedBlock": 960279,
+        "PaymentStatus": "expired",
+        "PaymentId": "",
+        "OnChainStatus": "failed"
+    },
+]
+```
 
 `getDataByGW` get arTx data or bundleItem data
-
+```
+GET /:id
+```
+| name |type| value | optional |
+|------|---|----------|-------|
+| id   | string | IlYC5sG61mhTOlG2Ued5LWxN4nuhyZh3ror0MBbPKy4 | false |
+```
+resp:
+byte data
+```
 ## Usage
 ### compatible arweave sdk
 [arweave-js](https://github.com/ArweaveTeam/arweave-js) sdk
