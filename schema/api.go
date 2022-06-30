@@ -30,3 +30,15 @@ type RespFee struct {
 	Decimals int    `json:"decimals"`
 	FinalFee string `json:"finalFee"` // uint
 }
+
+type ResBundler struct {
+	Bundler string `json:"bundler"`
+}
+
+type RespErr struct {
+	Err string `json:"error"`
+}
+
+func (r RespErr) Error() string {
+	return r.Err
+}

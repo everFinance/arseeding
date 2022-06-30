@@ -77,29 +77,29 @@ func (s *Arseeding) runAPI(port string) {
 func (s *Arseeding) submitTx(c *gin.Context) {
 	arTx := types.Transaction{}
 	if c.Request.Body == nil {
-		c.JSON(http.StatusBadRequest, "chunk data can not be null")
+		errorResponse(c, "chunk data can not be null")
 		return
 	}
 	by, err := ioutil.ReadAll(c.Request.Body)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
+		errorResponse(c, err.Error())
 		return
 	}
 	defer c.Request.Body.Close()
 
 	if err := json.Unmarshal(by, &arTx); err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
+		errorResponse(c, err.Error())
 		return
 	}
 	// save tx to local
 	if err = s.SaveSubmitTx(arTx); err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
+		errorResponse(c, err.Error())
 		return
 	}
 
 	// register broadcast submit tx
 	if err := s.registerTask(arTx.ID, schema.TaskTypeBroadcastMeta); err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
+		errorResponse(c, err.Error())
 		return
 	}
 }
@@ -107,24 +107,24 @@ func (s *Arseeding) submitTx(c *gin.Context) {
 func (s *Arseeding) submitChunk(c *gin.Context) {
 	chunk := types.GetChunk{}
 	if c.Request.Body == nil {
-		c.JSON(http.StatusBadRequest, "chunk data can not be null")
+		errorResponse(c, "chunk data can not be null")
 		return
 	}
 
 	by, err := ioutil.ReadAll(c.Request.Body)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
+		errorResponse(c, err.Error())
 		return
 	}
 	defer c.Request.Body.Close()
 
 	if err := json.Unmarshal(by, &chunk); err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
+		errorResponse(c, err.Error())
 		return
 	}
 
 	if err := s.SaveSubmitChunk(chunk); err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
+		errorResponse(c, err.Error())
 		return
 	}
 }
@@ -132,7 +132,7 @@ func (s *Arseeding) submitChunk(c *gin.Context) {
 func (s *Arseeding) getTxOffset(c *gin.Context) {
 	arId := c.Param("arid")
 	if len(arId) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_address"})
+		errorResponse(c, "invalid_address")
 		return
 	}
 	txMeta, err := s.store.LoadTxMeta(arId)
@@ -157,7 +157,7 @@ func (s *Arseeding) getChunk(c *gin.Context) {
 	offset := c.Param("offset")
 	chunkOffset, err := strconv.ParseUint(offset, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
+		errorResponse(c, err.Error())
 		return
 	}
 
@@ -167,7 +167,7 @@ func (s *Arseeding) getChunk(c *gin.Context) {
 			c.Data(404, "text/html; charset=utf-8", []byte("Not Found"))
 			return
 		}
-		c.JSON(http.StatusBadRequest, err.Error())
+		errorResponse(c, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, chunk)
@@ -220,7 +220,7 @@ func (s *Arseeding) getTxField(c *gin.Context) {
 	case "data.json", "data.txt", "data.pdf":
 		data, err := txDataByMeta(txMeta, s.store)
 		if err != nil {
-			c.JSON(400, err.Error())
+			errorResponse(c, err.Error())
 			return
 		}
 		typ := strings.Split(field, ".")[1]
@@ -229,7 +229,7 @@ func (s *Arseeding) getTxField(c *gin.Context) {
 	case "data.png", "data.jpeg", "data.gif":
 		data, err := txDataByMeta(txMeta, s.store)
 		if err != nil {
-			c.JSON(400, err.Error())
+			errorResponse(c, err.Error())
 			return
 		}
 		typ := strings.Split(field, ".")[1]
@@ -237,7 +237,7 @@ func (s *Arseeding) getTxField(c *gin.Context) {
 	case "data.mp4":
 		data, err := txDataByMeta(txMeta, s.store)
 		if err != nil {
-			c.JSON(400, err.Error())
+			errorResponse(c, err.Error())
 			return
 		}
 		c.Data(200, "video/mpeg4; charset=utf-8", data)
@@ -250,7 +250,7 @@ func (s *Arseeding) getTxField(c *gin.Context) {
 	case "signature":
 		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Signature))
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"status": 400, "error": "invalid_field"})
+		errorResponse(c, "invalid_field")
 	}
 }
 
@@ -267,7 +267,7 @@ func (s *Arseeding) getAnchor(c *gin.Context) {
 func (s *Arseeding) getTxPrice(c *gin.Context) {
 	dataSize, err := strconv.ParseInt(c.Param("size"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
+		errorResponse(c, err.Error())
 	}
 	fee := s.cache.GetFee()
 	// totPrice = chunkNum*deltaPrice(fee for per chunk) + basePrice
@@ -356,17 +356,17 @@ func (s *Arseeding) postTask(c *gin.Context) {
 	arid := c.Param("arid")
 	txHash, err := utils.Base64Decode(arid)
 	if err != nil || len(txHash) != 32 {
-		c.JSON(http.StatusBadRequest, "arId incorrect")
+		errorResponse(c, "arId incorrect")
 		return
 	}
 	tkType := c.Param("taskType")
 	if !strings.Contains(schema.TaskTypeSync+schema.TaskTypeBroadcast+schema.TaskTypeBroadcastMeta, tkType) {
-		c.JSON(http.StatusBadRequest, "tktype not exist")
+		errorResponse(c, "tktype not exist")
 		return
 	}
 
 	if err = s.registerTask(arid, tkType); err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
+		errorResponse(c, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, "ok")
@@ -376,12 +376,12 @@ func (s *Arseeding) killTask(c *gin.Context) {
 	arid := c.Param("arid")
 	tktype := c.Param("taskType")
 	if !strings.Contains(schema.TaskTypeSync+schema.TaskTypeBroadcast+schema.TaskTypeBroadcastMeta, tktype) {
-		c.JSON(http.StatusBadRequest, "tktype not exist")
+		errorResponse(c, "tktype not exist")
 		return
 	}
 	txHash, err := utils.Base64Decode(arid)
 	if err != nil || len(txHash) != 32 {
-		c.JSON(http.StatusBadRequest, "arId incorrect")
+		errorResponse(c, "arId incorrect")
 		return
 	}
 	err = s.taskMg.CloseTask(arid, tktype)
@@ -396,12 +396,12 @@ func (s *Arseeding) getTask(c *gin.Context) {
 	arid := c.Param("arid")
 	tktype := c.Param("taskType")
 	if !strings.Contains(schema.TaskTypeSync+schema.TaskTypeBroadcast+schema.TaskTypeBroadcastMeta, tktype) {
-		c.JSON(http.StatusBadRequest, "tktype not exist")
+		errorResponse(c, "tktype not exist")
 		return
 	}
 	txHash, err := utils.Base64Decode(arid)
 	if err != nil || len(txHash) != 32 {
-		c.JSON(http.StatusBadRequest, "arId incorrect")
+		errorResponse(c, "arId incorrect")
 		return
 	}
 	// get from cache
@@ -414,7 +414,7 @@ func (s *Arseeding) getTask(c *gin.Context) {
 	// get from db
 	tk, err = s.store.LoadTask(assembleTaskId(arid, tktype))
 	if err != nil {
-		c.JSON(http.StatusNotFound, err.Error())
+		errorResponse(c, err.Error())
 	} else {
 		c.JSON(http.StatusOK, tk)
 	}
@@ -442,16 +442,16 @@ func (s *Arseeding) registerTask(arId, tktype string) error {
 }
 
 func (s *Arseeding) getBundler(c *gin.Context) {
-	c.JSON(http.StatusOK, s.bundler.Signer.Address)
+	c.JSON(http.StatusOK, schema.ResBundler{Bundler: s.bundler.Signer.Address})
 }
 
 func (s *Arseeding) submitItem(c *gin.Context) {
 	if c.GetHeader("Content-Type") != "application/octet-stream" {
-		c.JSON(http.StatusBadRequest, "Wrong body type")
+		errorResponse(c, "Wrong body type")
 		return
 	}
 	if c.Request.Body == nil {
-		c.JSON(http.StatusBadRequest, "can not submit null bundle item")
+		errorResponse(c, "can not submit null bundle item")
 		return
 	}
 
@@ -462,13 +462,13 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	for {
 		if len(itemBinary) > schema.AllowMaxItemSize {
 			err := fmt.Errorf("allow max item size is 100 MB")
-			c.JSON(http.StatusBadRequest, err.Error())
+			errorResponse(c, err.Error())
 			return
 		}
 
 		n, err := c.Request.Body.Read(buf)
 		if err != nil && err != io.EOF {
-			c.JSON(http.StatusBadRequest, "read req failed")
+			errorResponse(c, "read req failed")
 			log.Error("read req failed", "err", err)
 			return
 		}
@@ -482,7 +482,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	// decode
 	item, err := utils.DecodeBundleItem(itemBinary)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, "decode item binary failed")
+		errorResponse(c, "decode item binary failed")
 		return
 	}
 	currency := c.Param("currency")
@@ -490,7 +490,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	// process bundleItem
 	ord, err := s.ProcessSubmitItem(*item, currency)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
+		errorResponse(c, err.Error())
 		return
 	}
 
@@ -510,7 +510,7 @@ func (s *Arseeding) getItemMeta(c *gin.Context) {
 	// could be bundle item id
 	meta, err := s.store.LoadItemMeta(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
+		internalErrorResponse(c, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, meta)
@@ -520,7 +520,7 @@ func (s *Arseeding) getItemIdsByArId(c *gin.Context) {
 	arId := c.Param("arId")
 	itemIds, err := s.store.LoadArIdToItemIds(arId)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
+		internalErrorResponse(c, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, itemIds)
@@ -531,12 +531,12 @@ func (s *Arseeding) bundleFee(c *gin.Context) {
 	symbol := c.Param("currency")
 	numSize, err := strconv.Atoi(size)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, err)
+		internalErrorResponse(c, err.Error())
 		return
 	}
 	respFee, err := s.CalcItemFee(symbol, int64(numSize))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
+		internalErrorResponse(c, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, respFee)
@@ -546,19 +546,19 @@ func (s *Arseeding) getOrders(c *gin.Context) {
 	signer := c.Param("signer")
 	_, signerAddr, err := account.IDCheck(signer)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, err)
+		errorResponse(c, err.Error())
 		return
 	}
 
 	cursorId, err := strconv.ParseInt(c.DefaultQuery("cursorId", "0"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, err)
+		errorResponse(c, err.Error())
 		return
 	}
 	num := 200
 	orders, err := s.wdb.GetOrdersBySigner(signerAddr, cursorId, num)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
+		internalErrorResponse(c, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, orders)
@@ -574,7 +574,7 @@ func (s *Arseeding) getDataByGW(c *gin.Context) {
 	if err == nil { // find id is arId
 		data, err := txDataByMeta(txMeta, s.store)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, err)
+			internalErrorResponse(c, err.Error())
 			return
 		}
 		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(txMeta.Tags, "Content-Type")), data)
@@ -586,12 +586,12 @@ func (s *Arseeding) getDataByGW(c *gin.Context) {
 	if err == nil { // id is bundle item id
 		item, err := utils.DecodeBundleItem(itemBinary)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, err)
+			internalErrorResponse(c, err.Error())
 			return
 		}
 		data, err := utils.Base64Decode(item.Data)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, err)
+			internalErrorResponse(c, err.Error())
 			return
 		}
 		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(item.Tags, "Content-Type")), data)
@@ -609,4 +609,18 @@ func getTagValue(tags []types.Tag, name string) string {
 		}
 	}
 	return ""
+}
+
+func errorResponse(c *gin.Context, err string) {
+	// client error
+	c.JSON(http.StatusBadRequest, schema.RespErr{
+		Err: err,
+	})
+}
+
+func internalErrorResponse(c *gin.Context, err string) {
+	// client error
+	c.JSON(http.StatusInternalServerError, schema.RespErr{
+		Err: err,
+	})
 }
