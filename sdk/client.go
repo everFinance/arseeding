@@ -127,7 +127,7 @@ func (a *ArSeedCli) GetBundler() (string, error) {
 func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string) (*schema.RespOrder, error) {
 	req := a.SCli.Post()
 	req.Path(fmt.Sprintf("/bundle/tx/%s", currency))
-	req.SetHeader("content-type", "application/octet-stream")
+	req.SetHeader("Content-Type", "application/octet-stream")
 
 	req.Body(bytes.NewReader(itemBinary))
 

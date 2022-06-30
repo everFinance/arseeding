@@ -446,7 +446,7 @@ func (s *Arseeding) getBundler(c *gin.Context) {
 }
 
 func (s *Arseeding) submitItem(c *gin.Context) {
-	if c.GetHeader("content-type") != "application/octet-stream" {
+	if c.GetHeader("Content-Type") != "application/octet-stream" {
 		c.JSON(http.StatusBadRequest, "Wrong body type")
 		return
 	}
