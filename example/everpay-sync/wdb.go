@@ -31,8 +31,8 @@ func NewWdb(dsn string) *Wdb {
 	return &Wdb{Db: db}
 }
 
-func (w *Wdb) Insert(arIds []*RollupArId) error {
-	return w.Db.Create(&arIds).Error
+func (w *Wdb) Insert(arId string) error {
+	return w.Db.Create(&RollupArId{ArId: arId}).Error
 }
 
 func (w *Wdb) UpdatePosted(arId string) error {

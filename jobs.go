@@ -1,260 +1,571 @@
 package arseeding
 
 import (
-	"fmt"
+	"encoding/json"
+	"errors"
+	"github.com/everFinance/arseeding/schema"
+	"github.com/everFinance/everpay-go/account"
+	"github.com/everFinance/everpay-go/config"
+	sdkSchema "github.com/everFinance/everpay-go/sdk/schema"
+	paySchema "github.com/everFinance/everpay-go/token/schema"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"github.com/panjf2000/ants/v2"
+	"github.com/tidwall/gjson"
+	"gorm.io/gorm"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 )
 
-func (s *Server) runJobs() {
-	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updatePeers)
-	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runBroadcastJobs)
-	s.scheduler.Every(2).Seconds().SingletonMode().Do(s.runSyncJobs)
+func (s *Arseeding) runJobs() {
+	// update cache
+	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updateAnchor)
+	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updateArFee)
+	s.scheduler.Every(30).Seconds().SingletonMode().Do(s.updateInfo)
+	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updatePeerMap)
 
-	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseJobs)
+	// about bundle
+	if !s.NoFee {
+		s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateTokenPrice)
+		s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundlePerFee)
+		go s.watchEverReceiptTxs()
+		s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptAndOrder)
+		s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
+		s.scheduler.Every(1).Minute().SingletonMode().Do(s.processExpiredOrd)
+	}
+	s.scheduler.Every(5).Minute().SingletonMode().Do(s.onChainBundleItems) // can set a longer time, if the items are less. such as 5m
+	s.scheduler.Every(3).Minute().SingletonMode().Do(s.watchArTx)
+	s.scheduler.Every(5).Minute().SingletonMode().Do(s.retryOnChainArTx)
+
+	s.scheduler.Every(1).Minute().SingletonMode().Do(s.parseAndSaveBundleTx)
+
+	// manager taskStatus
+	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseTasks)
 
 	s.scheduler.StartAsync()
 }
 
-func (s *Server) updatePeers() {
+func (s *Arseeding) updateAnchor() {
+	anchor, err := fetchAnchor(s.arCli, s.cache.GetPeers())
+	if err == nil {
+		s.cache.UpdateAnchor(anchor)
+	}
+}
+
+func (s *Arseeding) updateInfo() {
+	info, err := fetchArInfo(s.arCli, s.cache.GetPeers())
+	if err == nil && info != nil {
+		s.cache.UpdateInfo(*info)
+	}
+}
+
+func (s *Arseeding) updateArFee() {
+	txPrice, err := fetchArFee(s.arCli, s.cache.GetPeers())
+	if err == nil {
+		s.cache.UpdateFee(txPrice)
+	}
+}
+
+// update peer list concurrency, check peer available, save in db
+func (s *Arseeding) updatePeerMap() {
 	peers, err := s.arCli.GetPeers()
 	if err != nil {
 		return
 	}
-	if len(peers) == 0 {
+
+	availablePeers := filterPeers(peers, s.cache.GetConstTx())
+	if len(availablePeers) == 0 {
 		return
 	}
-	// update
-	s.peers = peers
+
+	peerMap := updatePeerMap(s.cache.GetPeerMap(), availablePeers)
+
+	s.cache.UpdatePeers(peerMap)
+	if err = s.store.SavePeers(peerMap); err != nil {
+		log.Warn("save new peer list fail")
+	}
 }
 
-func (s *Server) runBroadcastJobs() {
-	arIds, err := s.store.LoadPendingPool(jobTypeBroadcast, 50)
+// bundle
+
+func (s *Arseeding) updateTokenPrice() {
+	// update symbol
+	tps := make([]schema.TokenPrice, 0)
+	for _, tok := range s.everpaySdk.GetTokens() {
+		tps = append(tps, schema.TokenPrice{
+			Symbol:    strings.ToUpper(tok.Symbol),
+			Decimals:  tok.Decimals,
+			ManualSet: false,
+			UpdatedAt: time.Time{},
+		})
+	}
+	if err := s.wdb.InsertPrices(tps); err != nil {
+		log.Error("s.wdb.InsertPrices(tps)", "err", err)
+		return
+	}
+
+	// update fee
+	tps, err := s.wdb.GetPrices()
 	if err != nil {
-		log.Error("s.store.LoadPendingPool(jobTypeBroadcast, 20)", "err", err)
+		log.Error("s.wdb.GetPrices()", "err", err)
 		return
 	}
-	if len(arIds) == 0 {
-		return
-	}
-
-	log.Debug("load jobTypeBroadcast pending pool", "number", len(arIds))
-	var wg sync.WaitGroup
-	p, _ := ants.NewPoolWithFunc(50, func(i interface{}) {
-		defer wg.Done()
-		arId := i.(string)
-		if err := s.processBroadcastJob(arId); err != nil {
-			log.Error("processBroadcastJob", "err", err, "arId", arId)
-			return
-		}
-	})
-	defer p.Release()
-
-	for _, arId := range arIds {
-		wg.Add(1)
-		_ = p.Invoke(arId)
-	}
-	wg.Wait()
-
-	if err := s.setProcessedJobs(arIds, jobTypeBroadcast); err != nil {
-		log.Error("s.setProcessedJobs(arIds,jobTypeBroadcast)", "err", err)
-	} else {
-		log.Debug("run broadcast jobs success", "broadcastJobs number", len(arIds))
-	}
-}
-
-func (s *Server) runSyncJobs() {
-	arIds, err := s.store.LoadPendingPool(jobTypeSync, 100)
-	if err != nil {
-		log.Error("s.store.LoadPendingPool(jobTypeSync, 50)", "err", err)
-		return
-	}
-
-	if len(arIds) == 0 {
-		return
-	}
-
-	log.Debug("load jobTypeSync pending pool", "number", len(arIds))
-	var wg sync.WaitGroup
-	p, _ := ants.NewPoolWithFunc(100, func(i interface{}) {
-		defer wg.Done()
-		arId := i.(string)
-		if err := s.processSyncJob(arId); err != nil {
-			log.Error("processSyncJob", "err", err, "arId", arId)
-			return
-		}
-	})
-	defer p.Release()
-
-	for _, arId := range arIds {
-		wg.Add(1)
-		_ = p.Invoke(arId)
-	}
-	wg.Wait()
-
-	if err := s.setProcessedJobs(arIds, jobTypeSync); err != nil {
-		log.Error("s.setProcessedJobs(arIds, jobTypeSync)", "err", err)
-	} else {
-		log.Debug("run sync jobs success", "syncJobs number", len(arIds))
-	}
-}
-
-func (s *Server) processBroadcastJob(arId string) (err error) {
-	// job manager set
-	if s.jobManager.IsClosed(arId, jobTypeBroadcast) {
-		log.Warn("broadcast job was closed", "arId", arId)
-		return
-	}
-	if err = s.jobManager.JobBeginSet(arId, jobTypeBroadcast, len(s.peers)); err != nil {
-		log.Error("s.jobManager.JobBeginSet(arId, jobTypeBroadcast)", "err", err, "arId", arId)
-		return
-	}
-
-	if !s.store.IsExistTxMeta(arId) {
-		return ErrNotExist
-	}
-	txMeta, err := s.store.LoadTxMeta(arId)
-	if err != nil {
-		log.Error("s.store.LoadTxMeta(arId)", "err", err, "arId", arId)
-		return err
-	}
-	txData, err := getData(txMeta.DataRoot, txMeta.DataSize, s.store)
-	if err != nil {
-		log.Error("getData(txMeta.DataRoot,txMeta.DataSize,s.store)", "err", err, "arId", arId)
-		return err
-	}
-
-	txMetaPosted := true
-	// check this tx whether on chain
-	_, err = s.arCli.GetTransactionStatus(arId)
-	if err == goar.ErrPendingTx || err == goar.ErrNotFound {
-		txMetaPosted = false
-		err = nil
-	}
-	// generate tx chunks
-	utils.PrepareChunks(txMeta, txData)
-	txMeta.Data = utils.Base64Encode(txData)
-
-	s.jobManager.BroadcastData(arId, jobTypeBroadcast, txMeta, s.peers, txMetaPosted)
-	return
-}
-
-func (s *Server) processSyncJob(arId string) (err error) {
-	// 0. job manager set
-	if s.jobManager.IsClosed(arId, jobTypeSync) {
-		return
-	}
-	if err = s.jobManager.JobBeginSet(arId, jobTypeSync, len(s.peers)); err != nil {
-		log.Error("s.jobManager.JobBeginSet(arId, jobTypeSync)", "err", err, "arId", arId)
-		return
-	}
-
-	// 1. sync arTxMeta
-	arTxMeta := &types.Transaction{}
-	arTxMeta, err = s.store.LoadTxMeta(arId)
-	if err != nil {
-		// get txMeta from arweave network
-		arTxMeta, err = s.arCli.GetUnconfirmedTx(arId) // this api can return all tx (unconfirmed and confirmed)
-		if err != nil {
-			// get tx from peers
-			arTxMeta, err = s.jobManager.GetUnconfirmedTxFromPeers(arId, jobTypeSync, s.peers)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	if len(arTxMeta.ID) == 0 { // arTxMeta can not be null
-		return fmt.Errorf("get arTxMeta failed; arId: %s", arId)
-	}
-
-	// if arTxMeta not exist local, store it
-	if !s.store.IsExistTxMeta(arId) {
-		// store txMeta
-		if err := s.store.SaveTxMeta(*arTxMeta); err != nil {
-			log.Error("s.store.SaveTxMeta(arTx)", "err", err, "arTx", arTxMeta.ID)
-			return err
-		}
-		// store txDataEndOffset
-		if err := s.syncAddTxDataEndOffset(arTxMeta.DataRoot, arTxMeta.DataSize); err != nil {
-			log.Error("s.syncAddTxDataEndOffset(arTxMeta.DataRoot,arTxMeta.DataSize)", "err", err, "arId", arId)
-			return err
-		}
-	}
-
-	// 2. sync data
-	size, ok := new(big.Int).SetString(arTxMeta.DataSize, 10)
-	if !ok {
-		return fmt.Errorf("new(big.Int).SetString(arTxMeta.DataSize,10) failed; dataSize: %s", arTxMeta.DataSize)
-	}
-
-	if size.Cmp(big.NewInt(0)) <= 0 {
-		// not need to sync tx data, so this job is success
-		s.jobManager.IncSuccessed(arId, jobTypeSync)
-		return nil
-	}
-
-	// get data
-	var data []byte
-	data, err = getData(arTxMeta.DataRoot, arTxMeta.DataSize, s.store) // get data from local
-	if err == nil {
-		return nil // local exist data
-	} else {
-		// need get tx data from arweave network
-		data, err = s.arCli.GetTransactionDataByGateway(arId)
-		if err != nil {
-			data, err = s.jobManager.GetTxDataFromPeers(arId, jobTypeSync, s.peers)
-			if err != nil {
-				log.Error("get data failed", "err", err, "arId", arId)
-				return err
-			}
-		} else {
-			s.jobManager.IncSuccessed(arId, jobTypeSync)
-		}
-	}
-	// store data to local
-	return setTxDataChunks(*arTxMeta, data, s.store)
-}
-
-func (s *Server) setProcessedJobs(arIds []string, jobType string) error {
-	// process job status
-	for _, arId := range arIds {
-		js := s.jobManager.GetJob(arId, jobType)
-		if js != nil {
-			if err := s.store.SaveJobStatus(jobType, arId, *js); err != nil {
-				log.Error("s.store.SaveJobStatus(jobType,arId,*js)", "err", err, "jobType", jobType, "arId", arId)
-				return err
-			}
-		}
-		// unregister job
-		s.jobManager.UnregisterJob(arId, jobType)
-	}
-
-	// remove pending pool
-	if err := s.store.BatchDeletePendingPool(jobType, arIds); err != nil {
-		log.Error("s.store.BatchDeletePendingPool(jobType,arIds)", "err", err, "jobType", jobType, "arIds", arIds)
-		return err
-	}
-	return nil
-}
-
-func (s *Server) watcherAndCloseJobs() {
-	jobs := s.jobManager.GetJobs()
-	now := time.Now().Unix()
-	for _, job := range jobs {
-		if job.Close || job.Timestamp == 0 { // timestamp == 0  means do not start
+	for _, tp := range tps {
+		if tp.ManualSet {
 			continue
 		}
-		// spend time not more than 5 minutes
-		if now-job.Timestamp > 5*60 {
-			if err := s.jobManager.CloseJob(job.ArId, job.JobType); err != nil {
-				log.Error("watcherAndCloseJobs closeJob", "err", err, "jobId", AssembleId(job.ArId, job.JobType))
+		price, err := config.GetTokenPriceByRedstone(tp.Symbol, "USDC")
+		if err != nil {
+			log.Error("config.GetTokenPriceByRedstone(tp.Symbol,\"USDC\")", "err", err, "symbol", tp.Symbol)
+			continue
+		}
+		// update tokenPrice
+		if err := s.wdb.UpdatePrice(tp.Symbol, price); err != nil {
+			log.Error("s.wdb.UpdateFee(tp.Symbol,fee)", "err", err, "symbol", tp.Symbol, "fee", price)
+		}
+	}
+}
+
+func (s *Arseeding) updateBundlePerFee() {
+	feeMap, err := s.GetBundlePerFees()
+	if err != nil {
+		log.Error("s.GetBundlePerFees()", "err", err)
+		return
+	}
+	s.bundlePerFeeMap = feeMap
+}
+
+func (s *Arseeding) watcherAndCloseTasks() {
+	tasks := s.taskMg.GetTasks()
+	now := time.Now().Unix()
+	for _, tk := range tasks {
+		if tk.Close || tk.Timestamp == 0 { // timestamp == 0  means do not start
+			continue
+		}
+		// spend time not more than 30 minutes
+		if now-tk.Timestamp > 30*60 {
+			if err := s.taskMg.CloseTask(tk.ArId, tk.TaskType); err != nil {
+				log.Error("watcherAndCloseTasks closeJob", "err", err, "jobId", assembleTaskId(tk.ArId, tk.TaskType))
 				continue
 			}
 		}
 	}
+}
+
+func (s *Arseeding) watchEverReceiptTxs() {
+	startCursor, err := s.wdb.GetLastEverRawId()
+	if err != nil {
+		panic(err)
+	}
+	subTx := s.everpaySdk.Cli.SubscribeTxs(sdkSchema.FilterQuery{
+		StartCursor: startCursor,
+		Address:     s.bundler.Signer.Address,
+		Action:      paySchema.TxActionTransfer,
+	})
+	defer subTx.Unsubscribe()
+
+	for {
+		select {
+		case tt := <-subTx.Subscribe():
+			if tt.To != s.bundler.Signer.Address {
+				continue
+			}
+			_, from, err := account.IDCheck(tt.From)
+			if err != nil {
+				log.Error("account.IDCheck(tt.From)", "err", err, "from", tt.From)
+				continue
+			}
+			res := schema.ReceiptEverTx{
+				RawId:    tt.RawId,
+				EverHash: tt.EverHash,
+				Nonce:    tt.Nonce,
+				Symbol:   tt.TokenSymbol,
+				From:     from,
+				Amount:   tt.Amount,
+				Data:     tt.Data,
+				Status:   schema.UnSpent,
+			}
+
+			if err = s.wdb.InsertReceiptTx(res); err != nil {
+				log.Error("s.wdb.InsertReceiptTx(res)", "err", err)
+			}
+		}
+	}
+}
+
+func (s *Arseeding) mergeReceiptAndOrder() {
+	unspentRpts, err := s.wdb.GetReceiptsByStatus(schema.UnSpent)
+	if err != nil {
+		log.Error("s.wdb.GetUnSpentReceipts()", "err", err)
+		return
+	}
+
+	for _, urtx := range unspentRpts {
+		signer := urtx.From
+		paymentItemId := gjson.Parse(urtx.Data).Get("ItemId").String()
+		ord, err := s.wdb.GetUnPaidOrder(paymentItemId, signer)
+		if err != nil {
+			log.Error("s.wdb.GetUnPaidOrder", "err", err, "itemId", paymentItemId, "signer", signer)
+			if err == gorm.ErrRecordNotFound {
+				log.Warn("need refund about not find order", "itemId", paymentItemId, "signer", signer)
+				// update receipt status is unrefund and waiting refund
+				if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
+					log.Error("s.wdb.UpdateReceiptStatus", "err", err, "id", urtx.RawId)
+				}
+			}
+			continue
+		}
+
+		// verify payment token and amount
+		amt, ok := new(big.Int).SetString(urtx.Amount, 10)
+		if !ok {
+			log.Error("SetString(urtx.Amount,10)", "amount", urtx.Amount)
+			continue
+		}
+		fee, ok := new(big.Int).SetString(ord.Fee, 10)
+		if !ok {
+			log.Error("SetString(ord.Fee,10)", "fee", ord.Fee)
+			continue
+		}
+		if strings.ToLower(ord.Currency) != strings.ToLower(urtx.Symbol) || amt.Cmp(fee) < 0 {
+			log.Warn("need refund about currency or amount", "itemId", paymentItemId, "paySymble", urtx.Symbol, "payAmount", amt.String())
+			// update receipt status is unrefund and waiting refund
+			if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
+				log.Error("s.wdb.UpdateReceiptStatus", "err", err, "id", urtx.RawId)
+			}
+			continue
+		}
+
+		// update order payment status
+		dbTx := s.wdb.Db.Begin()
+		if err = s.wdb.UpdateOrderPay(ord.ID, urtx.EverHash, schema.SuccPayment, dbTx); err != nil {
+			log.Error("s.wdb.UpdateOrderPay(ord.ID,schema.SuccPayment,dbTx)", "err", err)
+			dbTx.Rollback()
+			continue
+		}
+		if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.Spent, dbTx); err != nil {
+			log.Error("s.wdb.UpdateReceiptStatus(urtx.ID,schema.Spent,dbTx)", "err", err)
+			dbTx.Rollback()
+			continue
+		}
+		dbTx.Commit()
+	}
+}
+
+func (s *Arseeding) refundReceipt() {
+	recpts, err := s.wdb.GetReceiptsByStatus(schema.UnRefund)
+	if err != nil {
+		log.Error("s.wdb.GetReceiptsByStatus(schema.UnRefund)", "err", err)
+		return
+	}
+
+	for _, rpt := range recpts {
+		// update rpt status is refund
+		if err := s.wdb.UpdateReceiptStatus(rpt.RawId, schema.Refund, nil); err != nil {
+			log.Error("s.wdb.UpdateReceiptStatus(rpt.ID,schema.Refund,nil)", "err", err, "id", rpt.RawId)
+			continue
+		}
+		// send everTx transfer for refund
+		amount, ok := new(big.Int).SetString(rpt.Amount, 10)
+		if !ok {
+			log.Error("new(big.Int).SetString(rpt.Amount,10) failed", "amt", rpt.Amount)
+			continue
+		}
+		// everTx data
+		mmap := map[string]string{
+			"App-Name":        "arseeding",
+			"Refund-EverHash": rpt.EverHash,
+		}
+		data, _ := json.Marshal(mmap)
+		everTx, err := s.everpaySdk.Transfer(rpt.Symbol, amount, rpt.From, string(data))
+		if err != nil { // notice: if refund failed, then need manual check and refund
+			log.Error("s.everpaySdk.Transfer", "err", err)
+			// update receipt status is unrefund
+			if err := s.wdb.UpdateRefundErr(rpt.RawId, err.Error()); err != nil {
+				log.Error("s.wdb.UpdateRefundErr(rpt.RawId, err.Error())", "err", err, "id", rpt.RawId)
+			}
+			continue
+		}
+		log.Info("refund receipt success...", "receipt everHash", rpt.EverHash, "refund everHash", everTx.HexHash())
+	}
+}
+
+func (s *Arseeding) onChainBundleItems() {
+	ords, err := s.wdb.GetNeedOnChainOrders()
+	if err != nil {
+		log.Error("s.wdb.GetNeedOnChainOrders()", "err", err)
+		return
+	}
+	// once total size limit 500 MB
+	itemIds := make([]string, 0, len(ords))
+	totalSize := int64(0)
+	for _, ord := range ords {
+		if totalSize >= schema.MaxPerOnChainSize {
+			break
+		}
+		od, exist := s.wdb.ExistProcessedOrderItem(ord.ItemId)
+		if exist {
+			if err = s.wdb.UpdateOrdOnChainStatus(od.ItemId, od.OnChainStatus, nil); err != nil {
+				log.Error("s.wdb.UpdateOrdOnChainStatus(od.ItemId,od.OnChainStatus)", "err", err, "itemId", od.ItemId)
+			}
+			continue
+		}
+		itemIds = append(itemIds, ord.ItemId)
+		totalSize += ord.Size
+	}
+
+	// send arTx to arweave
+	arTx, onChainItemIds, err := s.onChainBundleTx(itemIds)
+	if err != nil {
+		return
+	}
+
+	// insert arTx record
+	onChainItemIdsJs, err := json.Marshal(onChainItemIds)
+	if err != nil {
+		log.Error("json.Marshal(itemIds)", "err", err, "onChainItemIds", onChainItemIds)
+		return
+	}
+	if err = s.wdb.InsertArTx(schema.OnChainTx{
+		ArId:      arTx.ID,
+		CurHeight: s.cache.GetInfo().Height,
+		Status:    schema.PendingOnChain,
+		ItemIds:   onChainItemIdsJs,
+		ItemNum:   len(onChainItemIds),
+	}); err != nil {
+		log.Error("s.wdb.InsertArTx", "err", err)
+		return
+	}
+
+	// update order onChainStatus to pending
+	for _, itemId := range onChainItemIds {
+		if err = s.wdb.UpdateOrdOnChainStatus(itemId, schema.PendingOnChain, nil); err != nil {
+			log.Error("s.wdb.UpdateOrdOnChainStatus(item.Id,schema.PendingOnChain)", "err", err, "itemId", itemId)
+		}
+	}
+}
+
+func (s *Arseeding) watchArTx() {
+	txs, err := s.wdb.GetArTxByStatus(schema.PendingOnChain)
+	if err != nil {
+		log.Error("s.wdb.GetArTxByStatus(schema.PendingOnChain)", "err", err)
+		return
+	}
+
+	for _, tx := range txs {
+		// check onchain status
+		arTxStatus, err := s.arCli.GetTransactionStatus(tx.ArId)
+		if err != nil {
+			if err != goar.ErrPendingTx && s.cache.GetInfo().Height-tx.CurHeight > 50 {
+				// arTx has expired
+				if err = s.wdb.UpdateArTxStatus(tx.ArId, schema.FailedOnChain, nil); err != nil {
+					log.Error("UpdateArTxStatus(tx.ArId,schema.FailedOnChain)", "err", err)
+				}
+			}
+			continue
+		}
+
+		// update status success
+		if arTxStatus.NumberOfConfirmations > 3 {
+			dbTx := s.wdb.Db.Begin()
+			if err = s.wdb.UpdateArTxStatus(tx.ArId, schema.SuccOnChain, dbTx); err != nil {
+				log.Error("UpdateArTxStatus(tx.ArId,schema.SuccOnChain)", "err", err)
+				dbTx.Rollback()
+				continue
+			}
+
+			// update order onchain status
+			bundleItemIds := make([]string, 0)
+			if err = json.Unmarshal(tx.ItemIds, &bundleItemIds); err != nil {
+				log.Error("json.Unmarshal(tx.ItemIds,&bundleItemIds)", "err", err, "itemsJs", tx.ItemIds)
+				dbTx.Rollback()
+				continue
+			}
+
+			for _, itemId := range bundleItemIds {
+				if err = s.wdb.UpdateOrdOnChainStatus(itemId, schema.SuccOnChain, dbTx); err != nil {
+					log.Error("s.wdb.UpdateOrdOnChainStatus(itemId,schema.SuccOnChain,dbTx)", "err", err, "item", itemId)
+					dbTx.Rollback()
+					continue
+				}
+			}
+			dbTx.Commit()
+		}
+	}
+}
+
+func (s *Arseeding) retryOnChainArTx() {
+	txs, err := s.wdb.GetArTxByStatus(schema.FailedOnChain)
+	if err != nil {
+		log.Error("s.wdb.GetArTxByStatus(schema.PendingOnChain)", "err", err)
+		return
+	}
+	for _, tx := range txs {
+		itemIds := make([]string, 0)
+		if err = json.Unmarshal(tx.ItemIds, &itemIds); err != nil {
+			return
+		}
+		arTx, _, err := s.onChainBundleTx(itemIds)
+		if err != nil {
+			return
+		}
+		// update onChain
+		if err = s.wdb.UpdateArTx(tx.ID, arTx.ID, s.cache.GetInfo().Height, schema.PendingOnChain); err != nil {
+			log.Error("s.wdb.UpdateArTx", "err", err, "id", tx.ID, "arId", arTx.ID)
+		}
+	}
+}
+
+func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, onChainItemIds []string, err error) {
+	onChainItems := make([]types.BundleItem, 0, len(itemIds))
+	onChainItemIds = make([]string, 0, len(itemIds))
+	for _, itemId := range itemIds {
+		itemBinary, err := s.store.LoadItemBinary(itemId)
+		if err != nil {
+			log.Error("s.store.LoadItemBinary(itemId)", "err", err, "itemId", itemId)
+			continue
+		}
+		item, err := utils.DecodeBundleItem(itemBinary)
+		if err != nil {
+			log.Error("utils.DecodeBundleItem(itemBinary)", "err", err, "itemId", itemId)
+			continue
+		}
+		onChainItems = append(onChainItems, *item)
+		onChainItemIds = append(onChainItemIds, item.Id)
+	}
+	if len(onChainItems) == 0 {
+		err = errors.New("onChainItems is null")
+		return
+	}
+
+	// assemble and send to arweave
+	bundle, err := utils.NewBundle(onChainItems...)
+	if err != nil {
+		log.Error("utils.NewBundle(onChainItems...)", "err", err)
+		return
+	}
+	arTxtags := []types.Tag{
+		{Name: "App-Name", Value: "arseeding"},
+		{Name: "App-Version", Value: "1.0.0"},
+		{Name: "Action", Value: "Bundle"},
+	}
+	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, 20) // todo speed need config
+	if err != nil {
+		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags,20)", "err", err)
+		return
+	}
+	log.Info("send bundle arTx", "arTx", arTx.ID)
+
+	// submit to arseeding
+	if err := s.arseedCli.SubmitTx(arTx); err != nil {
+		log.Error("s.arseedCli.SubmitTx(arTx)", "err", err, "arId", arTx.ID)
+	}
+
+	return
+}
+
+func (s *Arseeding) processExpiredOrd() {
+	ords, err := s.wdb.GetExpiredOrders()
+	if err != nil {
+		log.Error("GetExpiredOrders()", "err", err)
+		return
+	}
+	for _, ord := range ords {
+		if err = s.wdb.UpdateOrdToExpiredStatus(ord.ID); err != nil {
+			log.Error("UpdateOrdToExpiredStatus", "err", err, "id", ord.ID)
+			continue
+		}
+		// delete bundle item from store
+		if err = s.DelItem(ord.ItemId); err != nil {
+			log.Error("DelItem", "err", err, "itemId", ord.ItemId)
+		}
+	}
+}
+
+func (s *Arseeding) parseAndSaveBundleTx() {
+	arIds, err := s.store.LoadWaitParseBundleArIds()
+	if err != nil {
+		if err != schema.ErrNotExist {
+			log.Error("s.store.LoadWaitParseBundleArIds()", "err", err)
+		}
+		return
+	}
+	for _, arId := range arIds {
+		// get tx data
+		arTxMeta, err := s.store.LoadTxMeta(arId)
+		if err != nil {
+			log.Error("s.store.LoadTxMeta(arId)", "err", err, "arId", arId)
+			continue
+		}
+
+		data, err := getData(arTxMeta.DataRoot, arTxMeta.DataSize, s.store)
+		if err != nil {
+			log.Error("get data failed, if is not_exist_record,then wait submit chunks fully", "err", err, "arId", arId)
+			continue
+		}
+		if err := s.ParseAndSaveBundleItems(arId, data); err != nil {
+			log.Error("ParseAndSaveBundleItems", "err", err, "arId", arId)
+			continue
+		}
+		// del wait db
+		if err = s.store.DelParsedBundleArId(arId); err != nil {
+			log.Error("DelParsedBundleArId", "err", err, "arId", arId)
+		}
+	}
+}
+
+func filterPeers(peers []string, constTx *types.Transaction) map[string]bool {
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	availablePeers := make(map[string]bool, 0)
+	p, err := ants.NewPoolWithFunc(50, func(peer interface{}) {
+		defer wg.Done()
+		pStr := peer.(string)
+		pNode := goar.NewTempConn()
+		pNode.SetTempConnUrl("http://" + pStr)
+		pNode.SetTimeout(time.Second * 10)
+		_, code, err := pNode.SubmitTransaction(constTx)
+		if err != nil {
+			return
+		}
+		// if the resp like this ,we believe this peer is available
+		if code/100 == 2 || code/100 == 4 {
+			mu.Lock()
+			availablePeers[pStr] = true
+			mu.Unlock()
+		}
+	})
+	// submit a legal Tx to peers, if the response is timely and acceptable, then the peer is good for submit tx
+	for _, peer := range peers {
+		wg.Add(1)
+		err = p.Invoke(peer)
+		if err != nil {
+			log.Warn("concurrency err", "err", err)
+		}
+	}
+	wg.Wait()
+	p.Release()
+	return availablePeers
+}
+
+func updatePeerMap(oldPeerMap map[string]int64, availablePeers map[string]bool) map[string]int64 {
+	for peer, cnt := range oldPeerMap {
+		if _, ok := availablePeers[peer]; !ok {
+			if cnt > 0 {
+				oldPeerMap[peer] -= 1
+			}
+		} else {
+			oldPeerMap[peer] += 1
+		}
+	}
+
+	for peer, _ := range availablePeers {
+		if _, ok := oldPeerMap[peer]; !ok {
+			oldPeerMap[peer] = 1
+		}
+	}
+	return oldPeerMap
 }
