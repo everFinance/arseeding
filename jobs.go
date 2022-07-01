@@ -449,7 +449,7 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 	}
 	arTxtags := []types.Tag{
 		{Name: "App-Name", Value: "arseeding"},
-		{Name: "App-Version", Value: "v1.0.0"},
+		{Name: "App-Version", Value: "1.0.0"},
 		{Name: "Action", Value: "Bundle"},
 	}
 	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, 20) // todo speed need config
