@@ -533,7 +533,7 @@ func (s *Arseeding) bundleFee(c *gin.Context) {
 	symbol := c.Param("currency")
 	numSize, err := strconv.Atoi(size)
 	if err != nil {
-		internalErrorResponse(c, err.Error())
+		errorResponse(c, err.Error())
 		return
 	}
 	respFee, err := s.CalcItemFee(symbol, int64(numSize))
