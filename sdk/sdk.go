@@ -51,7 +51,7 @@ func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.Option
 		return
 	}
 	itemId = order.ItemId
-	if order.Fee == "" {
+	if order.Fee == "" { // arseeding NO_FEE module
 		return
 	}
 	amount, ok := new(big.Int).SetString(order.Fee, 10)
@@ -64,8 +64,5 @@ func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.Option
 		return
 	}
 	everTx, err = s.payer.Transfer(order.Currency, amount, order.Bundler, string(dataJs))
-	if err != nil {
-		return
-	}
 	return
 }
