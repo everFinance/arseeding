@@ -236,6 +236,7 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 			if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
 				log.Error("s.wdb.UpdateReceiptStatus", "err", err, "id", urtx.RawId)
 			}
+			continue
 		}
 
 		// update order payment status
@@ -273,7 +274,13 @@ func (s *Arseeding) refundReceipt() {
 			log.Error("new(big.Int).SetString(rpt.Amount,10) failed", "amt", rpt.Amount)
 			continue
 		}
-		everTx, err := s.everpaySdk.Transfer(rpt.Symbol, amount, rpt.From, rpt.EverHash)
+		// everTx data
+		mmap := map[string]string{
+			"App-Name":        "arseeding",
+			"Refund-EverHash": rpt.EverHash,
+		}
+		data, _ := json.Marshal(mmap)
+		everTx, err := s.everpaySdk.Transfer(rpt.Symbol, amount, rpt.From, string(data))
 		if err != nil { // notice: if refund failed, then need manual check and refund
 			log.Error("s.everpaySdk.Transfer", "err", err)
 			// update receipt status is unrefund
