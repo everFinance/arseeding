@@ -46,7 +46,7 @@ func TestSendItem(t *testing.T) {
 
 	// upload bundle item to arseed serve
 	var wg sync.WaitGroup
-	for idx, pt := range pathArr[2490:2600] {
+	for idx, pt := range pathArr[2606:2607] {
 		data, err := ioutil.ReadFile(pt)
 		if err != nil {
 			t.Log("ReadFile failed", "idx", idx, "err", err)
@@ -74,7 +74,11 @@ func TestSendItem(t *testing.T) {
 
 			// use everpay payment fee
 			amount, _ := new(big.Int).SetString(order.Fee, 10)
-			_, err = payCli.Transfer(order.Currency, amount, order.Bundler, "")
+			dataJs, err := json.Marshal(&order)
+			if err != nil {
+				panic(err)
+			}
+			_, err = payCli.Transfer(order.Currency, amount, order.Bundler, string(dataJs))
 			if err != nil {
 				t.Log("send failed", "idx", idx, "err", err)
 				return
