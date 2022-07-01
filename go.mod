@@ -12,6 +12,7 @@ require (
 	github.com/panjf2000/ants/v2 v2.4.7
 	github.com/shopspring/decimal v1.2.0
 	github.com/stretchr/testify v1.7.0
+	github.com/tidwall/gjson v1.14.1
 	github.com/ulule/limiter/v3 v3.10.0
 	github.com/urfave/cli/v2 v2.3.0
 	go.etcd.io/bbolt v1.3.6
@@ -81,7 +82,6 @@ require (
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/status-im/keycard-go v0.0.0-20190316090335-8537d3370df4 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
-	github.com/tidwall/gjson v1.14.1 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tidwall/sjson v1.2.4 // indirect
