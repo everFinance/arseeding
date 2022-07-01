@@ -42,10 +42,9 @@ func (w *Wdb) InsertOrder(order schema.Order) error {
 	return w.Db.Create(&order).Error
 }
 
-func (w *Wdb) GetUnPaidOrder(signer, currency, fee string) (schema.Order, error) {
+func (w *Wdb) GetUnPaidOrder(itemId, signer string) (schema.Order, error) {
 	res := schema.Order{}
-	err := w.Db.Model(&schema.Order{}).Where("signer = ? and payment_status = ?"+
-		" and currency = ? and fee = ?", signer, schema.UnPayment, currency, fee).First(&res).Error
+	err := w.Db.Model(&schema.Order{}).Where("item_id = ? and signer = ? and payment_status = ?", itemId, signer, schema.UnPayment).First(&res).Error
 	return res, err
 }
 

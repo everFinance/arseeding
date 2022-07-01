@@ -12,6 +12,7 @@ import (
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"github.com/panjf2000/ants/v2"
+	"github.com/tidwall/gjson"
 	"gorm.io/gorm"
 	"math/big"
 	"strings"
@@ -35,7 +36,7 @@ func (s *Arseeding) runJobs() {
 		s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
 		s.scheduler.Every(1).Minute().SingletonMode().Do(s.processExpiredOrd)
 	}
-	s.scheduler.Every(1).Minute().SingletonMode().Do(s.onChainBundleItems) // can set a longer time, if the items are less. such as 5m
+	s.scheduler.Every(5).Minute().SingletonMode().Do(s.onChainBundleItems) // can set a longer time, if the items are less. such as 5m
 	s.scheduler.Every(3).Minute().SingletonMode().Do(s.watchArTx)
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.retryOnChainArTx)
 
@@ -202,29 +203,50 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 		return
 	}
 
-	for _, urt := range unspentRpts {
-		signer := urt.From
-		ord, err := s.wdb.GetUnPaidOrder(signer, urt.Symbol, urt.Amount)
+	for _, urtx := range unspentRpts {
+		signer := urtx.From
+		paymentItemId := gjson.Parse(urtx.Data).Get("itemId").String()
+		ord, err := s.wdb.GetUnPaidOrder(paymentItemId, signer)
 		if err != nil {
-			log.Error("s.wdb.GetUnPaidOrder", "err", err, "signer", signer, "symbol", urt.Symbol, "fee", urt.Amount)
+			log.Error("s.wdb.GetUnPaidOrder", "err", err, "itemId", paymentItemId, "signer", signer)
 			if err == gorm.ErrRecordNotFound {
+				log.Warn("need refund about not find order", "itemId", paymentItemId, "signer", signer)
 				// update receipt status is unrefund and waiting refund
-				if err = s.wdb.UpdateReceiptStatus(urt.RawId, schema.UnRefund, nil); err != nil {
-					log.Error("s.wdb.UpdateReceiptStatus", "err", err, "id", urt.RawId)
+				if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
+					log.Error("s.wdb.UpdateReceiptStatus", "err", err, "id", urtx.RawId)
 				}
 			}
 			continue
 		}
 
+		// verify payment token and amount
+		amt, ok := new(big.Int).SetString(urtx.Amount, 10)
+		if !ok {
+			log.Error("SetString(urtx.Amount,10)", "amount", urtx.Amount)
+			continue
+		}
+		fee, ok := new(big.Int).SetString(ord.Fee, 10)
+		if !ok {
+			log.Error("SetString(ord.Fee,10)", "fee", ord.Fee)
+			continue
+		}
+		if strings.ToLower(ord.Currency) != strings.ToLower(urtx.Symbol) || amt.Cmp(fee) < 0 {
+			log.Warn("need refund about currency or amount", "itemId", paymentItemId, "paySymble", urtx.Symbol, "payAmount", amt.String())
+			// update receipt status is unrefund and waiting refund
+			if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
+				log.Error("s.wdb.UpdateReceiptStatus", "err", err, "id", urtx.RawId)
+			}
+		}
+
 		// update order payment status
 		dbTx := s.wdb.Db.Begin()
-		if err = s.wdb.UpdateOrderPay(ord.ID, urt.EverHash, schema.SuccPayment, dbTx); err != nil {
+		if err = s.wdb.UpdateOrderPay(ord.ID, urtx.EverHash, schema.SuccPayment, dbTx); err != nil {
 			log.Error("s.wdb.UpdateOrderPay(ord.ID,schema.SuccPayment,dbTx)", "err", err)
 			dbTx.Rollback()
 			continue
 		}
-		if err = s.wdb.UpdateReceiptStatus(urt.RawId, schema.Spent, dbTx); err != nil {
-			log.Error("s.wdb.UpdateReceiptStatus(urt.ID,schema.Spent,dbTx)", "err", err)
+		if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.Spent, dbTx); err != nil {
+			log.Error("s.wdb.UpdateReceiptStatus(urtx.ID,schema.Spent,dbTx)", "err", err)
 			dbTx.Rollback()
 			continue
 		}
@@ -419,10 +441,11 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 		return
 	}
 	arTxtags := []types.Tag{
-		{Name: "Application", Value: "arseeding"},
+		{Name: "App-Name", Value: "arseeding"},
+		{Name: "App-Version", Value: "v1.0.0"},
 		{Name: "Action", Value: "Bundle"},
 	}
-	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, 20)
+	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, 20) // todo speed need config
 	if err != nil {
 		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags,20)", "err", err)
 		return
