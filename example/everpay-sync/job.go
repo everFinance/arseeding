@@ -3,30 +3,30 @@ package everpay_sync
 import "github.com/everFinance/arseeding/example"
 
 func (e *EverPaySync) runJobs() {
-	e.scheduler.Every(30).Seconds().SingletonMode().Do(e.FetchArIds)
 	e.scheduler.Every(30).Seconds().SingletonMode().Do(e.PostToArseeding)
 
 	e.scheduler.StartAsync()
 }
 
 func (e *EverPaySync) FetchArIds() {
-	processedArTx, err := e.wdb.GetLastPostTx()
-	if err != nil {
-		panic(err)
-	}
+	go func(e *EverPaySync) {
+		processedArTx, err := e.wdb.GetLastPostTx()
+		if err != nil {
+			panic(err)
+		}
+		err = e.fetchTxIds(processedArTx.ArId)
+		if err != nil {
+			panic(err)
+		}
+	}(e)
 
-	arIds, err := fetchTxIds(e.rollupOwner, processedArTx.ArId, e.arCli)
-	if err != nil {
-		panic(err)
-	}
-	arIds = reverseIDs(arIds)
-
-	rollupTxIds := make([]*RollupArId, 0, len(arIds))
-	for _, arId := range arIds {
-		rollupTxIds = append(rollupTxIds, &RollupArId{ArId: arId})
-	}
-	if err := e.wdb.Insert(rollupTxIds); err != nil {
-		panic(err)
+	for {
+		select {
+		case arId := <-e.arIdChan:
+			if err := e.wdb.Insert(arId); err != nil {
+				panic(err)
+			}
+		}
 	}
 }
 

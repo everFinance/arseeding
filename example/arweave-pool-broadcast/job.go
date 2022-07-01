@@ -107,15 +107,15 @@ func (b *BcPool) checkBroadcastTxStatus() {
 	}
 
 	for _, arId := range needCheckBroadcastTxIds {
-		jobStatus, err := example.GetJob(arId, "broadcast", b.seedCli)
+		tkStatus, err := b.seedCli.GetBroadcastTask(arId)
 		if err != nil {
-			log.Error("example.GetJob(arId,\"broadcast\",b.seedCli)", "err", err, "arId", arId)
+			log.Error("b.seedCli.GetBroadcastTask(arId)", "err", err, "arId", arId)
 			continue
 		}
-		if jobStatus.CountSuccessed >= 10 {
+		if tkStatus.CountSuccessed >= 10 {
 			// close job
-			if err := example.KillJob(arId, "broadcast", b.seedCli); err != nil {
-				log.Error("example.KillJob(arId,\"broadcast\",b.seedCli)", "err", err, "arId", arId)
+			if err := b.seedCli.KillBroadcastTask(arId); err != nil {
+				log.Error("b.seedCli.KillBroadcastTask(arId)", "err", err, "arId", arId)
 				continue
 			}
 
