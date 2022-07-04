@@ -35,6 +35,9 @@ GOOS=linux GOARCH=amd64 go build -o ./cmd/arseeding ./cmd
 docker build .
 ```
 
+### Deployment
+Deployment [documents]("https://arweave.net/tcFRol0PlMjSzfohtpmK-yf0B8N3c1EqHINUC-OfMzU")
+
 ## API
 arseeding is compatible with all http api interfaces of arweave node and also provide bundle api:
 ```

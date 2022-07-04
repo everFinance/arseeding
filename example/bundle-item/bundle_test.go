@@ -1,9 +1,13 @@
 package bundle_item
 
 import (
+	"encoding/json"
 	"github.com/everFinance/arseeding/sdk"
+	paySdk "github.com/everFinance/everpay-go/sdk"
 	"github.com/everFinance/goar"
+	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goether"
+	"math/big"
 	"testing"
 )
 
@@ -26,15 +30,31 @@ func TestItemUseCase(t *testing.T) {
 
 	// create bundle item with goar
 	data := []byte("your data") // your data,maybe read from files
-	item, err := itemSigner.CreateAndSignItem(data, "", "", nil)
+	item, err := itemSigner.CreateAndSignItem(data, "", "", []types.Tag{})
 	if err != nil {
 		panic(err)
 	}
 
 	// send bundle item to arseeding with arseeding sdk
-	res, err := arseedSdk.SubmitItem(item.ItemBinary, "USDC") // use "USDC" token payment fee
+	order, err := arseedSdk.SubmitItem(item.ItemBinary, "USDC") // use "USDC" token payment fee
 	if err != nil {
 		t.Log(err)
 	}
-	t.Log(res)
+	t.Log(order)
+
+	// use everpay payment fee
+	amount, _ := new(big.Int).SetString(order.Fee, 10)
+	dataJs, err := json.Marshal(&order)
+	if err != nil {
+		panic(err)
+	}
+	payCli, err := paySdk.New(eccSigner, "https://api-dev.everpay.io")
+	if err != nil {
+		panic(err)
+	}
+	_, err = payCli.Transfer(order.Currency, amount, order.Bundler, string(dataJs))
+	if err != nil {
+		t.Log("send failed", "err", err)
+		return
+	}
 }
