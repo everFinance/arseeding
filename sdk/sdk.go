@@ -15,7 +15,7 @@ import (
 type SDK struct {
 	itemSigner *goar.ItemSigner
 	arseedCli  *ArSeedCli
-	payer      *paySdk.SDK
+	pay        *paySdk.SDK
 }
 
 func NewSDK(arseedUrl, payUrl string, signer interface{}) (*SDK, error) {
@@ -24,14 +24,14 @@ func NewSDK(arseedUrl, payUrl string, signer interface{}) (*SDK, error) {
 	if err != nil {
 		return nil, err
 	}
-	payer, err := paySdk.New(signer, payUrl)
+	pay, err := paySdk.New(signer, payUrl)
 	if err != nil {
 		return nil, err
 	}
 	return &SDK{
 		itemSigner: itemSigner,
 		arseedCli:  cli,
-		payer:      payer,
+		pay:        pay,
 	}, nil
 }
 
@@ -63,6 +63,6 @@ func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.Option
 	if err != nil {
 		return
 	}
-	everTx, err = s.payer.Transfer(order.Currency, amount, order.Bundler, string(dataJs))
+	everTx, err = s.pay.Transfer(order.Currency, amount, order.Bundler, string(dataJs))
 	return
 }
