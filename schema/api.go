@@ -9,7 +9,7 @@ const (
 )
 
 type RespOrder struct {
-	ItemId             string `json:"ItemId"`   // bundleItem id
+	ItemId             string `json:"itemId"`   // bundleItem id
 	Bundler            string `json:"bundler"`  // fee receiver address
 	Currency           string `json:"currency"` // payment token symbol
 	Decimals           int    `json:"decimals"`
