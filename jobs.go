@@ -205,7 +205,7 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 
 	for _, urtx := range unspentRpts {
 		signer := urtx.From
-		paymentItemId := gjson.Parse(urtx.Data).Get("ItemId").String()
+		paymentItemId := gjson.Parse(urtx.Data).Get("itemId").String()
 		ord, err := s.wdb.GetUnPaidOrder(paymentItemId, signer)
 		if err != nil {
 			log.Error("s.wdb.GetUnPaidOrder", "err", err, "itemId", paymentItemId, "signer", signer)
