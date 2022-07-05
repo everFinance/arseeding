@@ -36,7 +36,7 @@ docker build .
 ```
 
 ### Deployment
-Deployment [documents](https://wxavdis5b6kmruwn7iq3ngmkzh6qd4g53tkevbza2ubdt4zt.arweave.net/tcFRol0PlMjSzfohtpmK-yf0B8N3c1EqHINUC-OfMzU)
+Deployment [documents](https://z2wz4tsbhkp5c4pf5ejwjkdyksunskfn7bhxtzg6j3wbkfdb2mba.arweave.net/zq2eTkE6n9Fx5ekTZKh4VKjZKK34T3nk3k7sFRRh0wI)
 
 ## API
 arseeding is compatible with all http api interfaces of arweave node and also provide bundle api:
