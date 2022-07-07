@@ -1,6 +1,7 @@
 package arseeding
 
 import (
+	"github.com/everFinance/arseeding/config"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/arseeding/sdk"
 	"github.com/everFinance/everpay-go/common"
@@ -24,7 +25,8 @@ type Arseeding struct {
 	taskMg    *TaskManager
 	scheduler *gocron.Scheduler
 
-	cache *Cache
+	cache  *Cache
+	config *config.Config
 
 	// ANS-104 bundle
 	arseedCli           *sdk.ArSeedCli
@@ -74,6 +76,7 @@ func New(
 
 	arCli := goar.NewClient(arNode)
 	a := &Arseeding{
+		config:              config.New(dsn),
 		store:               KVDb,
 		engine:              gin.Default(),
 		submitLocker:        sync.Mutex{},
@@ -101,6 +104,7 @@ func New(
 }
 
 func (s *Arseeding) Run(port string) {
+	s.config.Run()
 	go s.runAPI(port)
 	go s.runJobs()
 	go s.runTask()

@@ -452,7 +452,14 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 		{Name: "App-Version", Value: "1.0.0"},
 		{Name: "Action", Value: "Bundle"},
 	}
-	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, 20) // todo speed need config
+	price, err := s.arCli.GetTransactionPrice(bundle.BundleBinary, nil)
+	var speedFactor int64
+	if err == nil {
+		speedFactor = calculateFactor(price, s.config.GetSpeedFee())
+	} else {
+		speedFactor = 0
+	}
+	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, speedFactor) // todo speed need config
 	if err != nil {
 		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags,20)", "err", err)
 		return
@@ -568,4 +575,8 @@ func updatePeerMap(oldPeerMap map[string]int64, availablePeers map[string]bool) 
 		}
 	}
 	return oldPeerMap
+}
+
+func calculateFactor(price, speedFee int64) int64 {
+	return (price+speedFee)*100/price - 100
 }
