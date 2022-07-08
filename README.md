@@ -36,7 +36,7 @@ docker build .
 ```
 
 ### Deployment
-Deployment [documents]("https://arweave.net/tcFRol0PlMjSzfohtpmK-yf0B8N3c1EqHINUC-OfMzU")
+Deployment [documents](https://z2wz4tsbhkp5c4pf5ejwjkdyksunskfn7bhxtzg6j3wbkfdb2mba.arweave.net/zq2eTkE6n9Fx5ekTZKh4VKjZKK34T3nk3k7sFRRh0wI)
 
 ## API
 arseeding is compatible with all http api interfaces of arweave node and also provide bundle api:
@@ -319,9 +319,8 @@ resp:
 curl --request POST 'http://127.0.0.1:8080/task/kill/broadcast/yK_x7-bKBOe1GK3sEHWIQ4QZRibn504pzYOFa8iO2S8'
 ```
 
-### Bundle Usage
-Arseeding implement ANS-104 bundle Data API, [goar](https://github.com/everFinance/goar/tree/bundle) is a useful tool to assemble bundle item and interact with these APIs
-
+### Bundle Usage 
+Arseeding implement ANS-104 bundle Data API, [goar](https://github.com/everFinance/goar/tree/bundle) is a useful tool to assemble bundle item and interact with these APIs.   
 `e.g:`
 ```
     // connect arseeding server by goar sdk
@@ -347,9 +346,8 @@ resp:
     ExpectedBlock      int64
 }
 ```
-
-
-
+[go-sdk](https://github.com/everFinance/arseeding/blob/main/sdk/sdk.go)   
+[js-sdk](https://github.com/everFinance/arseeding-js)
 ## Example
 [everPay rollup txs sync](https://github.com/everFinance/arseeding/tree/main/example/everpay-sync): get all everpay rollup txIds from the arweave node, and then post to the arseeding service using the `sync` interface.
 
