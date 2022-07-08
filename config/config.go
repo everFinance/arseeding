@@ -20,8 +20,7 @@ func New(configDSN string) *Config {
 	}
 	fee, err := wdb.GetFee()
 	if err != nil {
-		fee.SpeedTxFee = 0
-		fee.BundleServeFee = 0
+		panic(err)
 	}
 	return &Config{
 		wdb:            wdb,

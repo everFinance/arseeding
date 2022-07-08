@@ -42,7 +42,7 @@ type Arseeding struct {
 func New(
 	boltDirPath, dsn string,
 	arWalletKeyPath string, arNode, payUrl string, noFee bool,
-	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region string,
+	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region string, port string,
 ) *Arseeding {
 	var err error
 	KVDb := &Store{}
@@ -64,7 +64,8 @@ func New(
 	if err = wdb.Migrate(noFee); err != nil {
 		panic(err)
 	}
-	bundler, err := goar.NewWalletFromPath(arWalletKeyPath, arNode)
+	localArseedUrl := "http://127.0.0.1" + port
+	bundler, err := goar.NewWalletFromPath(arWalletKeyPath, localArseedUrl)
 	if err != nil {
 		panic(err)
 	}
@@ -84,7 +85,7 @@ func New(
 		arCli:               arCli,
 		taskMg:              jobmg,
 		scheduler:           gocron.NewScheduler(time.UTC),
-		arseedCli:           sdk.New("http://127.0.0.1:8080"),
+		arseedCli:           sdk.New(localArseedUrl),
 		everpaySdk:          everpaySdk,
 		wdb:                 wdb,
 		bundler:             bundler,

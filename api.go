@@ -274,7 +274,7 @@ func (s *Arseeding) getTxPrice(c *gin.Context) {
 	fee := s.cache.GetFee()
 	// totPrice = chunkNum*deltaPrice(fee for per chunk) + basePrice
 	totPrice := calculatePrice(fee, dataSize)
-	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(totPrice))
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(fmt.Sprintf("%d", totPrice)))
 }
 
 func (s *Arseeding) getPeers(c *gin.Context) {
@@ -342,14 +342,14 @@ func proxyArweaveGateway(c *gin.Context) {
 	c.Abort()
 }
 
-func calculatePrice(fee schema.ArFee, dataSize int64) string {
+func calculatePrice(fee schema.ArFee, dataSize int64) int64 {
 	count := int64(0)
 	if dataSize > 0 {
 		count = (dataSize-1)/types.MAX_CHUNK_SIZE + 1
 	}
 
 	totPrice := fee.Base + count*fee.PerChunk
-	return fmt.Sprintf("%d", totPrice)
+	return totPrice
 }
 
 // about task-manager

@@ -452,25 +452,21 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 		{Name: "App-Version", Value: "1.0.0"},
 		{Name: "Action", Value: "Bundle"},
 	}
-	price, err := s.arCli.GetTransactionPrice(bundle.BundleBinary, nil)
-	var speedFactor int64
-	if err == nil {
-		speedFactor = calculateFactor(price, s.config.GetSpeedFee())
-	} else {
-		speedFactor = 0
-	}
-	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, speedFactor) // todo speed need config
+
+	// speed arTx Fee
+	price := calculatePrice(s.cache.GetFee(), int64(len(bundle.BundleBinary)))
+	speedFactor := calculateFactor(price, s.config.GetSpeedFee())
+	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, speedFactor)
 	if err != nil {
 		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags,20)", "err", err)
 		return
 	}
 	log.Info("send bundle arTx", "arTx", arTx.ID)
 
-	// submit to arseeding
-	if err := s.arseedCli.SubmitTx(arTx); err != nil {
-		log.Error("s.arseedCli.SubmitTx(arTx)", "err", err, "arId", arTx.ID)
+	// arseeding broadcast tx data
+	if err = s.arseedCli.BroadcastTxData(arTx.ID); err != nil {
+		log.Error("s.arseedCli.BroadcastTxData(arTx.ID)", "err", err)
 	}
-
 	return
 }
 

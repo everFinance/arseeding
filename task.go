@@ -9,8 +9,8 @@ import (
 func (s *Arseeding) runTask() {
 	for {
 		select {
-		case jobId := <-s.taskMg.PopTkChan():
-			go s.processTask(jobId)
+		case taskId := <-s.taskMg.PopTkChan():
+			go s.processTask(taskId)
 		}
 	}
 }
