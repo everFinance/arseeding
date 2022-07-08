@@ -163,7 +163,7 @@ func (w *Wdb) InsertArTx(tx schema.OnChainTx) error {
 
 func (w *Wdb) GetArTxByStatus(status string) ([]schema.OnChainTx, error) {
 	res := make([]schema.OnChainTx, 0, 10)
-	err := w.Db.Where("status = ?", status).Find(&res).Error
+	err := w.Db.Model(schema.OnChainTx{}).Where("status = ?", status).Find(&res).Error
 	return res, err
 }
 
