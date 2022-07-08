@@ -452,18 +452,21 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 		{Name: "App-Version", Value: "1.0.0"},
 		{Name: "Action", Value: "Bundle"},
 	}
-	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, 20) // todo speed need config
+
+	// speed arTx Fee
+	price := calculatePrice(s.cache.GetFee(), int64(len(bundle.BundleBinary)))
+	speedFactor := calculateFactor(price, s.config.GetSpeedFee())
+	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, speedFactor)
 	if err != nil {
 		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags,20)", "err", err)
 		return
 	}
 	log.Info("send bundle arTx", "arTx", arTx.ID)
 
-	// submit to arseeding
-	if err := s.arseedCli.SubmitTx(arTx); err != nil {
-		log.Error("s.arseedCli.SubmitTx(arTx)", "err", err, "arId", arTx.ID)
+	// arseeding broadcast tx data
+	if err = s.arseedCli.BroadcastTxData(arTx.ID); err != nil {
+		log.Error("s.arseedCli.BroadcastTxData(arTx.ID)", "err", err)
 	}
-
 	return
 }
 
@@ -568,4 +571,8 @@ func updatePeerMap(oldPeerMap map[string]int64, availablePeers map[string]bool) 
 		}
 	}
 	return oldPeerMap
+}
+
+func calculateFactor(price, speedFee int64) int64 {
+	return (price+speedFee)*100/price - 100
 }

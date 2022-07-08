@@ -1,6 +1,7 @@
 package arseeding
 
 import (
+	"github.com/everFinance/arseeding/config"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/arseeding/sdk"
 	"github.com/everFinance/everpay-go/common"
@@ -24,7 +25,8 @@ type Arseeding struct {
 	taskMg    *TaskManager
 	scheduler *gocron.Scheduler
 
-	cache *Cache
+	cache  *Cache
+	config *config.Config
 
 	// ANS-104 bundle
 	arseedCli           *sdk.ArSeedCli
@@ -40,7 +42,7 @@ type Arseeding struct {
 func New(
 	boltDirPath, dsn string,
 	arWalletKeyPath string, arNode, payUrl string, noFee bool,
-	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region string,
+	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region string, port string,
 ) *Arseeding {
 	var err error
 	KVDb := &Store{}
@@ -62,7 +64,8 @@ func New(
 	if err = wdb.Migrate(noFee); err != nil {
 		panic(err)
 	}
-	bundler, err := goar.NewWalletFromPath(arWalletKeyPath, arNode)
+	localArseedUrl := "http://127.0.0.1" + port
+	bundler, err := goar.NewWalletFromPath(arWalletKeyPath, localArseedUrl)
 	if err != nil {
 		panic(err)
 	}
@@ -74,6 +77,7 @@ func New(
 
 	arCli := goar.NewClient(arNode)
 	a := &Arseeding{
+		config:              config.New(dsn),
 		store:               KVDb,
 		engine:              gin.Default(),
 		submitLocker:        sync.Mutex{},
@@ -81,7 +85,7 @@ func New(
 		arCli:               arCli,
 		taskMg:              jobmg,
 		scheduler:           gocron.NewScheduler(time.UTC),
-		arseedCli:           sdk.New("http://127.0.0.1:8080"),
+		arseedCli:           sdk.New(localArseedUrl),
 		everpaySdk:          everpaySdk,
 		wdb:                 wdb,
 		bundler:             bundler,
@@ -101,6 +105,7 @@ func New(
 }
 
 func (s *Arseeding) Run(port string) {
+	s.config.Run()
 	go s.runAPI(port)
 	go s.runJobs()
 	go s.runTask()
