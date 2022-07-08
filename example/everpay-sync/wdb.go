@@ -12,6 +12,10 @@ type RollupArId struct {
 	Post bool
 }
 
+func (r RollupArId) TableName() string {
+	return "rollup_ar_id_prod"
+}
+
 type Wdb struct {
 	Db *gorm.DB
 }
