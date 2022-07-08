@@ -43,7 +43,7 @@ func New(
 	boltDirPath, dsn string,
 	arWalletKeyPath string, arNode, payUrl string, noFee bool,
 	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region string, use4EVER bool,
-	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region string, port string,
+	port string,
 ) *Arseeding {
 	var err error
 	KVDb := &Store{}
