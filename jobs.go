@@ -458,14 +458,14 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 	speedFactor := calculateFactor(price, s.config.GetSpeedFee())
 	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, speedFactor)
 	if err != nil {
-		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags,20)", "err", err)
+		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags)", "err", err)
 		return
 	}
 	log.Info("send bundle arTx", "arTx", arTx.ID)
 
 	// arseeding broadcast tx data
-	if err = s.arseedCli.BroadcastTxData(arTx.ID); err != nil {
-		log.Error("s.arseedCli.BroadcastTxData(arTx.ID)", "err", err)
+	if err := s.arseedCli.SubmitTx(arTx); err != nil {
+		log.Error("s.arseedCli.SubmitTx(arTx)", "err", err, "arId", arTx.ID)
 	}
 	return
 }

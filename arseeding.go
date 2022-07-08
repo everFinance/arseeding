@@ -65,8 +65,7 @@ func New(
 	if err = wdb.Migrate(noFee); err != nil {
 		panic(err)
 	}
-	localArseedUrl := "http://127.0.0.1" + port
-	bundler, err := goar.NewWalletFromPath(arWalletKeyPath, localArseedUrl)
+	bundler, err := goar.NewWalletFromPath(arWalletKeyPath, arNode)
 	if err != nil {
 		panic(err)
 	}
@@ -76,14 +75,14 @@ func New(
 		panic(err)
 	}
 
-	arCli := goar.NewClient(arNode)
+	localArseedUrl := "http://127.0.0.1" + port
 	a := &Arseeding{
 		config:              config.New(dsn),
 		store:               KVDb,
 		engine:              gin.Default(),
 		submitLocker:        sync.Mutex{},
 		endOffsetLocker:     sync.Mutex{},
-		arCli:               arCli,
+		arCli:               goar.NewClient(arNode),
 		taskMg:              jobmg,
 		scheduler:           gocron.NewScheduler(time.UTC),
 		arseedCli:           sdk.New(localArseedUrl),
@@ -101,7 +100,7 @@ func New(
 	if err != nil {
 		peerMap = make(map[string]int64)
 	}
-	a.cache = NewCache(arCli, peerMap)
+	a.cache = NewCache(a.arCli, peerMap)
 	return a
 }
 
