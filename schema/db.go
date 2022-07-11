@@ -28,22 +28,25 @@ const (
 )
 
 type Order struct {
-	gorm.Model
-	ItemId   string // bundleItem id
-	Signer   string `gorm:"index:idx1"` // item signer
-	SignType int
+	ID        uint      `gorm:"primarykey" json:"id"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 
-	Size               int64
-	Currency           string // payment token symbol
-	Decimals           int
-	Fee                string
-	PaymentExpiredTime int64 // uint s
-	ExpectedBlock      int64
+	ItemId   string `json:"itemId"`                   // bundleItem id
+	Signer   string `gorm:"index:idx1" json:"signer"` // item signer
+	SignType int    `json:"signType"`
 
-	PaymentStatus string // "unpaid", "paid", "expired"
-	PaymentId     string // everHash
+	Size               int64  `json:"size"`
+	Currency           string `json:"currency"` // payment token symbol
+	Decimals           int    `json:"decimals"`
+	Fee                string `json:"fee"`
+	PaymentExpiredTime int64  `json:"paymentExpiredTime"` // uint s
+	ExpectedBlock      int64  `json:"expectedBlock"`
 
-	OnChainStatus string // "waiting","pending","success","failed"
+	PaymentStatus string `json:"paymentStatus"` // "unpaid", "paid", "expired"
+	PaymentId     string `json:"paymentId"`     // everHash
+
+	OnChainStatus string `json:"onChainStatus"` // "waiting","pending","success","failed"
 }
 
 type ReceiptEverTx struct {
