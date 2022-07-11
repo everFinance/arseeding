@@ -15,9 +15,8 @@ type Wdb struct {
 }
 
 func NewWdb(dsn string) *Wdb {
-	logLevel := logger.Error
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger:          logger.Default.LogMode(logLevel), // 日志 level 设置, prod 使用 warn
+		Logger:          logger.Default.LogMode(logger.Error),
 		CreateBatchSize: 200,
 	})
 	if err != nil {
@@ -164,7 +163,7 @@ func (w *Wdb) InsertArTx(tx schema.OnChainTx) error {
 
 func (w *Wdb) GetArTxByStatus(status string) ([]schema.OnChainTx, error) {
 	res := make([]schema.OnChainTx, 0, 10)
-	err := w.Db.Where("status = ?", status).Find(&res).Error
+	err := w.Db.Model(schema.OnChainTx{}).Where("status = ?", status).Find(&res).Error
 	return res, err
 }
 

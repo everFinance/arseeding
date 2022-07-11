@@ -36,9 +36,9 @@ func (s *Arseeding) runJobs() {
 		s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
 		s.scheduler.Every(1).Minute().SingletonMode().Do(s.processExpiredOrd)
 	}
-	s.scheduler.Every(5).Minute().SingletonMode().Do(s.onChainBundleItems) // can set a longer time, if the items are less. such as 5m
+	s.scheduler.Every(2).Minute().SingletonMode().Do(s.onChainBundleItems) // can set a longer time, if the items are less. such as 5m
 	s.scheduler.Every(3).Minute().SingletonMode().Do(s.watchArTx)
-	s.scheduler.Every(5).Minute().SingletonMode().Do(s.retryOnChainArTx)
+	s.scheduler.Every(2).Minute().SingletonMode().Do(s.retryOnChainArTx)
 
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.parseAndSaveBundleTx)
 
@@ -452,18 +452,21 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 		{Name: "App-Version", Value: "1.0.0"},
 		{Name: "Action", Value: "Bundle"},
 	}
-	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, 20) // todo speed need config
+
+	// speed arTx Fee
+	price := calculatePrice(s.cache.GetFee(), int64(len(bundle.BundleBinary)))
+	speedFactor := calculateFactor(price, s.config.GetSpeedFee())
+	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, speedFactor)
 	if err != nil {
-		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags,20)", "err", err)
+		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags)", "err", err)
 		return
 	}
 	log.Info("send bundle arTx", "arTx", arTx.ID)
 
-	// submit to arseeding
+	// arseeding broadcast tx data
 	if err := s.arseedCli.SubmitTx(arTx); err != nil {
 		log.Error("s.arseedCli.SubmitTx(arTx)", "err", err, "arId", arTx.ID)
 	}
-
 	return
 }
 
@@ -568,4 +571,8 @@ func updatePeerMap(oldPeerMap map[string]int64, availablePeers map[string]bool) 
 		}
 	}
 	return oldPeerMap
+}
+
+func calculateFactor(price, speedFee int64) int64 {
+	return (price+speedFee)*100/price - 100
 }

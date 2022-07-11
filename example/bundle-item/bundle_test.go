@@ -25,7 +25,7 @@ func TestItemUseCase(t *testing.T) {
 	}
 
 	// create Arseeding SDK
-	url := "https://seed-dev.everpay.io" // your arseeding service address
+	url := "https://arseed.web3infura.io" // your arseeding service address
 	arseedSdk := sdk.New(url)
 
 	// create bundle item with goar
@@ -48,7 +48,7 @@ func TestItemUseCase(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	payCli, err := paySdk.New(eccSigner, "https://api-dev.everpay.io")
+	payCli, err := paySdk.New(eccSigner, "https://api.everpay.io")
 	if err != nil {
 		panic(err)
 	}

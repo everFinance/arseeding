@@ -92,6 +92,7 @@ func (s *Arseeding) GetBundlePerFees() (map[string]schema.Fee, error) {
 		return nil, err
 	}
 	arFee := s.cache.GetFee()
+	arFee.Base = arFee.Base + s.config.GetServeFee()
 	res := make(map[string]schema.Fee)
 	for _, tp := range tps {
 		if tp.Price <= 0.0 {

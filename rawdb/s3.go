@@ -19,10 +19,14 @@ type S3DB struct {
 	bucketPrefix string
 }
 
-func NewS3DB(accKey, secretKey, region, bktPrefix string) (*S3DB, error) {
+func NewS3DB(accKey, secretKey, region, bktPrefix string, use4EVER bool) (*S3DB, error) {
 	mySession := session.Must(session.NewSession())
 	cred := credentials.NewStaticCredentials(accKey, secretKey, "")
-	s3Api := s3.New(mySession, aws.NewConfig().WithRegion(region).WithCredentials(cred))
+	cfgs := aws.NewConfig().WithRegion(region).WithCredentials(cred)
+	if use4EVER {
+		cfgs.WithEndpoint("https://endpoint.4everland.co") // inject 4everland endpoint
+	}
+	s3Api := s3.New(mySession, cfgs)
 	err := createS3Bucket(s3Api, bktPrefix)
 	if err != nil {
 		return nil, err
@@ -109,7 +113,7 @@ func createS3Bucket(svc s3iface.S3API, prefix string) error {
 	for _, bucketName := range bucketNames {
 		s3Bkt := getS3Bucket(prefix, bucketName) // s3 bucket name only accept lower case
 		_, err := svc.CreateBucket(&s3.CreateBucketInput{Bucket: aws.String(s3Bkt)})
-		if err != nil && !strings.Contains(err.Error(), "already own") {
+		if err != nil && !strings.Contains(err.Error(), "BucketAlreadyOwnedByYou") {
 			return err
 		}
 	}
