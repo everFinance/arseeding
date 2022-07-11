@@ -574,5 +574,12 @@ func updatePeerMap(oldPeerMap map[string]int64, availablePeers map[string]bool) 
 }
 
 func calculateFactor(price, speedFee int64) int64 {
-	return (price+speedFee)*100/price - 100
+	if speedFee == 0 {
+		return 0
+	}
+	val := (price+speedFee)*100/price - 100
+	if val == 0 {
+		val = 1
+	}
+	return val
 }
