@@ -1,12 +1,14 @@
 package config
 
 import (
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/everFinance/arseeding/config/schema"
+	"github.com/everFinance/everpay-go/common"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+var log = common.NewLog("config")
 
 type Wdb struct {
 	Db *gorm.DB
@@ -25,7 +27,7 @@ func NewWdb(dsn string) *Wdb {
 }
 
 func (w *Wdb) Migrate() error {
-	return w.Db.AutoMigrate(&schema.FeeConfig{})
+	return w.Db.AutoMigrate(&schema.FeeConfig{}, &schema.IpRateWhitelist{}, &schema.ApiKey{})
 }
 
 func (w *Wdb) GetFee() (fee schema.FeeConfig, err error) {
@@ -38,6 +40,18 @@ func (w *Wdb) GetFee() (fee schema.FeeConfig, err error) {
 		return fee, nil
 	}
 	return
+}
+
+func (w *Wdb) GetAllAvailableIpRateWhitelist() ([]schema.IpRateWhitelist, error) {
+	res := make([]schema.IpRateWhitelist, 0, 10)
+	err := w.Db.Where("available = ?", true).Find(&res).Error
+	return res, err
+}
+
+func (w *Wdb) GetAllApiKeys() ([]schema.ApiKey, error) {
+	res := make([]schema.ApiKey, 0)
+	err := w.Db.Where("available = ?", true).Find(&res).Error
+	return res, err
 }
 
 func (w *Wdb) Close() {

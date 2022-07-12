@@ -44,6 +44,7 @@ func (s *Arseeding) runJobs() {
 
 	// manager taskStatus
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseTasks)
+	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundler)
 
 	s.scheduler.StartAsync()
 }
@@ -518,6 +519,17 @@ func (s *Arseeding) parseAndSaveBundleTx() {
 			log.Error("DelParsedBundleArId", "err", err, "arId", arId)
 		}
 	}
+}
+
+func (s *Arseeding) updateBundler() {
+	// update bundler balance
+	addr := s.bundler.Signer.Address
+	bal, err := s.arCli.GetWalletBalance(addr)
+	if err == nil {
+		v, _ := bal.Int64()
+		UpdateBalance(big.NewInt(v), addr)
+	}
+
 }
 
 func filterPeers(peers []string, constTx *types.Transaction) map[string]bool {
