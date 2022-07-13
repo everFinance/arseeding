@@ -1,7 +1,6 @@
 package arseeding
 
 import (
-	"github.com/everFinance/goar/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"math/big"
 )
@@ -27,7 +26,7 @@ func init() {
 	)
 }
 
-func metricBundlerBalance(bal *big.Int, addr string) {
-	arAmount, _ := utils.WinstonToAR(bal).Float64()
-	bundlerBalance.WithLabelValues(addr, "AR").Set(arAmount)
+func metricBundlerBalance(bal *big.Float, addr string) {
+	amount, _ := bal.Float64()
+	bundlerBalance.WithLabelValues(addr, "AR").Set(amount)
 }

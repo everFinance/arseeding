@@ -529,8 +529,7 @@ func (s *Arseeding) updateBundler() {
 	if err != nil {
 		return
 	}
-	v, _ := bal.Int64()
-	metricBundlerBalance(big.NewInt(v), addr)
+	metricBundlerBalance(bal, addr)
 }
 
 func filterPeers(peers []string, constTx *types.Transaction) map[string]bool {
