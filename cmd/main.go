@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/everFinance/arseeding"
+	"github.com/everFinance/arseeding/common"
 	"log"
 	"os"
 	"os/signal"
@@ -46,8 +47,10 @@ func run(c *cli.Context) error {
 	s := arseeding.New(
 		c.String("db_dir"), c.String("mysql"), c.String("key_path"), c.String("ar_node"), c.String("pay"), c.Bool("no_fee"),
 		c.Bool("use_s3"), c.String("s3_acc_key"), c.String("s3_secret_key"), c.String("s3_prefix"), c.String("s3_region"),
-		c.Bool("use_4ever"),c.String("port"))
+		c.Bool("use_4ever"), c.String("port"))
 	s.Run(c.String("port"))
+
+	common.NewMetricServer()
 
 	<-signals
 

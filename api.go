@@ -19,7 +19,11 @@ import (
 
 func (s *Arseeding) runAPI(port string) {
 	r := s.engine
+	ipWhiteList := s.config.GetIPWhiteList()
 	r.Use(common.CORSMiddleware())
+	if !s.NoFee {
+		r.Use(common.LimiterMiddleware(3000, "M", ipWhiteList))
+	}
 	v1 := r.Group("/")
 	{
 		// Compatible arweave http api
