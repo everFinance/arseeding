@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/everFinance/arseeding"
+	"github.com/everFinance/arseeding/common"
 	"log"
 	"os"
 	"os/signal"
@@ -49,7 +50,7 @@ func run(c *cli.Context) error {
 		c.Bool("use_4ever"), c.String("port"))
 	s.Run(c.String("port"))
 
-	arseeding.NewMetricServer("Arseeding")
+	common.NewMetricServer()
 
 	<-signals
 

@@ -20,10 +20,8 @@ import (
 func (s *Arseeding) runAPI(port string) {
 	r := s.engine
 	ipWhiteList := s.config.GetIPWhiteList()
-	apiKeys := s.config.GetApiKeys()
 	r.Use(common.CORSMiddleware())
 	r.Use(common.LimiterMiddleware(200, "M", ipWhiteList))
-	r.Use(common.APIKeyMiddleware(200, "M", apiKeys)) // apiKey level can be used to decide speed limit
 	v1 := r.Group("/")
 	{
 		// Compatible arweave http api

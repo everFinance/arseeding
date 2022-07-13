@@ -48,34 +48,6 @@ func LimiterMiddleware(limit int, period string, ipRateWhitelist *map[string]str
 	return middleware
 }
 
-func APIKeyMiddleware(limit int, period string, apiKeys *map[string]int64) gin.HandlerFunc {
-	rate, err := limiter.NewRateFromFormatted(fmt.Sprintf("%d-%s", limit, period))
-	if err != nil {
-		panic(err)
-	}
-	store := memory.NewStore()
-	middleware := mgin.NewMiddleware(limiter.New(store, rate),
-		mgin.WithLimitReachedHandler(func(c *gin.Context) {
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": ERR_TOO_MANY_REQUESTS.Error(),
-			})
-		}),
-		mgin.WithKeyGetter(func(c *gin.Context) string {
-			return c.Request.Header.Get("X-API-Key")
-		}),
-		mgin.WithExcludedKey(func(apiKey string) bool {
-			if apiKeys == nil || apiKey == "" {
-				return false
-			}
-			mmap := *apiKeys
-			if _, ok := mmap[apiKey]; ok {
-				return true
-			}
-			return false
-		}))
-	return middleware
-}
-
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")

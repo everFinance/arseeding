@@ -525,11 +525,11 @@ func (s *Arseeding) updateBundler() {
 	// update bundler balance
 	addr := s.bundler.Signer.Address
 	bal, err := s.arCli.GetWalletBalance(addr)
-	if err == nil {
-		v, _ := bal.Int64()
-		UpdateBalance(big.NewInt(v), addr)
+	if err != nil {
+		return
 	}
-
+	v, _ := bal.Int64()
+	metricBundlerBalance(big.NewInt(v), addr)
 }
 
 func filterPeers(peers []string, constTx *types.Transaction) map[string]bool {
