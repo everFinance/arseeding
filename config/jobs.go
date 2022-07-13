@@ -1,8 +1,8 @@
 package config
 
 func (c *Config) runJobs() {
-	// 定时更新 config 到缓存
-	c.scheduler.Every(20).Second().SingletonMode().Do(c.updateFee)
+	c.scheduler.Every(1).Minute().SingletonMode().Do(c.updateFee)
+	c.scheduler.Every(1).Minute().SingletonMode().Do(c.updateIPWhiteList)
 
 	c.scheduler.StartAsync()
 }
@@ -14,4 +14,18 @@ func (c *Config) updateFee() {
 	}
 	c.speedTxFee = fee.SpeedTxFee
 	c.bundleServeFee = fee.BundleServeFee
+}
+
+func (c *Config) updateIPWhiteList() {
+	ips, err := c.wdb.GetAllAvailableIpRateWhitelist()
+	if err != nil {
+		return
+	}
+	ipWhiteList := make(map[string]struct{}, 0)
+	for _, ip := range ips {
+		if ip.Available {
+			ipWhiteList[ip.OriginOrIP] = struct{}{}
+		}
+	}
+	c.ipWhiteList = ipWhiteList
 }
