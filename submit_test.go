@@ -52,9 +52,3 @@ func TestSyncAddTxDataEndOffset(t *testing.T) {
 	err = os.RemoveAll(dbPath)
 	assert.NoError(t, err)
 }
-
-func TestArseeding_CalcItemFee(t *testing.T) {
-	price := int64(12130000)
-	fee := int64(1200000)
-	t.Log(calculateFactor(price, fee))
-}

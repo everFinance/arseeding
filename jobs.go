@@ -44,6 +44,7 @@ func (s *Arseeding) runJobs() {
 
 	// manager taskStatus
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseTasks)
+
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundler)
 
 	s.scheduler.StartAsync()

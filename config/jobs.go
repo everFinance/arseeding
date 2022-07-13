@@ -1,10 +1,8 @@
 package config
 
 func (c *Config) runJobs() {
-	// 定时更新 config 到缓存
 	c.scheduler.Every(1).Minute().SingletonMode().Do(c.updateFee)
 	c.scheduler.Every(1).Minute().SingletonMode().Do(c.updateIPWhiteList)
-	c.scheduler.Every(1).Minute().SingletonMode().Do(c.updateApiKeys)
 
 	c.scheduler.StartAsync()
 }
@@ -30,18 +28,4 @@ func (c *Config) updateIPWhiteList() {
 		}
 	}
 	c.ipWhiteList = ipWhiteList
-}
-
-func (c *Config) updateApiKeys() {
-	keys, err := c.wdb.GetAllApiKeys()
-	if err != nil {
-		return
-	}
-	apiKeys := make(map[string]int64, 0)
-	for _, key := range keys {
-		if key.Available {
-			apiKeys[key.Key] = key.Level
-		}
-	}
-	c.apiKeys = apiKeys
 }

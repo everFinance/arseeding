@@ -4,7 +4,6 @@ go 1.17
 
 require (
 	github.com/aws/aws-sdk-go v1.27.0
-	github.com/ethereum/go-ethereum v1.10.12
 	github.com/everFinance/everpay-go v0.0.1
 	github.com/everFinance/goar v1.4.3
 	github.com/everFinance/goether v1.1.7
@@ -35,6 +34,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/deckarep/golang-set v0.0.0-20180603214616-504e848d77ea // indirect
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
+	github.com/ethereum/go-ethereum v1.10.12 // indirect
 	github.com/everFinance/ethrpc v1.0.4 // indirect
 	github.com/everFinance/gojwk v1.0.0 // indirect
 	github.com/everFinance/ttcrsa v1.1.3 // indirect

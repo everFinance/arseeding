@@ -6,7 +6,7 @@ type FeeConfig struct {
 }
 
 type IpRateWhitelist struct {
-	OriginOrIP  string // e.g "188.0.2.2" or "https://app.everpay.io"
+	OriginOrIP  string // e.g "188.0.2.2"
 	Available   bool   `gorm:"index:idx1"` // true means effective
 	Description string
 }
