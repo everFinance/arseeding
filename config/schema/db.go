@@ -12,6 +12,6 @@ type IpRateWhitelist struct {
 }
 
 type ApiKey struct {
-	Key         string // uuid
+	Key         string
 	Description string
 }
