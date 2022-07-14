@@ -74,6 +74,7 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/:id", s.getDataByGW) // get arTx data or bundleItem data
 		// submit native data with X-API-KEY
 		v1.POST("/bundle/data", s.submitNativeData)
+		v1.GET("/bundle/orders", s.getOrdersByApiKey) // http header need X-API-KEY
 	}
 
 	if err := r.Run(port); err != nil {
@@ -495,7 +496,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	currency := c.Param("currency")
 
 	// process bundleItem
-	ord, err := s.ProcessSubmitItem(*item, currency, s.NoFee)
+	ord, err := s.ProcessSubmitItem(*item, currency, s.NoFee, "")
 	if err != nil {
 		errorResponse(c, err.Error())
 		return
@@ -573,12 +574,45 @@ func (s *Arseeding) submitNativeData(c *gin.Context) {
 		return
 	}
 	// process submit item
-	order, err := s.ProcessSubmitItem(item, "", true)
+	order, err := s.ProcessSubmitItem(item, "", true, apiKey)
 	if err != nil {
 		errorResponse(c, err.Error())
 		return
 	}
+
 	c.JSON(http.StatusOK, schema.RespItemId{ItemId: order.ItemId})
+}
+
+func (s *Arseeding) getOrdersByApiKey(c *gin.Context) {
+	apiKey := c.GetHeader("X-API-KEY")
+	if _, ok := s.config.GetApiKey()[apiKey]; !ok {
+		errorResponse(c, "Wrong X-API-KEY")
+		return
+	}
+
+	cursorId, err := strconv.ParseInt(c.DefaultQuery("cursorId", "0"), 10, 64)
+	if err != nil {
+		errorResponse(c, err.Error())
+		return
+	}
+
+	pageSize, err := strconv.Atoi(c.DefaultQuery("size", "0"))
+	if err != nil {
+		errorResponse(c, err.Error())
+		return
+	}
+	MaxSize := 1000
+	if pageSize <= 0 || pageSize > MaxSize {
+		pageSize = MaxSize
+	}
+
+	sort := c.DefaultQuery("sort", "DESC")
+	orders, err := s.wdb.GetOrdersByApiKey(apiKey, cursorId, pageSize, sort)
+	if err != nil {
+		internalErrorResponse(c, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, orders)
 }
 
 func (s *Arseeding) getItemMeta(c *gin.Context) {

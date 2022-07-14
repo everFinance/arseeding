@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 	"math"
+	"strings"
 	"time"
 )
 
@@ -92,6 +93,20 @@ func (w *Wdb) GetOrdersBySigner(signer string, cursorId int64, num int) ([]schem
 	}
 	records := make([]schema.Order, 0, num)
 	err := w.Db.Where("signer = ? and id < ?", signer, cursorId).Order("id DESC").Limit(num).Find(&records).Error
+	return records, err
+}
+
+func (w *Wdb) GetOrdersByApiKey(apiKey string, cursorId int64, pageSize int, sort string) ([]schema.Order, error) {
+	if cursorId <= 0 {
+		cursorId = math.MaxInt64
+	}
+	records := make([]schema.Order, 0, pageSize)
+	var err error
+	if strings.ToUpper(sort) == "ASC" {
+		err = w.Db.Where("api_key = ? and id > ?", apiKey, cursorId).Order("id ASC").Limit(pageSize).Find(&records).Error
+	} else {
+		err = w.Db.Where("api_key = ? and id < ?", apiKey, cursorId).Order("id DESC").Limit(pageSize).Find(&records).Error
+	}
 	return records, err
 }
 
