@@ -10,6 +10,7 @@ type Config struct {
 	speedTxFee     int64
 	bundleServeFee int64
 	ipWhiteList    map[string]struct{}
+	apiKeyMap      map[string]struct{}
 	scheduler      *gocron.Scheduler
 }
 
@@ -41,6 +42,10 @@ func (c *Config) GetServeFee() int64 {
 
 func (c *Config) GetIPWhiteList() *map[string]struct{} {
 	return &c.ipWhiteList
+}
+
+func (c *Config) GetApiKey() map[string]struct{} {
+	return c.apiKeyMap
 }
 
 func (c *Config) Run() {

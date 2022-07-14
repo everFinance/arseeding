@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string) (schema.Order, error) {
+func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string, isNoFeeMode bool) (schema.Order, error) {
 	if err := utils.VerifyBundleItem(item); err != nil {
 		return schema.Order{}, err
 	}
@@ -40,7 +40,9 @@ func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string) (s
 	}
 
 	// calc fee
-	if !s.NoFee {
+	if isNoFeeMode {
+		order.PaymentStatus = schema.SuccPayment
+	} else {
 		respFee, err := s.CalcItemFee(currency, order.Size)
 		if err != nil {
 			return schema.Order{}, err
@@ -50,8 +52,6 @@ func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string) (s
 		order.Currency = strings.ToUpper(currency)
 		order.PaymentExpiredTime = time.Now().Unix() + s.paymentExpiredRange
 		order.PaymentStatus = schema.UnPayment
-	} else {
-		order.PaymentStatus = schema.SuccPayment
 	}
 
 	// insert to mysql

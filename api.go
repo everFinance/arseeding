@@ -72,6 +72,8 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
 		v1.GET("/bundle/orders/:signer", s.getOrders)
 		v1.GET("/:id", s.getDataByGW) // get arTx data or bundleItem data
+		// submit native data with X-API-KEY
+		v1.POST("/bundle/data", s.submitNativeData)
 	}
 
 	if err := r.Run(port); err != nil {
@@ -493,7 +495,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	currency := c.Param("currency")
 
 	// process bundleItem
-	ord, err := s.ProcessSubmitItem(*item, currency)
+	ord, err := s.ProcessSubmitItem(*item, currency, s.NoFee)
 	if err != nil {
 		errorResponse(c, err.Error())
 		return
@@ -508,6 +510,75 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 		PaymentExpiredTime: ord.PaymentExpiredTime,
 		ExpectedBlock:      ord.ExpectedBlock,
 	})
+}
+
+func (s *Arseeding) submitNativeData(c *gin.Context) {
+	apiKey := c.GetHeader("X-API-KEY")
+	if _, ok := s.config.GetApiKey()[apiKey]; !ok {
+		errorResponse(c, "Wrong X-API-KEY")
+		return
+	}
+	// get all query and assemble tags
+	queryMap := c.Request.URL.Query()
+	// query key must include "Content-Type"
+	if _, ok := queryMap["Content-Type"]; !ok {
+		errorResponse(c, "Query params must include Content-Type")
+		return
+	}
+
+	tags := make([]types.Tag, 0, len(queryMap))
+	for k, values := range queryMap {
+		for _, val := range values {
+			tags = append(tags, types.Tag{
+				Name:  k,
+				Value: val,
+			})
+		}
+	}
+
+	if c.Request.Body == nil {
+		errorResponse(c, "can not submit null native data")
+		return
+	}
+
+	defer c.Request.Body.Close()
+
+	nativeData := make([]byte, 0, 256*1024)
+	buf := make([]byte, 256*1024) // todo add to temp file
+	for {
+		if len(nativeData) > schema.AllowMaxNativeDataSize {
+			err := fmt.Errorf("allow max item size is 500 MB")
+			errorResponse(c, err.Error())
+			return
+		}
+
+		n, err := c.Request.Body.Read(buf)
+		if err != nil && err != io.EOF {
+			errorResponse(c, "read req failed")
+			log.Error("read req failed", "err", err)
+			return
+		}
+
+		if n == 0 {
+			break
+		}
+		nativeData = append(nativeData, buf[:n]...)
+	}
+
+	// use bundler private assemble bundle item
+	item, err := s.bundlerItemSigner.CreateAndSignItem(nativeData, "", "", tags)
+	if err != nil {
+		errorResponse(c, "assemble bundle item failed")
+		log.Error("s.bundlerItemSigner.CreateAndSignItem", "err", err)
+		return
+	}
+	// process submit item
+	order, err := s.ProcessSubmitItem(item, "", true)
+	if err != nil {
+		errorResponse(c, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, schema.RespItemId{ItemId: order.ItemId})
 }
 
 func (s *Arseeding) getItemMeta(c *gin.Context) {
