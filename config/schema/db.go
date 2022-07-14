@@ -10,3 +10,8 @@ type IpRateWhitelist struct {
 	Available   bool   `gorm:"index:idx1"` // true means effective
 	Description string
 }
+
+type ApiKey struct {
+	Key         string
+	Description string
+}

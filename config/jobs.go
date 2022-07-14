@@ -3,6 +3,7 @@ package config
 func (c *Config) runJobs() {
 	c.scheduler.Every(1).Minute().SingletonMode().Do(c.updateFee)
 	c.scheduler.Every(1).Minute().SingletonMode().Do(c.updateIPWhiteList)
+	c.scheduler.Every(10).Seconds().SingletonMode().Do(c.updateApiKey)
 
 	c.scheduler.StartAsync()
 }
@@ -28,4 +29,16 @@ func (c *Config) updateIPWhiteList() {
 		}
 	}
 	c.ipWhiteList = ipWhiteList
+}
+
+func (c *Config) updateApiKey() {
+	apiKeyList, err := c.wdb.GetAllApiKey()
+	if err != nil {
+		return
+	}
+	apiKeyMap := make(map[string]struct{})
+	for _, k := range apiKeyList {
+		apiKeyMap[k.Key] = struct{}{}
+	}
+	c.apiKeyMap = apiKeyMap
 }

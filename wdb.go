@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 	"math"
+	"strings"
 	"time"
 )
 
@@ -41,9 +42,9 @@ func (w *Wdb) InsertOrder(order schema.Order) error {
 	return w.Db.Create(&order).Error
 }
 
-func (w *Wdb) GetUnPaidOrder(itemId, signer string) (schema.Order, error) {
+func (w *Wdb) GetUnPaidOrder(itemId string) (schema.Order, error) {
 	res := schema.Order{}
-	err := w.Db.Model(&schema.Order{}).Where("item_id = ? and signer = ? and payment_status = ?", itemId, signer, schema.UnPayment).First(&res).Error
+	err := w.Db.Model(&schema.Order{}).Where("item_id = ? and payment_status = ?", itemId, schema.UnPayment).First(&res).Error
 	return res, err
 }
 
@@ -92,6 +93,23 @@ func (w *Wdb) GetOrdersBySigner(signer string, cursorId int64, num int) ([]schem
 	}
 	records := make([]schema.Order, 0, num)
 	err := w.Db.Where("signer = ? and id < ?", signer, cursorId).Order("id DESC").Limit(num).Find(&records).Error
+	return records, err
+}
+
+func (w *Wdb) GetOrdersByApiKey(apiKey string, cursorId int64, pageSize int, sort string) ([]schema.Order, error) {
+	records := make([]schema.Order, 0, pageSize)
+	var err error
+	if strings.ToUpper(sort) == "ASC" {
+		if cursorId <= 0 {
+			cursorId = 0
+		}
+		err = w.Db.Where("api_key = ? and id > ?", apiKey, cursorId).Order("id ASC").Limit(pageSize).Find(&records).Error
+	} else {
+		if cursorId <= 0 {
+			cursorId = math.MaxInt64
+		}
+		err = w.Db.Where("api_key = ? and id < ?", apiKey, cursorId).Order("id DESC").Limit(pageSize).Find(&records).Error
+	}
 	return records, err
 }
 

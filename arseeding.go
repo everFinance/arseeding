@@ -33,6 +33,7 @@ type Arseeding struct {
 	everpaySdk          *paySdk.SDK
 	wdb                 *Wdb
 	bundler             *goar.Wallet
+	bundlerItemSigner   *goar.ItemSigner
 	NoFee               bool                  // if true, means no bundle fee; default false
 	bundlePerFeeMap     map[string]schema.Fee // key: tokenSymbol, val: fee per chunk_size(256KB)
 	paymentExpiredRange int64                 // default 1 hour
@@ -70,6 +71,10 @@ func New(
 		panic(err)
 	}
 
+	itemSigner, err := goar.NewItemSigner(bundler.Signer)
+	if err != nil {
+		panic(err)
+	}
 	everpaySdk, err := paySdk.New(bundler.Signer, payUrl)
 	if err != nil {
 		panic(err)
@@ -89,6 +94,7 @@ func New(
 		everpaySdk:          everpaySdk,
 		wdb:                 wdb,
 		bundler:             bundler,
+		bundlerItemSigner:   itemSigner,
 		NoFee:               noFee,
 		bundlePerFeeMap:     make(map[string]schema.Fee),
 		paymentExpiredRange: schema.DefaultPaymentExpiredRange,

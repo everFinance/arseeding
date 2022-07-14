@@ -206,13 +206,12 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 	}
 
 	for _, urtx := range unspentRpts {
-		signer := urtx.From
 		paymentItemId := gjson.Parse(urtx.Data).Get("itemId").String()
-		ord, err := s.wdb.GetUnPaidOrder(paymentItemId, signer)
+		ord, err := s.wdb.GetUnPaidOrder(paymentItemId)
 		if err != nil {
-			log.Error("s.wdb.GetUnPaidOrder", "err", err, "itemId", paymentItemId, "signer", signer)
+			log.Error("s.wdb.GetUnPaidOrder", "err", err, "itemId", paymentItemId)
 			if err == gorm.ErrRecordNotFound {
-				log.Warn("need refund about not find order", "itemId", paymentItemId, "signer", signer)
+				log.Warn("need refund about not find order", "itemId", paymentItemId)
 				// update receipt status is unrefund and waiting refund
 				if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
 					log.Error("s.wdb.UpdateReceiptStatus", "err", err, "id", urtx.RawId)
