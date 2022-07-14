@@ -47,6 +47,7 @@ type Order struct {
 	PaymentId     string `json:"paymentId"`     // everHash
 
 	OnChainStatus string `json:"onChainStatus"` // "waiting","pending","success","failed"
+	ApiKey        string `gorm:"index:idx2" json:"-"`
 }
 
 type ReceiptEverTx struct {

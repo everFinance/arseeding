@@ -5,7 +5,8 @@ import (
 )
 
 const (
-	AllowMaxItemSize = 100 * 1024 * 1024 // 100 MB
+	AllowMaxItemSize       = 200 * 1024 * 1024 // 200 MB
+	AllowMaxNativeDataSize = 500 * 1024 * 1024 // 500 MB
 )
 
 type RespOrder struct {
@@ -16,6 +17,10 @@ type RespOrder struct {
 	Fee                string `json:"fee"`
 	PaymentExpiredTime int64  `json:"paymentExpiredTime"`
 	ExpectedBlock      int64  `json:"expectedBlock"`
+}
+
+type RespItemId struct {
+	ItemId string `json:"itemId"` // bundleItem id
 }
 
 type Fee struct {

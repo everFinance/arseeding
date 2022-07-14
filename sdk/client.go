@@ -144,6 +144,29 @@ func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string) (*schema.Resp
 	return br, err
 }
 
+func (a *ArSeedCli) SubmitNativeData(apiKey string, data []byte, contentType string, tags map[string]string) (*schema.RespItemId, error) {
+	req := a.SCli.Post()
+	req.Path(fmt.Sprintf("/bundle/data"))
+	req.SetHeader("X-API-KEY", apiKey)
+	req.AddQuery("Content-Type", contentType)
+	for k, v := range tags {
+		req.AddQuery(k, v)
+	}
+	req.Body(bytes.NewReader(data))
+
+	resp, err := req.Send()
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Close()
+	if !resp.Ok {
+		return nil, fmt.Errorf("resp failed.http code: %d, errMsg:%s", resp.StatusCode, resp.String())
+	}
+	br := &schema.RespItemId{}
+	err = resp.JSON(br)
+	return br, err
+}
+
 func (a *ArSeedCli) GetItemMeta(itemId string) (types.BundleItem, error) {
 	req := a.SCli.Get()
 	req.Path(fmt.Sprintf("/bundle/tx/%s", itemId))

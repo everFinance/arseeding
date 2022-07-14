@@ -52,3 +52,17 @@ func TestSDK_SendDataAndPay_RsaSigner(t *testing.T) {
 	t.Log("itemId:", itemId)
 	t.Log(tx.HexHash())
 }
+
+func TestArSeedCli_SubmitNativeData(t *testing.T) {
+	apiKey := "aabbccddeee"
+	data := []byte("aaabbbcc")
+	cli := New("http://127.0.0.1:8080")
+
+	res, err := cli.SubmitNativeData(apiKey, data, "image/jpeg", map[string]string{
+		"key1": "arseeding test",
+		"key2": "sandy test bundle native data",
+	})
+	assert.NoError(t, err)
+	t.Log(res)
+
+}

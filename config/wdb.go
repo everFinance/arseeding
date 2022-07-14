@@ -27,7 +27,16 @@ func NewWdb(dsn string) *Wdb {
 }
 
 func (w *Wdb) Migrate() error {
-	return w.Db.AutoMigrate(&schema.FeeConfig{}, &schema.IpRateWhitelist{})
+	return w.Db.AutoMigrate(&schema.FeeConfig{},
+		&schema.IpRateWhitelist{},
+		&schema.ApiKey{})
+}
+
+func (w *Wdb) Close() {
+	sql, err := w.Db.DB()
+	if err == nil {
+		sql.Close()
+	}
 }
 
 func (w *Wdb) GetFee() (fee schema.FeeConfig, err error) {
@@ -48,9 +57,8 @@ func (w *Wdb) GetAllAvailableIpRateWhitelist() ([]schema.IpRateWhitelist, error)
 	return res, err
 }
 
-func (w *Wdb) Close() {
-	sql, err := w.Db.DB()
-	if err == nil {
-		sql.Close()
-	}
+func (w *Wdb) GetAllApiKey() ([]schema.ApiKey, error) {
+	res := make([]schema.ApiKey, 0, 10)
+	err := w.Db.Model(&schema.ApiKey{}).Find(&res).Error
+	return res, err
 }
