@@ -97,14 +97,17 @@ func (w *Wdb) GetOrdersBySigner(signer string, cursorId int64, num int) ([]schem
 }
 
 func (w *Wdb) GetOrdersByApiKey(apiKey string, cursorId int64, pageSize int, sort string) ([]schema.Order, error) {
-	if cursorId <= 0 {
-		cursorId = math.MaxInt64
-	}
 	records := make([]schema.Order, 0, pageSize)
 	var err error
 	if strings.ToUpper(sort) == "ASC" {
+		if cursorId <= 0 {
+			cursorId = 0
+		}
 		err = w.Db.Where("api_key = ? and id > ?", apiKey, cursorId).Order("id ASC").Limit(pageSize).Find(&records).Error
 	} else {
+		if cursorId <= 0 {
+			cursorId = math.MaxInt64
+		}
 		err = w.Db.Where("api_key = ? and id < ?", apiKey, cursorId).Order("id DESC").Limit(pageSize).Find(&records).Error
 	}
 	return records, err
