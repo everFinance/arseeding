@@ -34,6 +34,10 @@ func (a *ArSeedCli) BroadcastTxData(arId string) error {
 	return a.postTask(schema.TaskTypeBroadcast, arId)
 }
 
+func (a *ArSeedCli) BroadcastTxMeta(arId string) error {
+	return a.postTask(schema.TaskTypeBroadcastMeta, arId)
+}
+
 func (a *ArSeedCli) SyncTx(arId string) error {
 	return a.postTask(schema.TaskTypeSync, arId)
 }
