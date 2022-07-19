@@ -13,9 +13,9 @@ import (
 )
 
 type SDK struct {
-	itemSigner *goar.ItemSigner
-	arseedCli  *ArSeedCli
-	pay        *paySdk.SDK
+	ItemSigner *goar.ItemSigner
+	Cli        *ArSeedCli
+	Pay        *paySdk.SDK
 }
 
 func NewSDK(arseedUrl, payUrl string, signer interface{}) (*SDK, error) {
@@ -29,9 +29,9 @@ func NewSDK(arseedUrl, payUrl string, signer interface{}) (*SDK, error) {
 		return nil, err
 	}
 	return &SDK{
-		itemSigner: itemSigner,
-		arseedCli:  cli,
-		pay:        pay,
+		ItemSigner: itemSigner,
+		Cli:        cli,
+		Pay:        pay,
 	}, nil
 }
 
@@ -39,14 +39,14 @@ func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.Option
 
 	bundleItem := types.BundleItem{}
 	if option != nil {
-		bundleItem, err = s.itemSigner.CreateAndSignItem(data, option.Target, option.Anchor, option.Tags)
+		bundleItem, err = s.ItemSigner.CreateAndSignItem(data, option.Target, option.Anchor, option.Tags)
 	} else {
-		bundleItem, err = s.itemSigner.CreateAndSignItem(data, "", "", nil)
+		bundleItem, err = s.ItemSigner.CreateAndSignItem(data, "", "", nil)
 	}
 	if err != nil {
 		return
 	}
-	order, err := s.arseedCli.SubmitItem(bundleItem.ItemBinary, currency)
+	order, err := s.Cli.SubmitItem(bundleItem.ItemBinary, currency)
 	if err != nil {
 		return
 	}
@@ -63,6 +63,6 @@ func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.Option
 	if err != nil {
 		return
 	}
-	everTx, err = s.pay.Transfer(order.Currency, amount, order.Bundler, string(dataJs))
+	everTx, err = s.Pay.Transfer(order.Currency, amount, order.Bundler, string(dataJs))
 	return
 }
