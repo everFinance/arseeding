@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	arseedSchema "github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/arseeding/sdk/schema"
 	paySchema "github.com/everFinance/everpay-go/pay/schema"
 	paySdk "github.com/everFinance/everpay-go/sdk"
@@ -36,7 +37,15 @@ func NewSDK(arseedUrl, payUrl string, signer interface{}) (*SDK, error) {
 }
 
 func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.OptionItem) (everTx *paySchema.Transaction, itemId string, err error) {
+	order, err := s.SendData(data, currency, option)
+	if err != nil {
+		return
+	}
+	everTx, err = s.PayOrder(order)
+	return
+}
 
+func (s *SDK) SendData(data []byte, currency string, option *schema.OptionItem) (order *arseedSchema.RespOrder, err error) {
 	bundleItem := types.BundleItem{}
 	if option != nil {
 		bundleItem, err = s.ItemSigner.CreateAndSignItem(data, option.Target, option.Anchor, option.Tags)
@@ -46,11 +55,14 @@ func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.Option
 	if err != nil {
 		return
 	}
-	order, err := s.Cli.SubmitItem(bundleItem.ItemBinary, currency)
-	if err != nil {
-		return
+	order, err = s.Cli.SubmitItem(bundleItem.ItemBinary, currency)
+	return
+}
+
+func (s *SDK) PayOrder(order *arseedSchema.RespOrder) (everTx *paySchema.Transaction, err error) {
+	if order == nil {
+		return nil, errors.New("order is null")
 	}
-	itemId = order.ItemId
 	if order.Fee == "" { // arseeding NO_FEE module
 		return
 	}
