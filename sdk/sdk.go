@@ -41,6 +41,7 @@ func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.Option
 	if err != nil {
 		return
 	}
+	itemId = order.ItemId
 	everTx, err = s.PayOrder(order)
 	return
 }
