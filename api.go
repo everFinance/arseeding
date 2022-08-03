@@ -2,6 +2,7 @@ package arseeding
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/everFinance/arseeding/common"
 	"github.com/everFinance/arseeding/schema"
@@ -20,6 +21,7 @@ import (
 func (s *Arseeding) runAPI(port string) {
 	r := s.engine
 	r.Use(common.CORSMiddleware())
+	r.Use(common.SandboxMiddleware())
 	if !s.NoFee {
 		r.Use(common.LimiterMiddleware(3000, "M", s.config.GetIPWhiteList()))
 	}
@@ -71,7 +73,10 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/bundle/fees", s.bundleFees)
 		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
 		v1.GET("/bundle/orders/:signer", s.getOrders)
-		v1.GET("/:id", s.getDataByGW) // get arTx data or bundleItem data
+		v1.GET("/:id", s.dataResponse)       // get arTx data or bundleItem data
+		v1.GET("/:id/*path", s.dataResponse) // get pathData from manifest data
+		v1.GET("/folder/:id", s.getFolder)   // return manifest data, display the folder
+
 		// submit native data with X-API-KEY
 		v1.POST("/bundle/data", s.submitNativeData)
 		v1.GET("/bundle/orders", s.getOrdersByApiKey) // http header need X-API-KEY
@@ -298,14 +303,14 @@ func txDataByMeta(txMeta *types.Transaction, db *Store) ([]byte, error) {
 		return nil, schema.ErrDataTooBig
 	}
 
-	data, err := getData(txMeta.DataRoot, txMeta.DataSize, db)
+	data, err := getArTxData(txMeta.DataRoot, txMeta.DataSize, db)
 	if err != nil {
 		return nil, err
 	}
 	return data, nil
 }
 
-func getData(dataRoot, dataSize string, db *Store) ([]byte, error) {
+func getArTxData(dataRoot, dataSize string, db *Store) ([]byte, error) {
 	size, err := strconv.ParseUint(dataSize, 10, 64)
 	if err != nil {
 		return nil, err
@@ -678,7 +683,7 @@ func (s *Arseeding) bundleFees(c *gin.Context) {
 	c.JSON(http.StatusOK, s.bundlePerFeeMap)
 }
 
-func (s *Arseeding) getDataByGW(c *gin.Context) {
+func (s *Arseeding) getFolder(c *gin.Context) {
 	id := c.Param("id")
 	txMeta, err := s.store.LoadTxMeta(id)
 	if err == nil { // find id is arId
@@ -687,29 +692,69 @@ func (s *Arseeding) getDataByGW(c *gin.Context) {
 			internalErrorResponse(c, err.Error())
 			return
 		}
-		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(txMeta.Tags, "Content-Type")), data)
+		if getTagValue(txMeta.Tags, schema.ContentType) != schema.ManifestType {
+			errorResponse(c, "Not Manifest Tx")
+			return
+		}
+		c.Data(200, "application/json; charset=utf-8", data)
 		return
 	}
-
 	// not arId
 	itemBinary, err := s.store.LoadItemBinary(id)
 	if err == nil { // id is bundle item id
-		item, err := utils.DecodeBundleItem(itemBinary)
+		data, item, err := getItemInfo(itemBinary)
 		if err != nil {
 			internalErrorResponse(c, err.Error())
 			return
 		}
-		data, err := utils.Base64Decode(item.Data)
-		if err != nil {
-			internalErrorResponse(c, err.Error())
+		if getTagValue(item.Tags, schema.ContentType) != schema.ManifestType {
+			errorResponse(c, "Not Manifest Tx")
 			return
 		}
-		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(item.Tags, "Content-Type")), data)
+		c.Data(200, "application/json; charset=utf-8", data)
 		return
 	}
+	notFoundResponse(c, "Not Found")
+}
 
-	// get from arweave gateway
-	proxyArweaveGateway(c)
+func (s *Arseeding) dataResponse(c *gin.Context) {
+	ids := make(map[string]bool, 0) // path shouldn't contain loop. e.g id1(manifest)->id2(manifest)->id3(manifest)->id1
+	tags, data, err := getData(c.Param("id"), c.Param("path"), s.store, ids)
+	switch err {
+	case nil:
+		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, "Content-Type")), data)
+	case schema.ErrPageNotFound:
+		notFoundResponse(c, err.Error())
+	case schema.ErrLocalNotExist:
+		proxyArweaveGateway(c)
+	default:
+		internalErrorResponse(c, err.Error())
+	}
+}
+
+func getData(id string, subPath string, db *Store, ids map[string]bool) ([]types.Tag, []byte, error) {
+	ids[id] = true
+	txMeta, err := db.LoadTxMeta(id)
+	if err == nil { // find id is arId
+		data, err := txDataByMeta(txMeta, db)
+		if err != nil {
+			return nil, nil, err
+		}
+		return getRealData(txMeta.Tags, data, subPath, db, ids)
+	}
+
+	// not arId
+	itemBinary, err := db.LoadItemBinary(id)
+	if err == nil { // id is bundle item id
+		data, item, err := getItemInfo(itemBinary)
+		if err != nil {
+			return nil, nil, err
+		}
+		return getRealData(item.Tags, data, subPath, db, ids)
+	}
+
+	// txId not found in local, need proxy to gateway
+	return nil, nil, schema.ErrLocalNotExist
 }
 
 func getTagValue(tags []types.Tag, name string) string {
@@ -721,6 +766,52 @@ func getTagValue(tags []types.Tag, name string) string {
 	return ""
 }
 
+func getItemInfo(itemBinary []byte) ([]byte, *types.BundleItem, error) {
+	item, err := utils.DecodeBundleItem(itemBinary)
+	if err != nil {
+		return nil, nil, err
+	}
+	data, err := utils.Base64Decode(item.Data)
+	if err != nil {
+		return nil, nil, err
+	}
+	return data, item, nil
+}
+
+func getRealData(tags []types.Tag, data []byte, subPath string, db *Store, ids map[string]bool) ([]types.Tag, []byte, error) {
+	if getTagValue(tags, "Content-Type") == schema.ManifestType {
+		realData, err := handleManifest(data, subPath, db, ids)
+		if err != nil {
+			return nil, nil, err
+		}
+		return tags, realData, nil
+	}
+	// not manifest
+	return tags, data, nil
+}
+
+func handleManifest(maniData []byte, path string, db *Store, ids map[string]bool) ([]byte, error) {
+	mani := schema.ManifestData{}
+	err := json.Unmarshal(maniData, &mani)
+	if err != nil {
+		return nil, err
+	}
+	if path == "" {
+		if mani.Index.Path == "" {
+			return nil, schema.ErrPageNotFound
+		}
+		path = mani.Index.Path
+	}
+	txId, ok := mani.Paths[path]
+	if !ok {
+		return nil, schema.ErrPageNotFound
+	}
+	if _, ok = ids[txId.TxId]; ok { // stop recursive, otherwise is dead loop
+		return nil, errors.New("illegal Manifest")
+	}
+	_, data, err := getData(txId.TxId, "", db, ids)
+	return data, err
+}
 func errorResponse(c *gin.Context, err string) {
 	// client error
 	c.JSON(http.StatusBadRequest, schema.RespErr{
@@ -728,8 +819,14 @@ func errorResponse(c *gin.Context, err string) {
 	})
 }
 
+func notFoundResponse(c *gin.Context, err string) {
+	c.JSON(http.StatusNotFound, schema.RespErr{
+		Err: err,
+	})
+}
+
 func internalErrorResponse(c *gin.Context, err string) {
-	// client error
+	// internal error
 	c.JSON(http.StatusInternalServerError, schema.RespErr{
 		Err: err,
 	})
