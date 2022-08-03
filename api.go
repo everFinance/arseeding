@@ -734,13 +734,18 @@ func (s *Arseeding) dataResponse(c *gin.Context) {
 
 func getData(id string, subPath string, db *Store, ids map[string]bool) ([]types.Tag, []byte, error) {
 	ids[id] = true
+	subPath = strings.TrimPrefix(subPath, "/")
 	txMeta, err := db.LoadTxMeta(id)
 	if err == nil { // find id is arId
 		data, err := txDataByMeta(txMeta, db)
 		if err != nil {
 			return nil, nil, err
 		}
-		return getRealData(txMeta.Tags, data, subPath, db, ids)
+		tags, err := utils.TagsDecode(txMeta.Tags)
+		if err != nil {
+			return nil, nil, err
+		}
+		return getRealData(tags, data, subPath, db, ids)
 	}
 
 	// not arId
@@ -780,7 +785,7 @@ func getItemInfo(itemBinary []byte) ([]byte, *types.BundleItem, error) {
 
 func getRealData(tags []types.Tag, data []byte, subPath string, db *Store, ids map[string]bool) ([]types.Tag, []byte, error) {
 	if getTagValue(tags, "Content-Type") == schema.ManifestType {
-		realData, err := handleManifest(data, subPath, db, ids)
+		tags, realData, err := handleManifest(data, subPath, db, ids)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -790,28 +795,29 @@ func getRealData(tags []types.Tag, data []byte, subPath string, db *Store, ids m
 	return tags, data, nil
 }
 
-func handleManifest(maniData []byte, path string, db *Store, ids map[string]bool) ([]byte, error) {
+func handleManifest(maniData []byte, path string, db *Store, ids map[string]bool) ([]types.Tag, []byte, error) {
 	mani := schema.ManifestData{}
 	err := json.Unmarshal(maniData, &mani)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if path == "" {
 		if mani.Index.Path == "" {
-			return nil, schema.ErrPageNotFound
+			return nil, nil, schema.ErrPageNotFound
 		}
 		path = mani.Index.Path
 	}
 	txId, ok := mani.Paths[path]
 	if !ok {
-		return nil, schema.ErrPageNotFound
+		return nil, nil, schema.ErrPageNotFound
 	}
 	if _, ok = ids[txId.TxId]; ok { // stop recursive, otherwise is dead loop
-		return nil, errors.New("illegal Manifest")
+		return nil, nil, errors.New("illegal Manifest")
 	}
-	_, data, err := getData(txId.TxId, "", db, ids)
-	return data, err
+	tags, data, err := getData(txId.TxId, "", db, ids)
+	return tags, data, err
 }
+
 func errorResponse(c *gin.Context, err string) {
 	// client error
 	c.JSON(http.StatusBadRequest, schema.RespErr{
