@@ -70,11 +70,25 @@ func CORSMiddleware() gin.HandlerFunc {
 func SandboxMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		txId := getTxIdFromPath(c.Request.RequestURI)
-		if txId != "" && c.GetHeader("x-amz-cf-id") == "" {
+		isBrowser := false
+		if strings.Contains(c.GetHeader("User-Agent"), "Mozilla") {
+			isBrowser = true
+		}
+		if isBrowser && txId != "" && c.GetHeader("x-amz-cf-id") == "" {
 			currentSandbox := getRequestSandbox(c.Request)
 			expectedSandbox := expectedTxSandbox(txId)
 			if currentSandbox != expectedSandbox {
-				c.Redirect(302, fmt.Sprintf("https://%s.%s%s", expectedSandbox, c.Request.Host, c.Request.RequestURI))
+				protocol := "https"
+				if c.Request.TLS == nil {
+					protocol = "http"
+				}
+				redirectUrl := fmt.Sprintf("%s://%s.%s%s", protocol, expectedSandbox, c.Request.Host, c.Request.RequestURI)
+				// add "/" fix double slash
+				if !strings.HasSuffix(redirectUrl, "/") {
+					redirectUrl = redirectUrl + "/"
+				}
+
+				c.Redirect(302, redirectUrl)
 				return
 			}
 		}
