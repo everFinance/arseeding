@@ -14,6 +14,7 @@ func handleManifest(maniData []byte, path string, db *Store) ([]types.Tag, []byt
 		return nil, nil, err
 	}
 	path = strings.TrimPrefix(path, "/")
+	path = strings.TrimSuffix(path, "/")
 	if path == "" {
 		if mani.Index.Path == "" {
 			return nil, nil, schema.ErrPageNotFound
