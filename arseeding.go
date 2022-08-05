@@ -34,7 +34,8 @@ type Arseeding struct {
 	wdb                 *Wdb
 	bundler             *goar.Wallet
 	bundlerItemSigner   *goar.ItemSigner
-	NoFee               bool                  // if true, means no bundle fee; default false
+	NoFee               bool // if true, means no bundle fee; default false
+	EnableManifest      bool
 	bundlePerFeeMap     map[string]schema.Fee // key: tokenSymbol, val: fee per chunk_size(256KB)
 	paymentExpiredRange int64                 // default 1 hour
 	expectedRange       int64                 // default 50 block
@@ -42,7 +43,7 @@ type Arseeding struct {
 
 func New(
 	boltDirPath, dsn string,
-	arWalletKeyPath string, arNode, payUrl string, noFee bool,
+	arWalletKeyPath string, arNode, payUrl string, noFee bool, enableManifest bool,
 	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region string, use4EVER bool,
 	port string,
 ) *Arseeding {
@@ -96,6 +97,7 @@ func New(
 		bundler:             bundler,
 		bundlerItemSigner:   itemSigner,
 		NoFee:               noFee,
+		EnableManifest:      enableManifest,
 		bundlePerFeeMap:     make(map[string]schema.Fee),
 		paymentExpiredRange: schema.DefaultPaymentExpiredRange,
 		expectedRange:       schema.DefaultExpectedRange,

@@ -40,7 +40,7 @@ func (s *Arseeding) runJobs() {
 	s.scheduler.Every(3).Minute().SingletonMode().Do(s.watchArTx)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.retryOnChainArTx)
 
-	s.scheduler.Every(1).Minute().SingletonMode().Do(s.parseAndSaveBundleTx)
+	s.scheduler.Every(10).Seconds().SingletonMode().Do(s.parseAndSaveBundleTx)
 
 	// manager taskStatus
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseTasks)

@@ -2,7 +2,6 @@ package arseeding
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/everFinance/arseeding/common"
 	"github.com/everFinance/arseeding/schema"
@@ -21,7 +20,11 @@ import (
 func (s *Arseeding) runAPI(port string) {
 	r := s.engine
 	r.Use(common.CORSMiddleware())
-	r.Use(common.SandboxMiddleware())
+
+	if s.EnableManifest {
+		r.Use(common.SandboxMiddleware())
+	}
+
 	if !s.NoFee {
 		r.Use(common.LimiterMiddleware(3000, "M", s.config.GetIPWhiteList()))
 	}
@@ -75,7 +78,6 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/bundle/orders/:signer", s.getOrders)
 		v1.GET("/:id", s.dataResponse)       // get arTx data or bundleItem data
 		v1.GET("/:id/*path", s.dataResponse) // get pathData from manifest data
-		v1.GET("/folder/:id", s.getFolder)   // return manifest data, display the folder
 
 		// submit native data with X-API-KEY
 		v1.POST("/bundle/data", s.submitNativeData)
@@ -298,8 +300,8 @@ func txDataByMeta(txMeta *types.Transaction, db *Store) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// When data is bigger than 12MiB return statusCode == 400, use chunk
-	if size > 50*128*1024 {
+	// When data is bigger than 50MiB return statusCode == 400, use chunk
+	if size > schema.AllowMaxRespDataSize {
 		return nil, schema.ErrDataTooBig
 	}
 
@@ -683,83 +685,32 @@ func (s *Arseeding) bundleFees(c *gin.Context) {
 	c.JSON(http.StatusOK, s.bundlePerFeeMap)
 }
 
-func (s *Arseeding) getFolder(c *gin.Context) {
-	id := c.Param("id")
-	txMeta, err := s.store.LoadTxMeta(id)
-	if err == nil { // find id is arId
-		data, err := txDataByMeta(txMeta, s.store)
-		if err != nil {
-			internalErrorResponse(c, err.Error())
-			return
-		}
-		if getTagValue(txMeta.Tags, schema.ContentType) != schema.ManifestType {
-			errorResponse(c, "Not Manifest Tx")
-			return
-		}
-		c.Data(200, "application/json; charset=utf-8", data)
-		return
-	}
-	// not arId
-	itemBinary, err := s.store.LoadItemBinary(id)
-	if err == nil { // id is bundle item id
-		data, item, err := getItemInfo(itemBinary)
-		if err != nil {
-			internalErrorResponse(c, err.Error())
-			return
-		}
-		if getTagValue(item.Tags, schema.ContentType) != schema.ManifestType {
-			errorResponse(c, "Not Manifest Tx")
-			return
-		}
-		c.Data(200, "application/json; charset=utf-8", data)
-		return
-	}
-	notFoundResponse(c, "Not Found")
-}
-
 func (s *Arseeding) dataResponse(c *gin.Context) {
-	ids := make(map[string]bool, 0) // path shouldn't contain loop. e.g id1(manifest)->id2(manifest)->id3(manifest)->id1
-	tags, data, err := getData(c.Param("id"), c.Param("path"), s.store, ids)
+	tags, data, err := getArTxOrItemData(c.Param("id"), s.store)
 	switch err {
 	case nil:
+		// process manifest
+		if s.EnableManifest && getTagValue(tags, schema.ContentType) == schema.ManifestType {
+			tags, data, err = handleManifest(data, c.Param("path"), s.store)
+			if err != nil {
+				if err == schema.ErrLocalNotExist {
+					proxyArweaveGateway(c)
+				} else if err == schema.ErrPageNotFound {
+					notFoundResponse(c, err.Error())
+				} else {
+					internalErrorResponse(c, err.Error())
+				}
+				return
+			}
+		}
+
 		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, "Content-Type")), data)
-	case schema.ErrPageNotFound:
-		notFoundResponse(c, err.Error())
+
 	case schema.ErrLocalNotExist:
 		proxyArweaveGateway(c)
 	default:
 		internalErrorResponse(c, err.Error())
 	}
-}
-
-func getData(id string, subPath string, db *Store, ids map[string]bool) ([]types.Tag, []byte, error) {
-	ids[id] = true
-	subPath = strings.TrimPrefix(subPath, "/")
-	txMeta, err := db.LoadTxMeta(id)
-	if err == nil { // find id is arId
-		data, err := txDataByMeta(txMeta, db)
-		if err != nil {
-			return nil, nil, err
-		}
-		tags, err := utils.TagsDecode(txMeta.Tags)
-		if err != nil {
-			return nil, nil, err
-		}
-		return getRealData(tags, data, subPath, db, ids)
-	}
-
-	// not arId
-	itemBinary, err := db.LoadItemBinary(id)
-	if err == nil { // id is bundle item id
-		data, item, err := getItemInfo(itemBinary)
-		if err != nil {
-			return nil, nil, err
-		}
-		return getRealData(item.Tags, data, subPath, db, ids)
-	}
-
-	// txId not found in local, need proxy to gateway
-	return nil, nil, schema.ErrLocalNotExist
 }
 
 func getTagValue(tags []types.Tag, name string) string {
@@ -769,53 +720,6 @@ func getTagValue(tags []types.Tag, name string) string {
 		}
 	}
 	return ""
-}
-
-func getItemInfo(itemBinary []byte) ([]byte, *types.BundleItem, error) {
-	item, err := utils.DecodeBundleItem(itemBinary)
-	if err != nil {
-		return nil, nil, err
-	}
-	data, err := utils.Base64Decode(item.Data)
-	if err != nil {
-		return nil, nil, err
-	}
-	return data, item, nil
-}
-
-func getRealData(tags []types.Tag, data []byte, subPath string, db *Store, ids map[string]bool) ([]types.Tag, []byte, error) {
-	if getTagValue(tags, "Content-Type") == schema.ManifestType {
-		tags, realData, err := handleManifest(data, subPath, db, ids)
-		if err != nil {
-			return nil, nil, err
-		}
-		return tags, realData, nil
-	}
-	// not manifest
-	return tags, data, nil
-}
-
-func handleManifest(maniData []byte, path string, db *Store, ids map[string]bool) ([]types.Tag, []byte, error) {
-	mani := schema.ManifestData{}
-	err := json.Unmarshal(maniData, &mani)
-	if err != nil {
-		return nil, nil, err
-	}
-	if path == "" {
-		if mani.Index.Path == "" {
-			return nil, nil, schema.ErrPageNotFound
-		}
-		path = mani.Index.Path
-	}
-	txId, ok := mani.Paths[path]
-	if !ok {
-		return nil, nil, schema.ErrPageNotFound
-	}
-	if _, ok = ids[txId.TxId]; ok { // stop recursive, otherwise is dead loop
-		return nil, nil, errors.New("illegal Manifest")
-	}
-	tags, data, err := getData(txId.TxId, "", db, ids)
-	return tags, data, err
 }
 
 func errorResponse(c *gin.Context, err string) {
