@@ -74,7 +74,7 @@ func SandboxMiddleware() gin.HandlerFunc {
 		if strings.Contains(c.GetHeader("User-Agent"), "Mozilla") {
 			isBrowser = true
 		}
-		if isBrowser && txId != "" && c.GetHeader("x-amz-cf-id") == "" {
+		if isBrowser && txId != "" {
 			currentSandbox := getRequestSandbox(c.Request)
 			expectedSandbox := expectedTxSandbox(txId)
 			if currentSandbox != expectedSandbox {
@@ -84,7 +84,8 @@ func SandboxMiddleware() gin.HandlerFunc {
 				}
 				redirectUrl := fmt.Sprintf("%s://%s.%s%s", protocol, expectedSandbox, c.Request.Host, c.Request.RequestURI)
 				// add "/" fix double slash
-				if !strings.HasSuffix(redirectUrl, "/") {
+				redirectUrl = strings.TrimSuffix(redirectUrl, "/")
+				if c.Param("path") == "" {
 					redirectUrl = redirectUrl + "/"
 				}
 
