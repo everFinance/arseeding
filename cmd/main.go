@@ -21,7 +21,7 @@ func main() {
 			&cli.StringFlag{Name: "ar_node", Value: "https://arweave.net", EnvVars: []string{"AR_NODE"}},
 			&cli.StringFlag{Name: "pay", Value: "https://api-dev.everpay.io", Usage: "pay url", EnvVars: []string{"PAY"}},
 			&cli.BoolFlag{Name: "no_fee", Value: false, EnvVars: []string{"NO_FEE"}},
-			&cli.BoolFlag{Name: "manifest", Value: false, EnvVars: []string{"MANIFEST"}},
+			&cli.BoolFlag{Name: "manifest", Value: true, EnvVars: []string{"MANIFEST"}},
 
 			&cli.BoolFlag{Name: "use_s3", Value: false, Usage: "run with s3 store", EnvVars: []string{"USE_S3"}},
 			&cli.StringFlag{Name: "s3_acc_key", Value: "AKIATZSGGOHIV4QTYNH5", Usage: "s3 access key", EnvVars: []string{"S3_ACC_KEY"}},
