@@ -58,3 +58,18 @@ func getArTxOrItemData(id string, db *Store) (decodeTags []types.Tag, data []byt
 	// txId not found in local, need proxy to gateway
 	return nil, nil, schema.ErrLocalNotExist
 }
+
+func getBundleItemData(id string, db *Store) (decodeTags []types.Tag, data []byte, err error) {
+	itemBinary, err := db.LoadItemBinary(id)
+	if err == nil {
+		var item *types.BundleItem
+		item, err = utils.DecodeBundleItem(itemBinary)
+		if err != nil {
+			return
+		}
+		decodeTags = item.Tags
+		data, err = utils.Base64Decode(item.Data)
+		return
+	}
+	return
+}

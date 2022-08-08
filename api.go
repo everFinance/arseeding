@@ -72,6 +72,7 @@ func (s *Arseeding) runAPI(port string) {
 			v1.POST("/bundle/tx", s.submitItem)
 		}
 		v1.GET("/bundle/tx/:itemId", s.getItemMeta) // get item meta, without data
+		v1.GET("/bundle/tx/:itemId/:field", s.getItemField)
 		v1.GET("/bundle/itemIds/:arId", s.getItemIdsByArId)
 		v1.GET("/bundle/fees", s.bundleFees)
 		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
@@ -633,6 +634,41 @@ func (s *Arseeding) getItemMeta(c *gin.Context) {
 	c.JSON(http.StatusOK, meta)
 }
 
+func (s *Arseeding) getItemField(c *gin.Context) {
+	id := c.Param("itemId")
+	field := c.Param("field")
+	txMeta, err := s.store.LoadItemMeta(id)
+	if err != nil {
+		notFoundResponse(c, err.Error())
+		return
+	}
+	switch field {
+	case "id":
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Id))
+	case "anchor":
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Anchor))
+	case "owner":
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Owner))
+	case "tags":
+		c.JSON(http.StatusOK, txMeta.Tags)
+	case "target":
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Target))
+	case "signature":
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Signature))
+	case "signatureType":
+		c.Data(200, "text/html; charset=utf-8", []byte(strconv.Itoa(txMeta.SignatureType)))
+	case "data", "data.json", "data.txt", "data.pdf", "data.png", "data.jpeg", "data.gif", "data.mp4":
+		tags, data, err := getBundleItemData(id, s.store)
+		if err != nil {
+			internalErrorResponse(c, err.Error())
+			return
+		}
+		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
+	default:
+		errorResponse(c, "invalid_field")
+	}
+}
+
 func (s *Arseeding) getItemIdsByArId(c *gin.Context) {
 	arId := c.Param("arId")
 	itemIds, err := s.store.LoadArIdToItemIds(arId)
@@ -704,7 +740,7 @@ func (s *Arseeding) dataResponse(c *gin.Context) {
 			}
 		}
 
-		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, "Content-Type")), data)
+		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
 
 	case schema.ErrLocalNotExist:
 		proxyArweaveGateway(c)
