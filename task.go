@@ -78,7 +78,7 @@ func (s *Arseeding) broadcastTxTask(arId string) (err error) {
 		log.Error("s.store.LoadTxMeta(arId)", "err", err, "arId", arId)
 		return err
 	}
-	txData, err := getData(txMeta.DataRoot, txMeta.DataSize, s.store)
+	txData, err := getArTxData(txMeta.DataRoot, txMeta.DataSize, s.store)
 	if err != nil {
 		if err == schema.ErrNotExist {
 			if err = s.FetchAndStoreTx(arId); err != nil {
@@ -89,7 +89,7 @@ func (s *Arseeding) broadcastTxTask(arId string) (err error) {
 			log.Error("getDataByGW(txMeta.DataRoot,txMeta.DataSize,s.store)", "err", err, "arId", arId)
 			return err
 		}
-		txData, err = getData(txMeta.DataRoot, txMeta.DataSize, s.store)
+		txData, err = getArTxData(txMeta.DataRoot, txMeta.DataSize, s.store)
 		if err != nil {
 			log.Error("get data failed", "err", err, "arId", arId)
 			return err

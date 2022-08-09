@@ -139,7 +139,7 @@ func (s *Arseeding) FetchAndStoreTx(arId string) (err error) {
 
 	// get data
 	var data []byte
-	data, err = getData(arTxMeta.DataRoot, arTxMeta.DataSize, s.store) // get data from local
+	data, err = getArTxData(arTxMeta.DataRoot, arTxMeta.DataSize, s.store) // get data from local
 	if err == nil {
 		return nil // local exist data
 	}

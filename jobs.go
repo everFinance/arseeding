@@ -40,7 +40,7 @@ func (s *Arseeding) runJobs() {
 	s.scheduler.Every(3).Minute().SingletonMode().Do(s.watchArTx)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.retryOnChainArTx)
 
-	s.scheduler.Every(1).Minute().SingletonMode().Do(s.parseAndSaveBundleTx)
+	s.scheduler.Every(10).Seconds().SingletonMode().Do(s.parseAndSaveBundleTx)
 
 	// manager taskStatus
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseTasks)
@@ -505,7 +505,7 @@ func (s *Arseeding) parseAndSaveBundleTx() {
 			continue
 		}
 
-		data, err := getData(arTxMeta.DataRoot, arTxMeta.DataSize, s.store)
+		data, err := getArTxData(arTxMeta.DataRoot, arTxMeta.DataSize, s.store)
 		if err != nil {
 			log.Error("get data failed, if is not_exist_record,then wait submit chunks fully", "err", err, "arId", arId)
 			continue

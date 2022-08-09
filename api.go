@@ -20,6 +20,11 @@ import (
 func (s *Arseeding) runAPI(port string) {
 	r := s.engine
 	r.Use(common.CORSMiddleware())
+
+	if s.EnableManifest {
+		r.Use(common.SandboxMiddleware())
+	}
+
 	if !s.NoFee {
 		r.Use(common.LimiterMiddleware(3000, "M", s.config.GetIPWhiteList()))
 	}
@@ -67,11 +72,14 @@ func (s *Arseeding) runAPI(port string) {
 			v1.POST("/bundle/tx", s.submitItem)
 		}
 		v1.GET("/bundle/tx/:itemId", s.getItemMeta) // get item meta, without data
+		v1.GET("/bundle/tx/:itemId/:field", s.getItemField)
 		v1.GET("/bundle/itemIds/:arId", s.getItemIdsByArId)
 		v1.GET("/bundle/fees", s.bundleFees)
 		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
 		v1.GET("/bundle/orders/:signer", s.getOrders)
-		v1.GET("/:id", s.getDataByGW) // get arTx data or bundleItem data
+		v1.GET("/:id", s.dataResponse)       // get arTx data or bundleItem data
+		v1.GET("/:id/*path", s.dataResponse) // get pathData from manifest data
+
 		// submit native data with X-API-KEY
 		v1.POST("/bundle/data", s.submitNativeData)
 		v1.GET("/bundle/orders", s.getOrdersByApiKey) // http header need X-API-KEY
@@ -293,19 +301,19 @@ func txDataByMeta(txMeta *types.Transaction, db *Store) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// When data is bigger than 12MiB return statusCode == 400, use chunk
-	if size > 50*128*1024 {
+	// When data is bigger than 50MiB return statusCode == 400, use chunk
+	if size > schema.AllowMaxRespDataSize {
 		return nil, schema.ErrDataTooBig
 	}
 
-	data, err := getData(txMeta.DataRoot, txMeta.DataSize, db)
+	data, err := getArTxData(txMeta.DataRoot, txMeta.DataSize, db)
 	if err != nil {
 		return nil, err
 	}
 	return data, nil
 }
 
-func getData(dataRoot, dataSize string, db *Store) ([]byte, error) {
+func getArTxData(dataRoot, dataSize string, db *Store) ([]byte, error) {
 	size, err := strconv.ParseUint(dataSize, 10, 64)
 	if err != nil {
 		return nil, err
@@ -626,6 +634,41 @@ func (s *Arseeding) getItemMeta(c *gin.Context) {
 	c.JSON(http.StatusOK, meta)
 }
 
+func (s *Arseeding) getItemField(c *gin.Context) {
+	id := c.Param("itemId")
+	field := c.Param("field")
+	txMeta, err := s.store.LoadItemMeta(id)
+	if err != nil {
+		notFoundResponse(c, err.Error())
+		return
+	}
+	switch field {
+	case "id":
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Id))
+	case "anchor":
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Anchor))
+	case "owner":
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Owner))
+	case "tags":
+		c.JSON(http.StatusOK, txMeta.Tags)
+	case "target":
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Target))
+	case "signature":
+		c.Data(200, "text/html; charset=utf-8", []byte(txMeta.Signature))
+	case "signatureType":
+		c.Data(200, "text/html; charset=utf-8", []byte(strconv.Itoa(txMeta.SignatureType)))
+	case "data", "data.json", "data.txt", "data.pdf", "data.png", "data.jpeg", "data.gif", "data.mp4":
+		tags, data, err := getBundleItemData(id, s.store)
+		if err != nil {
+			internalErrorResponse(c, err.Error())
+			return
+		}
+		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
+	default:
+		errorResponse(c, "invalid_field")
+	}
+}
+
 func (s *Arseeding) getItemIdsByArId(c *gin.Context) {
 	arId := c.Param("arId")
 	itemIds, err := s.store.LoadArIdToItemIds(arId)
@@ -678,38 +721,32 @@ func (s *Arseeding) bundleFees(c *gin.Context) {
 	c.JSON(http.StatusOK, s.bundlePerFeeMap)
 }
 
-func (s *Arseeding) getDataByGW(c *gin.Context) {
-	id := c.Param("id")
-	txMeta, err := s.store.LoadTxMeta(id)
-	if err == nil { // find id is arId
-		data, err := txDataByMeta(txMeta, s.store)
-		if err != nil {
-			internalErrorResponse(c, err.Error())
-			return
+func (s *Arseeding) dataResponse(c *gin.Context) {
+	tags, data, err := getArTxOrItemData(c.Param("id"), s.store)
+	switch err {
+	case nil:
+		// process manifest
+		if s.EnableManifest && getTagValue(tags, schema.ContentType) == schema.ManifestType {
+			tags, data, err = handleManifest(data, c.Param("path"), s.store)
+			if err != nil {
+				if err == schema.ErrLocalNotExist {
+					proxyArweaveGateway(c)
+				} else if err == schema.ErrPageNotFound {
+					notFoundResponse(c, err.Error())
+				} else {
+					internalErrorResponse(c, err.Error())
+				}
+				return
+			}
 		}
-		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(txMeta.Tags, "Content-Type")), data)
-		return
-	}
 
-	// not arId
-	itemBinary, err := s.store.LoadItemBinary(id)
-	if err == nil { // id is bundle item id
-		item, err := utils.DecodeBundleItem(itemBinary)
-		if err != nil {
-			internalErrorResponse(c, err.Error())
-			return
-		}
-		data, err := utils.Base64Decode(item.Data)
-		if err != nil {
-			internalErrorResponse(c, err.Error())
-			return
-		}
-		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(item.Tags, "Content-Type")), data)
-		return
-	}
+		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
 
-	// get from arweave gateway
-	proxyArweaveGateway(c)
+	case schema.ErrLocalNotExist:
+		proxyArweaveGateway(c)
+	default:
+		internalErrorResponse(c, err.Error())
+	}
 }
 
 func getTagValue(tags []types.Tag, name string) string {
@@ -728,8 +765,14 @@ func errorResponse(c *gin.Context, err string) {
 	})
 }
 
+func notFoundResponse(c *gin.Context, err string) {
+	c.JSON(http.StatusNotFound, schema.RespErr{
+		Err: err,
+	})
+}
+
 func internalErrorResponse(c *gin.Context, err string) {
-	// client error
+	// internal error
 	c.JSON(http.StatusInternalServerError, schema.RespErr{
 		Err: err,
 	})
