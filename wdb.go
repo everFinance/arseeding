@@ -193,10 +193,12 @@ func (w *Wdb) UpdateArTxStatus(arId, status string, tx *gorm.DB) error {
 	return db.Model(&schema.OnChainTx{}).Where("ar_id = ?", arId).Update("status", status).Error
 }
 
-func (w *Wdb) UpdateArTx(id uint, arId string, curHeight int64, status string) error {
+func (w *Wdb) UpdateArTx(id uint, arId string, curHeight int64, dataSize, reward string, status string) error {
 	data := make(map[string]interface{})
 	data["ar_id"] = arId
 	data["cur_height"] = curHeight
+	data["data_size"] = dataSize
+	data["reward"] = reward
 	data["status"] = status
 	return w.Db.Model(&schema.OnChainTx{}).Where("id = ?", id).Updates(data).Error
 }

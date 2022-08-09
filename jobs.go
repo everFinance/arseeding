@@ -333,6 +333,8 @@ func (s *Arseeding) onChainBundleItems() {
 	if err = s.wdb.InsertArTx(schema.OnChainTx{
 		ArId:      arTx.ID,
 		CurHeight: s.cache.GetInfo().Height,
+		DataSize:  arTx.DataSize,
+		Reward:    arTx.Reward,
 		Status:    schema.PendingOnChain,
 		ItemIds:   onChainItemIdsJs,
 		ItemNum:   len(onChainItemIds),
@@ -414,7 +416,7 @@ func (s *Arseeding) retryOnChainArTx() {
 			return
 		}
 		// update onChain
-		if err = s.wdb.UpdateArTx(tx.ID, arTx.ID, s.cache.GetInfo().Height, schema.PendingOnChain); err != nil {
+		if err = s.wdb.UpdateArTx(tx.ID, arTx.ID, s.cache.GetInfo().Height, arTx.DataSize, arTx.Reward, schema.PendingOnChain); err != nil {
 			log.Error("s.wdb.UpdateArTx", "err", err, "id", tx.ID, "arId", arTx.ID)
 		}
 	}

@@ -75,6 +75,8 @@ type OnChainTx struct {
 	gorm.Model
 	ArId      string
 	CurHeight int64
+	DataSize  string
+	Reward    string         // onchain arTx reward
 	Status    string         // "pending","success"
 	ItemIds   datatypes.JSON // json.marshal(itemIds)
 	ItemNum   int
