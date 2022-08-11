@@ -503,8 +503,17 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	}
 	currency := c.Param("currency")
 
+	// check whether noFee mode
+	noFee := false
+	// if has apikey
+	apikey := c.GetHeader("X-API-KEY")
+	_, hasApikey := s.config.GetApiKey()[apikey]
+	if s.NoFee || hasApikey {
+		noFee = true
+	}
+
 	// process bundleItem
-	ord, err := s.ProcessSubmitItem(*item, currency, s.NoFee, "")
+	ord, err := s.ProcessSubmitItem(*item, currency, noFee, apikey)
 	if err != nil {
 		errorResponse(c, err.Error())
 		return
