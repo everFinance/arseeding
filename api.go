@@ -19,8 +19,6 @@ import (
 
 func (s *Arseeding) runAPI(port string) {
 	r := s.engine
-	r.Use(common.CORSMiddleware())
-
 	if s.EnableManifest {
 		r.Use(common.SandboxMiddleware())
 	}
@@ -30,6 +28,7 @@ func (s *Arseeding) runAPI(port string) {
 	}
 	v1 := r.Group("/")
 	{
+		v1.Use(common.CORSMiddleware())
 		// Compatible arweave http api
 		v1.POST("tx", s.submitTx)
 		v1.POST("chunk", s.submitChunk)
@@ -503,8 +502,17 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	}
 	currency := c.Param("currency")
 
+	// check whether noFee mode
+	noFee := false
+	// if has apikey
+	apikey := c.GetHeader("X-API-KEY")
+	_, hasApikey := s.config.GetApiKey()[apikey]
+	if s.NoFee || hasApikey {
+		noFee = true
+	}
+
 	// process bundleItem
-	ord, err := s.ProcessSubmitItem(*item, currency, s.NoFee, "")
+	ord, err := s.ProcessSubmitItem(*item, currency, noFee, apikey)
 	if err != nil {
 		errorResponse(c, err.Error())
 		return
