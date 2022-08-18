@@ -13,7 +13,7 @@ import (
 
 func main() {
 	app := &cli.App{
-		Name: "arseeding",
+		Name: "Arseeding",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "db_dir", Value: "./data/bolt", Usage: "bolt db dir path", EnvVars: []string{"DB_DIR"}},
 			&cli.StringFlag{Name: "mysql", Value: "root@tcp(127.0.0.1:3306)/arseed?charset=utf8mb4&parseTime=True&loc=Local", Usage: "mysql dsn", EnvVars: []string{"MYSQL"}},
