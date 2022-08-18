@@ -112,9 +112,9 @@ func New(
 	return a
 }
 
-func (s *Arseeding) Run(port string) {
+func (s *Arseeding) Run(port string, bundleInterval int) {
 	s.config.Run()
 	go s.runAPI(port)
-	go s.runJobs()
+	go s.runJobs(bundleInterval)
 	go s.runTask()
 }
