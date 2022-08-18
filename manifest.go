@@ -2,10 +2,11 @@ package arseeding
 
 import (
 	"encoding/json"
+	"strings"
+
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
-	"strings"
 )
 
 func handleManifest(maniData []byte, path string, db *Store) ([]types.Tag, []byte, error) {
@@ -13,6 +14,9 @@ func handleManifest(maniData []byte, path string, db *Store) ([]types.Tag, []byt
 	if err := json.Unmarshal(maniData, &mani); err != nil {
 		return nil, nil, err
 	}
+
+	originalPath := path
+
 	path = strings.TrimPrefix(path, "/")
 	path = strings.TrimSuffix(path, "/")
 	if path == "" {
@@ -23,7 +27,14 @@ func handleManifest(maniData []byte, path string, db *Store) ([]types.Tag, []byt
 	}
 	txId, ok := mani.Paths[path]
 	if !ok {
-		return nil, nil, schema.ErrPageNotFound
+		if originalPath[len(originalPath)-1] == '/' {
+			txId, ok = mani.Paths[path+"/"+"index.html"]
+			if !ok {
+				return nil, nil, schema.ErrPageNotFound
+			}
+		} else {
+			return nil, nil, schema.ErrPageNotFound
+		}
 	}
 
 	tags, data, err := getArTxOrItemData(txId.TxId, db)
