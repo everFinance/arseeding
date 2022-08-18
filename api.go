@@ -29,6 +29,7 @@ func (s *Arseeding) runAPI(port string) {
 	}
 	v1 := r.Group("/")
 	{
+		v1.Any("/", s.arseedInfo)
 		// Compatible arweave http api
 		v1.POST("tx", s.submitTx)
 		v1.POST("chunk", s.submitChunk)
@@ -87,6 +88,14 @@ func (s *Arseeding) runAPI(port string) {
 	if err := r.Run(port); err != nil {
 		panic(err)
 	}
+}
+
+func (s *Arseeding) arseedInfo(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"Name":          "Arseeding",
+		"Version":       "v1.0.11",
+		"Documentation": "https://web3infura.io",
+	})
 }
 
 func (s *Arseeding) submitTx(c *gin.Context) {
