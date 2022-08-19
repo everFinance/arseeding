@@ -1,4 +1,4 @@
-package common
+package arseeding
 
 import (
 	"encoding/base32"
@@ -67,30 +67,54 @@ func CORSMiddleware() gin.HandlerFunc {
 	}
 }
 
-func SandboxMiddleware() gin.HandlerFunc {
+func SandboxMiddleware(wdb *Wdb) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		txId := getTxIdFromPath(c.Request.RequestURI)
 		isBrowser := false
 		if strings.Contains(c.GetHeader("User-Agent"), "Mozilla") {
 			isBrowser = true
 		}
-		if isBrowser && txId != "" {
-			currentSandbox := getRequestSandbox(c.Request)
-			expectedSandbox := expectedTxSandbox(txId)
-			if currentSandbox != expectedSandbox {
+
+		if isBrowser {
+			currentSandbox := getRequestSandbox(c.Request.Host)
+			txId := getTxIdFromPath(c.Request.RequestURI)
+
+			// support absolute path
+			if txId == "" && len(currentSandbox) > 0 {
+				// find txId from db
+				mfId, err := wdb.GetManifestId(currentSandbox)
+				if err != nil {
+					log.Warn("wdb.GetManifestId(currentSandbox)", "err", err, "mfUrl", currentSandbox)
+				}
 				protocol := "https"
 				if c.Request.TLS == nil {
 					protocol = "http"
 				}
-				redirectUrl := fmt.Sprintf("%s://%s.%s%s", protocol, expectedSandbox, c.Request.Host, c.Request.RequestURI)
-				// add "/" fix double slash
-				redirectUrl = strings.TrimSuffix(redirectUrl, "/")
-				if c.Param("path") == "" {
-					redirectUrl = redirectUrl + "/"
-				}
+				redirectUrl := fmt.Sprintf("%s://%s%s", protocol, c.Request.Host, "/"+mfId+c.Request.RequestURI)
 
 				c.Redirect(302, redirectUrl)
+				c.Abort()
 				return
+			}
+
+			// redirect
+			if txId != "" {
+				expectedSandbox := expectedTxSandbox(txId)
+				if currentSandbox != expectedSandbox {
+					protocol := "https"
+					if c.Request.TLS == nil {
+						protocol = "http"
+					}
+					redirectUrl := fmt.Sprintf("%s://%s.%s%s", protocol, expectedSandbox, c.Request.Host, c.Request.RequestURI)
+					// add "/" fix double slash
+					redirectUrl = strings.TrimSuffix(redirectUrl, "/")
+					if c.Param("path") == "" {
+						redirectUrl = redirectUrl + "/"
+					}
+
+					c.Redirect(302, redirectUrl)
+					c.Abort()
+					return
+				}
 			}
 		}
 		c.Next()
@@ -106,10 +130,10 @@ func getTxIdFromPath(path string) string {
 	return ""
 }
 
-func getRequestSandbox(req *http.Request) string {
-	hostStr := strings.Split(req.Host, ".")
-	if len(hostStr) > 0 {
-		return strings.ToLower(hostStr[0])
+func getRequestSandbox(host string) string {
+	prefix := strings.Split(host, ".")[0]
+	if len(prefix) > 40 { // todo 40
+		return prefix
 	}
 	return ""
 }

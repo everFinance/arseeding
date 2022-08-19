@@ -27,7 +27,7 @@ func handleManifest(maniData []byte, path string, db *Store) ([]types.Tag, []byt
 	}
 	txId, ok := mani.Paths[path]
 	if !ok {
-		if originalPath[len(originalPath)-1] == '/' {
+		if strings.HasSuffix(originalPath, "/") {
 			txId, ok = mani.Paths[path+"/"+"index.html"]
 			if !ok {
 				return nil, nil, schema.ErrPageNotFound

@@ -27,13 +27,19 @@ func NewWdb(dsn string) *Wdb {
 	return &Wdb{Db: db}
 }
 
-func (w *Wdb) Migrate(noFee bool) error {
+func (w *Wdb) Migrate(noFee, enableManifest bool) error {
 	err := w.Db.AutoMigrate(&schema.Order{}, &schema.OnChainTx{})
 	if err != nil {
 		return err
 	}
 	if !noFee {
 		err = w.Db.AutoMigrate(&schema.TokenPrice{}, &schema.ReceiptEverTx{})
+	}
+	if err != nil {
+		return err
+	}
+	if enableManifest {
+		err = w.Db.AutoMigrate(&schema.Manifest{})
 	}
 	return err
 }
@@ -201,4 +207,14 @@ func (w *Wdb) UpdateArTx(id uint, arId string, curHeight int64, dataSize, reward
 	data["reward"] = reward
 	data["status"] = status
 	return w.Db.Model(&schema.OnChainTx{}).Where("id = ?", id).Updates(data).Error
+}
+
+func (w *Wdb) InsertManifest(mf schema.Manifest) error {
+	return w.Db.Create(&mf).Error
+}
+
+func (w *Wdb) GetManifestId(mfUrl string) (string, error) {
+	res := schema.Manifest{}
+	err := w.Db.Model(&schema.Manifest{}).Where("manifest_url = ?", mfUrl).First(&res).Error
+	return res.ManifestId, err
 }

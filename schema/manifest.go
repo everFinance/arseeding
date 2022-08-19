@@ -44,3 +44,9 @@ type IndexPath struct {
 type Resource struct {
 	TxId string `json:"id"`
 }
+
+type Manifest struct {
+	ID          uint   `gorm:"primarykey"`
+	ManifestUrl string `gorm:"index:idx1"`
+	ManifestId  string // arId
+}

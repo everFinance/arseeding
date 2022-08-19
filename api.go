@@ -3,12 +3,12 @@ package arseeding
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/everFinance/arseeding/common"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay-go/account"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -19,13 +19,13 @@ import (
 
 func (s *Arseeding) runAPI(port string) {
 	r := s.engine
-	r.Use(common.CORSMiddleware())
+	r.Use(CORSMiddleware())
 	if s.EnableManifest {
-		r.Use(common.SandboxMiddleware())
+		r.Use(SandboxMiddleware(s.wdb))
 	}
 
 	if !s.NoFee {
-		r.Use(common.LimiterMiddleware(3000, "M", s.config.GetIPWhiteList()))
+		r.Use(LimiterMiddleware(3000, "M", s.config.GetIPWhiteList()))
 	}
 	v1 := r.Group("/")
 	{
@@ -93,7 +93,7 @@ func (s *Arseeding) runAPI(port string) {
 func (s *Arseeding) arseedInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"Name":          "Arseeding",
-		"Version":       "v1.0.12",
+		"Version":       "v1.0.13",
 		"Documentation": "https://web3infura.io",
 	})
 }
@@ -740,11 +740,26 @@ func (s *Arseeding) bundleFees(c *gin.Context) {
 }
 
 func (s *Arseeding) dataResponse(c *gin.Context) {
-	tags, data, err := getArTxOrItemData(c.Param("id"), s.store)
+	txId := c.Param("id")
+	tags, data, err := getArTxOrItemData(txId, s.store)
 	switch err {
 	case nil:
 		// process manifest
 		if s.EnableManifest && getTagValue(tags, schema.ContentType) == schema.ManifestType {
+			if c.Param("path") == "/" || c.Param("path") == "" { // root path
+				mfUrl := expectedTxSandbox(txId)
+				if _, err = s.wdb.GetManifestId(mfUrl); err == gorm.ErrRecordNotFound {
+					// insert new record
+					if err = s.wdb.InsertManifest(schema.Manifest{
+						ManifestUrl: mfUrl,
+						ManifestId:  txId,
+					}); err != nil {
+						internalErrorResponse(c, err.Error())
+						return
+					}
+				}
+			}
+
 			tags, data, err = handleManifest(data, c.Param("path"), s.store)
 			if err != nil {
 				if err == schema.ErrLocalNotExist {
