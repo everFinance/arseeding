@@ -15,8 +15,6 @@ func handleManifest(maniData []byte, path string, db *Store) ([]types.Tag, []byt
 		return nil, nil, err
 	}
 
-	originalPath := path
-
 	path = strings.TrimPrefix(path, "/")
 	path = strings.TrimSuffix(path, "/")
 	if path == "" {
@@ -27,14 +25,11 @@ func handleManifest(maniData []byte, path string, db *Store) ([]types.Tag, []byt
 	}
 	txId, ok := mani.Paths[path]
 	if !ok {
-		if strings.HasSuffix(originalPath, "/") {
-			txId, ok = mani.Paths[path+"/"+"index.html"]
-			if !ok {
-				return nil, nil, schema.ErrPageNotFound
-			}
-		} else {
-			return nil, nil, schema.ErrPageNotFound
-		}
+		// could ignore index.html, so add index.html and try again
+		txId, ok = mani.Paths[path+"/"+"index.html"]
+	}
+	if !ok {
+		return nil, nil, schema.ErrPageNotFound
 	}
 
 	tags, data, err := getArTxOrItemData(txId.TxId, db)
