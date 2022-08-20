@@ -21,7 +21,7 @@ func (s *Arseeding) runAPI(port string) {
 	r := s.engine
 	r.Use(CORSMiddleware())
 	if s.EnableManifest {
-		r.Use(SandboxMiddleware(s.wdb))
+		r.Use(ManifestMiddleware(s.wdb, s.store))
 	}
 
 	if !s.NoFee {
@@ -77,8 +77,7 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/bundle/fees", s.bundleFees)
 		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
 		v1.GET("/bundle/orders/:signer", s.getOrders)
-		v1.GET("/:id", s.dataResponse)       // get arTx data or bundleItem data
-		v1.GET("/:id/*path", s.dataResponse) // get pathData from manifest data
+		v1.GET("/:id", s.dataRoute) // get arTx data or bundleItem data
 
 		// submit native data with X-API-KEY
 		v1.POST("/bundle/data", s.submitNativeData)
@@ -739,41 +738,35 @@ func (s *Arseeding) bundleFees(c *gin.Context) {
 	c.JSON(http.StatusOK, s.bundlePerFeeMap)
 }
 
-func (s *Arseeding) dataResponse(c *gin.Context) {
+func (s *Arseeding) dataRoute(c *gin.Context) {
 	txId := c.Param("id")
 	tags, data, err := getArTxOrItemData(txId, s.store)
 	switch err {
 	case nil:
 		// process manifest
 		if s.EnableManifest && getTagValue(tags, schema.ContentType) == schema.ManifestType {
-			if c.Param("path") == "/" || c.Param("path") == "" { // root path
-				mfUrl := expectedTxSandbox(txId)
-				if _, err = s.wdb.GetManifestId(mfUrl); err == gorm.ErrRecordNotFound {
-					// insert new record
-					if err = s.wdb.InsertManifest(schema.Manifest{
-						ManifestUrl: mfUrl,
-						ManifestId:  txId,
-					}); err != nil {
-						internalErrorResponse(c, err.Error())
-						return
-					}
-				}
-			}
-
-			tags, data, err = handleManifest(data, c.Param("path"), s.store)
-			if err != nil {
-				if err == schema.ErrLocalNotExist {
-					proxyArweaveGateway(c)
-				} else if err == schema.ErrPageNotFound {
-					notFoundResponse(c, err.Error())
-				} else {
+			mfUrl := expectedTxSandbox(txId)
+			if _, err = s.wdb.GetManifestId(mfUrl); err == gorm.ErrRecordNotFound {
+				// insert new record
+				if err = s.wdb.InsertManifest(schema.Manifest{
+					ManifestUrl: mfUrl,
+					ManifestId:  txId,
+				}); err != nil {
 					internalErrorResponse(c, err.Error())
+					return
 				}
-				return
 			}
-		}
 
-		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
+			protocol := "https"
+			if c.Request.TLS == nil {
+				protocol = "http"
+			}
+			redirectUrl := fmt.Sprintf("%s://%s.%s", protocol, mfUrl, c.Request.Host)
+
+			c.Redirect(302, redirectUrl)
+		} else {
+			c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
+		}
 
 	case schema.ErrLocalNotExist:
 		proxyArweaveGateway(c)

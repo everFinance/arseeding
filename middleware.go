@@ -4,6 +4,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
+	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/ulule/limiter/v3"
@@ -67,55 +68,30 @@ func CORSMiddleware() gin.HandlerFunc {
 	}
 }
 
-func SandboxMiddleware(wdb *Wdb) gin.HandlerFunc {
+func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		isBrowser := false
-		if strings.Contains(c.GetHeader("User-Agent"), "Mozilla") {
-			isBrowser = true
-		}
-
-		if isBrowser {
-			currentSandbox := getRequestSandbox(c.Request.Host)
-			txId := getTxIdFromPath(c.Request.RequestURI)
-
-			// support absolute path
-			if txId == "" && len(currentSandbox) > 0 {
-				// find txId from db
-				mfId, err := wdb.GetManifestId(currentSandbox)
-				if err != nil {
-					log.Warn("wdb.GetManifestId(currentSandbox)", "err", err, "mfUrl", currentSandbox)
-				}
-				protocol := "https"
-				if c.Request.TLS == nil {
-					protocol = "http"
-				}
-				redirectUrl := fmt.Sprintf("%s://%s%s", protocol, c.Request.Host, "/"+mfId+c.Request.RequestURI)
-
-				c.Redirect(302, redirectUrl)
-				c.Abort()
+		prefixUri := getRequestSandbox(c.Request.Host)
+		if len(prefixUri) > 0 && c.Request.Method == "GET" {
+			mfId, err := wdb.GetManifestId(prefixUri)
+			if err != nil {
+				c.Next()
 				return
 			}
-
-			// redirect
-			if txId != "" {
-				expectedSandbox := expectedTxSandbox(txId)
-				if currentSandbox != expectedSandbox {
-					protocol := "https"
-					if c.Request.TLS == nil {
-						protocol = "http"
-					}
-					redirectUrl := fmt.Sprintf("%s://%s.%s%s", protocol, expectedSandbox, c.Request.Host, c.Request.RequestURI)
-					// add "/" fix double slash
-					redirectUrl = strings.TrimSuffix(redirectUrl, "/")
-					if c.Param("path") == "" {
-						redirectUrl = redirectUrl + "/"
-					}
-
-					c.Redirect(302, redirectUrl)
-					c.Abort()
-					return
-				}
+			_, mfData, err := getArTxOrItemData(mfId, store)
+			if err != nil {
+				c.Abort()
+				internalErrorResponse(c, err.Error())
+				return
 			}
+			tags, data, err := handleManifest(mfData, c.Request.URL.Path, store)
+			if err != nil {
+				c.Abort()
+				internalErrorResponse(c, err.Error())
+				return
+			}
+			c.Abort()
+			c.Data(http.StatusOK, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
+			return
 		}
 		c.Next()
 	}
