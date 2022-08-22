@@ -33,8 +33,10 @@ const (
 )
 
 type ManifestData struct {
-	Index IndexPath           `json:"index"`
-	Paths map[string]Resource `json:"paths"`
+	Manifest string              `json:"manifest"` // must be "arweave/paths"
+	Version  string              `json:"version"`  // currently "0.1.0"
+	Index    IndexPath           `json:"index"`
+	Paths    map[string]Resource `json:"paths"`
 }
 
 type IndexPath struct {
