@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"github.com/everFinance/arseeding/schema"
 	schema2 "github.com/everFinance/arseeding/sdk/schema"
-	paySchema "github.com/everFinance/everpay-go/pay/schema"
 	"github.com/everFinance/goar/types"
 	"github.com/panjf2000/ants/v2"
 	"io/ioutil"
@@ -15,7 +14,7 @@ import (
 	"sync"
 )
 
-func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, currency string) ([]schema.RespOrder, error) {
+func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, currency string) ([]*schema.RespOrder, error) {
 	if indexFile == "" {
 		indexFile = "index.html"
 	}
@@ -35,7 +34,7 @@ func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, cur
 		return nil, err
 	}
 
-	orders := make([]schema.RespOrder, 0, len(pathFiles))
+	orders := make([]*schema.RespOrder, 0, len(pathFiles))
 
 	var (
 		lock sync.Mutex
@@ -57,7 +56,7 @@ func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, cur
 			panic(err)
 		}
 		lock.Lock()
-		orders = append(orders, *order)
+		orders = append(orders, order)
 		// add manifest file
 		manifestFile.Paths[fp] = schema.Resource{
 			TxId: order.ItemId,
@@ -87,13 +86,8 @@ func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, cur
 	if err != nil {
 		return nil, err
 	}
-	orders = append(orders, *order)
+	orders = append(orders, order)
 	return orders, nil
-}
-
-func (s *SDK) PayOrders(orders []schema.RespOrder, batchSize int) ([]*paySchema.Transaction, error) {
-	// todo use bundle everTx
-	return nil, nil
 }
 
 func readFileData(rootPath, filePath string) ([]byte, error) {

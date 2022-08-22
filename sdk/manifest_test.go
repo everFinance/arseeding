@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"github.com/everFinance/goether"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -27,4 +28,8 @@ func TestSDK_UploadFolder(t *testing.T) {
 	t.Log(len(orders))
 
 	// pay orders
+	everTxs, err := sdk.BatchPayOrders(orders)
+	assert.NoError(t, err)
+	t.Log(len(everTxs))
+	t.Log(everTxs[0].HexHash())
 }
