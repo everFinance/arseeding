@@ -2,8 +2,8 @@ package sdk
 
 import (
 	"encoding/json"
-	"github.com/everFinance/arseeding/schema"
-	schema2 "github.com/everFinance/arseeding/sdk/schema"
+	seedSchema "github.com/everFinance/arseeding/schema"
+	"github.com/everFinance/arseeding/sdk/schema"
 	"github.com/everFinance/goar/types"
 	"github.com/panjf2000/ants/v2"
 	"io/ioutil"
@@ -14,19 +14,19 @@ import (
 	"sync"
 )
 
-func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, currency string) ([]*schema.RespOrder, error) {
+func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, currency string) ([]*seedSchema.RespOrder, error) {
 	if indexFile == "" {
 		indexFile = "index.html"
 	}
 
 	// create manifest data
-	manifestFile := &schema.ManifestData{
+	manifestFile := &seedSchema.ManifestData{
 		Manifest: "arweave/paths",
 		Version:  "0.1.0",
-		Index: schema.IndexPath{
+		Index: seedSchema.IndexPath{
 			Path: indexFile,
 		},
-		Paths: make(map[string]schema.Resource),
+		Paths: make(map[string]seedSchema.Resource),
 	}
 
 	pathFiles, err := getPathFiles(rootPath)
@@ -34,7 +34,7 @@ func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, cur
 		return nil, err
 	}
 
-	orders := make([]*schema.RespOrder, 0, len(pathFiles))
+	orders := make([]*seedSchema.RespOrder, 0, len(pathFiles))
 
 	var (
 		lock sync.Mutex
@@ -58,7 +58,7 @@ func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, cur
 		lock.Lock()
 		orders = append(orders, order)
 		// add manifest file
-		manifestFile.Paths[fp] = schema.Resource{
+		manifestFile.Paths[fp] = seedSchema.Resource{
 			TxId: order.ItemId,
 		}
 		lock.Unlock()
@@ -80,7 +80,7 @@ func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, cur
 	if err != nil {
 		return nil, err
 	}
-	order, err := s.SendData(manifestFileBy, currency, &schema2.OptionItem{
+	order, err := s.SendData(manifestFileBy, currency, &schema.OptionItem{
 		Tags: []types.Tag{{Name: "Type", Value: "manifest"}, {Name: "Content-Type", Value: "application/x.arweave-manifest+json"}},
 	})
 	if err != nil {
