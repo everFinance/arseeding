@@ -93,7 +93,7 @@ func (s *Arseeding) arseedInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"Name":          "Arseeding",
 		"Version":       "v1.0.13",
-		"Documentation": "https://web3infura.io",
+		"Documentation": "https://web3infra.dev",
 	})
 }
 
