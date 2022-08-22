@@ -9,10 +9,10 @@ require (
 	github.com/everFinance/goether v1.1.7
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-co-op/gocron v1.11.0
-	github.com/panjf2000/ants/v2 v2.4.7
+	github.com/panjf2000/ants/v2 v2.5.0
 	github.com/prometheus/client_golang v1.12.2
 	github.com/shopspring/decimal v1.2.0
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 	github.com/tidwall/gjson v1.14.1
 	github.com/ulule/limiter/v3 v3.10.0
 	github.com/urfave/cli/v2 v2.3.0
