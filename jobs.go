@@ -209,6 +209,7 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 	for _, urtx := range unspentRpts {
 		itemIds, err := parseItemIds(urtx.Data)
 		if err != nil {
+			log.Error("parseItemIds(urtx.Data)", "err", err, "urtx", urtx.EverHash)
 			if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
 				log.Error("s.wdb.UpdateReceiptStatus1", "err", err, "id", urtx.RawId)
 			}
@@ -230,6 +231,7 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 
 		// check currency, orders currency must == paymentTxSymbol
 		if err = checkOrdersCurrency(ordArr, urtx.Symbol); err != nil {
+			log.Error("checkOrdersCurrency(ordArr, urtx.Symbol)", "err", err, "urtx", urtx.EverHash)
 			if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
 				log.Error("s.wdb.UpdateReceiptStatus3", "err", err, "id", urtx.RawId)
 			}
@@ -238,6 +240,7 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 
 		// check amount
 		if err = checkOrdersAmount(ordArr, urtx.Amount); err != nil {
+			log.Error("checkOrdersAmount(ordArr, urtx.Amount)", "err", err, "urtx", urtx.EverHash)
 			if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
 				log.Error("s.wdb.UpdateReceiptStatus4", "err", err, "id", urtx.RawId)
 			}
