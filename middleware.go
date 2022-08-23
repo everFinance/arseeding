@@ -72,6 +72,22 @@ func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		prefixUri := getRequestSandbox(c.Request.Host)
 		if len(prefixUri) > 0 && c.Request.Method == "GET" {
+			// compatible url https://xxxxxxx.arseed.web3infra.dev/{{arId}}
+			txId := getTxIdFromPath(c.Request.RequestURI)
+			if txId != "" && prefixUri == expectedTxSandbox(txId) {
+				protocol := "https"
+				if c.Request.TLS == nil {
+					protocol = "http"
+				}
+				// redirect url: https://arseed.web3infra.dev/{{arId}}
+				rootHost := strings.SplitN(c.Request.Host, ".", 2)[1]
+				redirectUrl := fmt.Sprintf("%s://%s/%s", protocol, rootHost, txId)
+				c.Redirect(302, redirectUrl)
+
+				c.Abort()
+				return
+			}
+
 			mfId, err := wdb.GetManifestId(prefixUri)
 			if err != nil {
 				c.Next()
