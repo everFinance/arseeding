@@ -3,7 +3,7 @@ package config
 func (c *Config) runJobs() {
 	c.scheduler.Every(1).Minute().SingletonMode().Do(c.updateFee)
 	c.scheduler.Every(1).Minute().SingletonMode().Do(c.updateIPWhiteList)
-	c.scheduler.Every(10).Seconds().SingletonMode().Do(c.updateApiKey)
+	c.scheduler.Every(5).Seconds().SingletonMode().Do(c.updateApiKey)
 
 	c.scheduler.StartAsync()
 }
