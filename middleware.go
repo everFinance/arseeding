@@ -1,9 +1,10 @@
-package common
+package arseeding
 
 import (
 	"encoding/base32"
 	"errors"
 	"fmt"
+	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/ulule/limiter/v3"
@@ -67,31 +68,46 @@ func CORSMiddleware() gin.HandlerFunc {
 	}
 }
 
-func SandboxMiddleware() gin.HandlerFunc {
+func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		txId := getTxIdFromPath(c.Request.RequestURI)
-		isBrowser := false
-		if strings.Contains(c.GetHeader("User-Agent"), "Mozilla") {
-			isBrowser = true
-		}
-		if isBrowser && txId != "" {
-			currentSandbox := getRequestSandbox(c.Request)
-			expectedSandbox := expectedTxSandbox(txId)
-			if currentSandbox != expectedSandbox {
+		prefixUri := getRequestSandbox(c.Request.Host)
+		if len(prefixUri) > 0 && c.Request.Method == "GET" {
+			// compatible url https://xxxxxxx.arseed.web3infra.dev/{{arId}}
+			txId := getTxIdFromPath(c.Request.RequestURI)
+			if txId != "" && prefixUri == expectedTxSandbox(txId) {
 				protocol := "https"
 				if c.Request.TLS == nil {
 					protocol = "http"
 				}
-				redirectUrl := fmt.Sprintf("%s://%s.%s%s", protocol, expectedSandbox, c.Request.Host, c.Request.RequestURI)
-				// add "/" fix double slash
-				redirectUrl = strings.TrimSuffix(redirectUrl, "/")
-				if c.Param("path") == "" {
-					redirectUrl = redirectUrl + "/"
-				}
-
+				// redirect url: https://arseed.web3infra.dev/{{arId}}
+				rootHost := strings.SplitN(c.Request.Host, ".", 2)[1]
+				redirectUrl := fmt.Sprintf("%s://%s/%s", protocol, rootHost, txId)
 				c.Redirect(302, redirectUrl)
+
+				c.Abort()
 				return
 			}
+
+			mfId, err := wdb.GetManifestId(prefixUri)
+			if err != nil {
+				c.Next()
+				return
+			}
+			_, mfData, err := getArTxOrItemData(mfId, store)
+			if err != nil {
+				c.Abort()
+				internalErrorResponse(c, err.Error())
+				return
+			}
+			tags, data, err := handleManifest(mfData, c.Request.URL.Path, store)
+			if err != nil {
+				c.Abort()
+				internalErrorResponse(c, err.Error())
+				return
+			}
+			c.Abort()
+			c.Data(http.StatusOK, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
+			return
 		}
 		c.Next()
 	}
@@ -106,10 +122,10 @@ func getTxIdFromPath(path string) string {
 	return ""
 }
 
-func getRequestSandbox(req *http.Request) string {
-	hostStr := strings.Split(req.Host, ".")
-	if len(hostStr) > 0 {
-		return strings.ToLower(hostStr[0])
+func getRequestSandbox(host string) string {
+	prefix := strings.Split(host, ".")[0]
+	if len(prefix) > 40 { // todo 40
+		return prefix
 	}
 	return ""
 }

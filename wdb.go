@@ -27,13 +27,19 @@ func NewWdb(dsn string) *Wdb {
 	return &Wdb{Db: db}
 }
 
-func (w *Wdb) Migrate(noFee bool) error {
+func (w *Wdb) Migrate(noFee, enableManifest bool) error {
 	err := w.Db.AutoMigrate(&schema.Order{}, &schema.OnChainTx{})
 	if err != nil {
 		return err
 	}
 	if !noFee {
 		err = w.Db.AutoMigrate(&schema.TokenPrice{}, &schema.ReceiptEverTx{})
+	}
+	if err != nil {
+		return err
+	}
+	if enableManifest {
+		err = w.Db.AutoMigrate(&schema.Manifest{})
 	}
 	return err
 }
@@ -44,7 +50,7 @@ func (w *Wdb) InsertOrder(order schema.Order) error {
 
 func (w *Wdb) GetUnPaidOrder(itemId string) (schema.Order, error) {
 	res := schema.Order{}
-	err := w.Db.Model(&schema.Order{}).Where("item_id = ? and payment_status = ?", itemId, schema.UnPayment).First(&res).Error
+	err := w.Db.Model(&schema.Order{}).Where("item_id = ? and payment_status = ?", itemId, schema.UnPayment).Last(&res).Error
 	return res, err
 }
 
@@ -75,7 +81,7 @@ func (w *Wdb) UpdateOrderPay(id uint, everHash string, paymentStatus string, tx 
 
 func (w *Wdb) GetNeedOnChainOrders() ([]schema.Order, error) {
 	res := make([]schema.Order, 0)
-	err := w.Db.Where("payment_status = ?  and on_chain_status = ?", schema.SuccPayment, schema.WaitOnChain).Find(&res).Error
+	err := w.Db.Model(&schema.Order{}).Where("payment_status = ?  and on_chain_status = ?", schema.SuccPayment, schema.WaitOnChain).Find(&res).Error
 	return res, err
 }
 
@@ -92,7 +98,7 @@ func (w *Wdb) GetOrdersBySigner(signer string, cursorId int64, num int) ([]schem
 		cursorId = math.MaxInt64
 	}
 	records := make([]schema.Order, 0, num)
-	err := w.Db.Where("signer = ? and id < ?", signer, cursorId).Order("id DESC").Limit(num).Find(&records).Error
+	err := w.Db.Model(&schema.Order{}).Where("signer = ? and id < ?", signer, cursorId).Order("id DESC").Limit(num).Find(&records).Error
 	return records, err
 }
 
@@ -103,18 +109,18 @@ func (w *Wdb) GetOrdersByApiKey(apiKey string, cursorId int64, pageSize int, sor
 		if cursorId <= 0 {
 			cursorId = 0
 		}
-		err = w.Db.Where("api_key = ? and id > ?", apiKey, cursorId).Order("id ASC").Limit(pageSize).Find(&records).Error
+		err = w.Db.Model(&schema.Order{}).Where("api_key = ? and id > ?", apiKey, cursorId).Order("id ASC").Limit(pageSize).Find(&records).Error
 	} else {
 		if cursorId <= 0 {
 			cursorId = math.MaxInt64
 		}
-		err = w.Db.Where("api_key = ? and id < ?", apiKey, cursorId).Order("id DESC").Limit(pageSize).Find(&records).Error
+		err = w.Db.Model(&schema.Order{}).Where("api_key = ? and id < ?", apiKey, cursorId).Order("id DESC").Limit(pageSize).Find(&records).Error
 	}
 	return records, err
 }
 
 func (w *Wdb) ExistProcessedOrderItem(itemId string) (res schema.Order, exist bool) {
-	err := w.Db.Where("item_id = ? and (on_chain_status = ? or on_chain_status = ?)", itemId, schema.PendingOnChain, schema.SuccOnChain).First(&res).Error
+	err := w.Db.Model(&schema.Order{}).Where("item_id = ? and (on_chain_status = ? or on_chain_status = ?)", itemId, schema.PendingOnChain, schema.SuccOnChain).First(&res).Error
 	if err == nil {
 		exist = true
 	}
@@ -201,4 +207,14 @@ func (w *Wdb) UpdateArTx(id uint, arId string, curHeight int64, dataSize, reward
 	data["reward"] = reward
 	data["status"] = status
 	return w.Db.Model(&schema.OnChainTx{}).Where("id = ?", id).Updates(data).Error
+}
+
+func (w *Wdb) InsertManifest(mf schema.Manifest) error {
+	return w.Db.Create(&mf).Error
+}
+
+func (w *Wdb) GetManifestId(mfUrl string) (string, error) {
+	res := schema.Manifest{}
+	err := w.Db.Model(&schema.Manifest{}).Where("manifest_url = ?", mfUrl).Last(&res).Error
+	return res.ManifestId, err
 }

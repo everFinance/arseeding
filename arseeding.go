@@ -64,7 +64,7 @@ func New(
 	}
 
 	wdb := NewWdb(dsn)
-	if err = wdb.Migrate(noFee); err != nil {
+	if err = wdb.Migrate(noFee, enableManifest); err != nil {
 		panic(err)
 	}
 	bundler, err := goar.NewWalletFromPath(arWalletKeyPath, arNode)
