@@ -552,6 +552,15 @@ func (s *Arseeding) processExpiredOrd() {
 			log.Error("UpdateOrdToExpiredStatus", "err", err, "id", ord.ID)
 			continue
 		}
+		// can not delete
+		// 1. exist paid order
+		if s.wdb.ExistPaidOrd(ord.ItemId) {
+			continue
+		}
+		// 2. this order not the latest unpaid order
+		if !s.wdb.IsLatestUnpaidOrd(ord.ItemId, ord.PaymentExpiredTime) {
+			continue
+		}
 		// delete bundle item from store
 		if err = s.DelItem(ord.ItemId); err != nil {
 			log.Error("DelItem", "err", err, "itemId", ord.ItemId)

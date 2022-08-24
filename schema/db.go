@@ -32,7 +32,7 @@ type Order struct {
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 
-	ItemId   string `json:"itemId"`                   // bundleItem id
+	ItemId   string `gorm:"index:idx0" json:"itemId"` // bundleItem id
 	Signer   string `gorm:"index:idx1" json:"signer"` // item signer
 	SignType int    `json:"signType"`
 
@@ -43,8 +43,8 @@ type Order struct {
 	PaymentExpiredTime int64  `json:"paymentExpiredTime"` // uint s
 	ExpectedBlock      int64  `json:"expectedBlock"`
 
-	PaymentStatus string `json:"paymentStatus"` // "unpaid", "paid", "expired"
-	PaymentId     string `json:"paymentId"`     // everHash
+	PaymentStatus string `gorm:"index:idx0" json:"paymentStatus"` // "unpaid", "paid", "expired"
+	PaymentId     string `json:"paymentId"`                       // everHash
 
 	OnChainStatus string `json:"onChainStatus"` // "waiting","pending","success","failed"
 	ApiKey        string `gorm:"index:idx2" json:"-"`
