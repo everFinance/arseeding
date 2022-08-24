@@ -36,7 +36,7 @@ func NewSDK(arseedUrl, payUrl string, signer interface{}) (*SDK, error) {
 }
 
 func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.OptionItem) (everTx *paySchema.Transaction, itemId string, err error) {
-	order, err := s.SendData(data, currency, option)
+	order, err := s.SendData(data, currency, "", option)
 	if err != nil {
 		return
 	}
@@ -45,7 +45,7 @@ func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.Option
 	return
 }
 
-func (s *SDK) SendData(data []byte, currency string, option *schema.OptionItem) (order *arseedSchema.RespOrder, err error) {
+func (s *SDK) SendData(data []byte, currency string, apikey string, option *schema.OptionItem) (order *arseedSchema.RespOrder, err error) {
 	bundleItem := types.BundleItem{}
 	if option != nil {
 		bundleItem, err = s.ItemSigner.CreateAndSignItem(data, option.Target, option.Anchor, option.Tags)
@@ -55,7 +55,7 @@ func (s *SDK) SendData(data []byte, currency string, option *schema.OptionItem) 
 	if err != nil {
 		return
 	}
-	order, err = s.Cli.SubmitItem(bundleItem.ItemBinary, currency)
+	order, err = s.Cli.SubmitItem(bundleItem.ItemBinary, currency, apikey)
 	return
 }
 

@@ -68,9 +68,8 @@ func (s *Arseeding) runAPI(port string) {
 		// ANS-104 bundle Data api
 		v1.GET("/bundle/bundler", s.getBundler)
 		v1.POST("/bundle/tx/:currency", s.submitItem)
-		if s.NoFee {
-			v1.POST("/bundle/tx", s.submitItem)
-		}
+		v1.POST("/bundle/tx", s.submitItem)
+
 		v1.GET("/bundle/tx/:itemId", s.getItemMeta) // get item meta, without data
 		v1.GET("/bundle/tx/:itemId/:field", s.getItemField)
 		v1.GET("/bundle/itemIds/:arId", s.getItemIdsByArId)

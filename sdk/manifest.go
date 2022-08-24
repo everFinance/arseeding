@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	seedSchema "github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/arseeding/sdk/schema"
+	paySchema "github.com/everFinance/everpay-go/pay/schema"
 	"github.com/everFinance/goar/types"
 	"github.com/panjf2000/ants/v2"
 	"io/ioutil"
@@ -14,7 +15,26 @@ import (
 	"sync"
 )
 
-func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, currency string) ([]*seedSchema.RespOrder, error) {
+func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, currency string) (orders []*seedSchema.RespOrder, manifestId string, err error) {
+	orders, manifestId, err = s.uploadFolder(rootPath, batchSize, indexFile, currency, "")
+	return
+}
+
+func (s *SDK) UploadFolderAndPay(rootPath string, batchSize int, indexFile string, currency string) (orders []*seedSchema.RespOrder, manifestId string, everTxs []*paySchema.Transaction, err error) {
+	orders, manifestId, err = s.uploadFolder(rootPath, batchSize, indexFile, currency, "")
+	if err != nil {
+		return
+	}
+	everTxs, err = s.BatchPayOrders(orders)
+	return
+}
+
+func (s *SDK) UploadFolderWithNoFee(rootPath string, batchSize int, indexFile string, noFeeApikey string) (orders []*seedSchema.RespOrder, manifestId string, err error) {
+	orders, manifestId, err = s.uploadFolder(rootPath, batchSize, indexFile, "", noFeeApikey)
+	return
+}
+
+func (s *SDK) uploadFolder(rootPath string, batchSize int, indexFile string, currency string, noFeeApikey string) ([]*seedSchema.RespOrder, string, error) {
 	if indexFile == "" {
 		indexFile = "index.html"
 	}
@@ -31,7 +51,7 @@ func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, cur
 
 	pathFiles, err := getPathFiles(rootPath)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	orders := make([]*seedSchema.RespOrder, 0, len(pathFiles))
@@ -51,7 +71,7 @@ func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, cur
 			panic(err)
 		}
 		// bundle item and send to arseeding
-		order, err := s.SendData(data, currency, nil)
+		order, err := s.SendData(data, currency, noFeeApikey, nil)
 		if err != nil {
 			panic(err)
 		}
@@ -78,16 +98,16 @@ func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, cur
 	// submit manifest file
 	manifestFileBy, err := json.Marshal(manifestFile)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	order, err := s.SendData(manifestFileBy, currency, &schema.OptionItem{
+	order, err := s.SendData(manifestFileBy, currency, noFeeApikey, &schema.OptionItem{
 		Tags: []types.Tag{{Name: "Type", Value: "manifest"}, {Name: "Content-Type", Value: "application/x.arweave-manifest+json"}},
 	})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	orders = append(orders, order)
-	return orders, nil
+	return orders, order.ItemId, nil
 }
 
 func readFileData(rootPath, filePath string) ([]byte, error) {

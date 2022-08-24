@@ -128,10 +128,18 @@ func (a *ArSeedCli) GetBundler() (string, error) {
 	return addr, err
 }
 
-func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string) (*schema.RespOrder, error) {
+func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string, apikey string) (*schema.RespOrder, error) {
 	req := a.SCli.Post()
-	req.Path(fmt.Sprintf("/bundle/tx/%s", currency))
+	if currency != "" {
+		req.Path(fmt.Sprintf("/bundle/tx/%s", currency))
+	} else {
+		req.Path("/bundle/tx")
+	}
+
 	req.SetHeader("Content-Type", "application/octet-stream")
+	if len(apikey) > 0 {
+		req.SetHeader("X-API-KEY", apikey)
+	}
 
 	req.Body(bytes.NewReader(itemBinary))
 

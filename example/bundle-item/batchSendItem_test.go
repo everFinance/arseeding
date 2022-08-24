@@ -66,7 +66,7 @@ func TestSendItem(t *testing.T) {
 				return
 			}
 			// submit to arseed
-			order, err := arseedSdk.SubmitItem(item.ItemBinary, "usdt")
+			order, err := arseedSdk.SubmitItem(item.ItemBinary, "usdt", "")
 			if err != nil {
 				t.Log("send failed", "idx", idx, "err", err)
 				return
