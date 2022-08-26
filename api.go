@@ -25,7 +25,7 @@ func (s *Arseeding) runAPI(port string) {
 	}
 
 	if !s.NoFee {
-		r.Use(LimiterMiddleware(3000, "M", s.config.GetIPWhiteList()))
+		r.Use(LimiterMiddleware(30000, "M", s.config.GetIPWhiteList()))
 	}
 	v1 := r.Group("/")
 	{
@@ -91,7 +91,7 @@ func (s *Arseeding) runAPI(port string) {
 func (s *Arseeding) arseedInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"Name":          "Arseeding",
-		"Version":       "v1.0.13",
+		"Version":       "v1.0.16",
 		"Documentation": "https://web3infra.dev",
 	})
 }

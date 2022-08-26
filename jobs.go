@@ -3,6 +3,7 @@ package arseeding
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay-go/account"
 	"github.com/everFinance/everpay-go/config"
@@ -492,7 +493,6 @@ func (s *Arseeding) retryOnChainArTx() {
 
 func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, onChainItemIds []string, err error) {
 	onChainItems := make([]types.BundleItem, 0, len(itemIds))
-	onChainItemIds = make([]string, 0, len(itemIds))
 	for _, itemId := range itemIds {
 		itemBinary, err := s.store.LoadItemBinary(itemId)
 		if err != nil {
@@ -505,11 +505,35 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 			continue
 		}
 		onChainItems = append(onChainItems, *item)
-		onChainItemIds = append(onChainItemIds, item.Id)
 	}
 	if len(onChainItems) == 0 {
 		err = errors.New("onChainItems is null")
 		return
+	}
+
+	// the end off item.Data not be "", because when the case viewblock decode failed. // todo viewblock used stream function decode item, so this is a bug for them
+	endItem := onChainItems[len(onChainItems)-1]
+	if endItem.Data == "" {
+		// find a data != "" item and push to end off
+		idx := -1
+		for i, item := range onChainItems {
+			if item.Data != "" {
+				idx = i
+				break
+			}
+		}
+		if idx == -1 {
+			err = errors.New("all bundle items data are null")
+			return
+		}
+		newEndItem := onChainItems[idx]
+		onChainItems = append(onChainItems[:idx], onChainItems[idx+1:]...)
+		onChainItems = append(onChainItems, newEndItem)
+	}
+
+	// get onChainItemIds
+	for _, item := range onChainItems {
+		onChainItemIds = append(onChainItemIds, item.Id)
 	}
 
 	// assemble and send to arweave
@@ -518,6 +542,13 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 		log.Error("utils.NewBundle(onChainItems...)", "err", err)
 		return
 	}
+
+	// verify bundle, ensure that the bundle is exactly right before sending
+	if _, err = utils.DecodeBundle(bundle.BundleBinary); err != nil {
+		err = errors.New(fmt.Sprintf("Verify bundle failed; err:%v", err))
+		return
+	}
+
 	arTxtags := []types.Tag{
 		{Name: "App-Name", Value: "arseeding"},
 		{Name: "App-Version", Value: "1.0.0"},
@@ -591,7 +622,6 @@ func (s *Arseeding) parseAndSaveBundleTx() {
 		}
 		if err := s.ParseAndSaveBundleItems(arId, data); err != nil {
 			log.Error("ParseAndSaveBundleItems", "err", err, "arId", arId)
-			continue
 		}
 		// del wait db
 		if err = s.store.DelParsedBundleArId(arId); err != nil {
