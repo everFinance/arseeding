@@ -46,13 +46,13 @@ func TestSDK_UploadFolderWithNoFee(t *testing.T) {
 	priKey := "1d8bdd0d2f1e73dffe1111111118325b7e195669541f76559760ef615a588be3"
 	eccSigner, err := goether.NewSigner(priKey)
 	assert.NoError(t, err)
-	seedUrl := "https://arseed-dev.web3infra.dev"
+	seedUrl := "https://arseed.web3infra.dev"
 	payUrl := "https://api.everpay.io"
 	sdk, err := NewSDK(seedUrl, payUrl, eccSigner)
 	assert.NoError(t, err)
 	apikey := "xxxxxxxxxx"
 
-	rootPath := "./dist"
+	rootPath := "./build"
 	orders, manifestId, err := sdk.UploadFolderWithNoFee(rootPath, 20, "index.html", apikey)
 	assert.NoError(t, err)
 	t.Log(len(orders))
