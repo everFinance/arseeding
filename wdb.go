@@ -17,7 +17,7 @@ type Wdb struct {
 
 func NewWdb(dsn string) *Wdb {
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger:          logger.Default.LogMode(logger.Error),
+		Logger:          logger.Default.LogMode(logger.Silent),
 		CreateBatchSize: 200,
 	})
 	if err != nil {
@@ -98,7 +98,7 @@ func (w *Wdb) UpdateOrderPay(id uint, everHash string, paymentStatus string, tx 
 
 func (w *Wdb) GetNeedOnChainOrders() ([]schema.Order, error) {
 	res := make([]schema.Order, 0)
-	err := w.Db.Model(&schema.Order{}).Where("payment_status = ?  and on_chain_status = ?", schema.SuccPayment, schema.WaitOnChain).Find(&res).Error
+	err := w.Db.Model(&schema.Order{}).Where("payment_status = ?  and on_chain_status = ?", schema.SuccPayment, schema.WaitOnChain).Limit(500).Find(&res).Error
 	return res, err
 }
 
