@@ -17,7 +17,7 @@ type Wdb struct {
 
 func NewWdb(dsn string) *Wdb {
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger:          logger.Default.LogMode(logger.Error),
+		Logger:          logger.Default.LogMode(logger.Silent),
 		CreateBatchSize: 200,
 	})
 	if err != nil {
