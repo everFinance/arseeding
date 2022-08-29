@@ -37,18 +37,6 @@ func handleManifest(maniData []byte, path string, db *Store) ([]types.Tag, []byt
 }
 
 func getArTxOrItemData(id string, db *Store) (decodeTags []types.Tag, data []byte, err error) {
-	// find arId
-	txMeta, err := db.LoadTxMeta(id)
-	if err == nil { // arTx id
-		data, err = txDataByMeta(txMeta, db)
-		if err != nil {
-			return
-		}
-		decodeTags, err = utils.TagsDecode(txMeta.Tags)
-		return
-	}
-
-	// not arId
 	// find bundle item
 	itemBinary, err := db.LoadItemBinary(id)
 	if err == nil {
@@ -61,8 +49,36 @@ func getArTxOrItemData(id string, db *Store) (decodeTags []types.Tag, data []byt
 		data, err = utils.Base64Decode(item.Data)
 		return
 	}
+
+	// not bundle item
+	// find arId
+	txMeta, err := db.LoadTxMeta(id)
+	if err == nil { // arTx id
+		data, err = txDataByMeta(txMeta, db)
+		if err != nil {
+			return
+		}
+		decodeTags, err = utils.TagsDecode(txMeta.Tags)
+		return
+	}
 	// txId not found in local, need proxy to gateway
 	return nil, nil, schema.ErrLocalNotExist
+}
+
+func getArTxOrItemTags(id string, db *Store) (decodeTags []types.Tag, err error) {
+	itemMeta, err := db.LoadItemMeta(id)
+	if err == nil {
+		decodeTags = itemMeta.Tags
+		return
+	}
+	// not bundle item
+	// find arId
+	txMeta, err := db.LoadTxMeta(id)
+	if err == nil { // arTx id
+		decodeTags, err = utils.TagsDecode(txMeta.Tags)
+		return
+	}
+	return nil, schema.ErrLocalNotExist
 }
 
 func getBundleItemData(id string, db *Store) (decodeTags []types.Tag, data []byte, err error) {
