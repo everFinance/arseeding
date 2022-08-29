@@ -235,3 +235,7 @@ func (w *Wdb) GetManifestId(mfUrl string) (string, error) {
 	err := w.Db.Model(&schema.Manifest{}).Where("manifest_url = ?", mfUrl).Last(&res).Error
 	return res.ManifestId, err
 }
+
+func (w *Wdb) DelManifest(id string) error {
+	return w.Db.Where("manifest_id = ?", id).Delete(&schema.Manifest{}).Error
+}
