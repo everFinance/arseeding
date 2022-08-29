@@ -77,6 +77,9 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
 		v1.GET("/bundle/orders/:signer", s.getOrders)
 		v1.GET("/:id", s.dataRoute) // get arTx data or bundleItem data
+		if s.EnableManifest {
+			v1.POST("/manifest_url/:id", s.setManifestUrl)
+		}
 
 		// submit native data with X-API-KEY
 		v1.POST("/bundle/data", s.submitNativeData)
@@ -91,7 +94,7 @@ func (s *Arseeding) runAPI(port string) {
 func (s *Arseeding) arseedInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"Name":          "Arseeding",
-		"Version":       "v1.0.16",
+		"Version":       "v1.0.18",
 		"Documentation": "https://web3infra.dev",
 	})
 }
@@ -528,6 +531,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 
 	c.JSON(http.StatusOK, schema.RespOrder{
 		ItemId:             ord.ItemId,
+		Size:               ord.Size,
 		Bundler:            s.bundler.Signer.Address,
 		Currency:           ord.Currency,
 		Decimals:           ord.Decimals,
@@ -604,7 +608,7 @@ func (s *Arseeding) submitNativeData(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, schema.RespItemId{ItemId: order.ItemId})
+	c.JSON(http.StatusOK, schema.RespItemId{ItemId: order.ItemId, Size: order.Size})
 }
 
 func (s *Arseeding) getOrdersByApiKey(c *gin.Context) {
@@ -772,6 +776,39 @@ func (s *Arseeding) dataRoute(c *gin.Context) {
 	default:
 		internalErrorResponse(c, err.Error())
 	}
+}
+
+func (s *Arseeding) setManifestUrl(c *gin.Context) {
+	txId := c.Param("id")
+	mfUrl := expectedTxSandbox(txId)
+	if mfId, err := s.wdb.GetManifestId(mfUrl); err == nil {
+		c.JSON(http.StatusOK, schema.Manifest{
+			ManifestUrl: mfUrl,
+			ManifestId:  mfId,
+		})
+		return
+	}
+
+	tags, err := getArTxOrItemTags(txId, s.store)
+	if err != nil {
+		internalErrorResponse(c, err.Error())
+		return
+	}
+	if s.EnableManifest && getTagValue(tags, schema.ContentType) == schema.ManifestType {
+		// insert new record
+		if err = s.wdb.InsertManifest(schema.Manifest{
+			ManifestUrl: mfUrl,
+			ManifestId:  txId,
+		}); err != nil {
+			internalErrorResponse(c, err.Error())
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, schema.Manifest{
+		ManifestUrl: mfUrl,
+		ManifestId:  txId,
+	})
 }
 
 func getTagValue(tags []types.Tag, name string) string {

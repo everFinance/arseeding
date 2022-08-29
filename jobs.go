@@ -595,6 +595,12 @@ func (s *Arseeding) processExpiredOrd() {
 		// delete bundle item from store
 		if err = s.DelItem(ord.ItemId); err != nil {
 			log.Error("DelItem", "err", err, "itemId", ord.ItemId)
+			continue
+		}
+		// delete manifest table
+		if err = s.wdb.DelManifest(ord.ItemId); err != nil {
+			log.Error("s.wdb.DelManifest", "err", err, "itemId", ord.ItemId)
+			continue
 		}
 	}
 }
