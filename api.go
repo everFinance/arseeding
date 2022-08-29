@@ -528,6 +528,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 
 	c.JSON(http.StatusOK, schema.RespOrder{
 		ItemId:             ord.ItemId,
+		Size:               ord.Size,
 		Bundler:            s.bundler.Signer.Address,
 		Currency:           ord.Currency,
 		Decimals:           ord.Decimals,
@@ -604,7 +605,7 @@ func (s *Arseeding) submitNativeData(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, schema.RespItemId{ItemId: order.ItemId})
+	c.JSON(http.StatusOK, schema.RespItemId{ItemId: order.ItemId, Size: order.Size})
 }
 
 func (s *Arseeding) getOrdersByApiKey(c *gin.Context) {

@@ -11,7 +11,8 @@ const (
 )
 
 type RespOrder struct {
-	ItemId             string `json:"itemId"`   // bundleItem id
+	ItemId             string `json:"itemId"` // bundleItem id
+	Size               int64  `json:"size"`
 	Bundler            string `json:"bundler"`  // fee receiver address
 	Currency           string `json:"currency"` // payment token symbol
 	Decimals           int    `json:"decimals"`
@@ -22,6 +23,7 @@ type RespOrder struct {
 
 type RespItemId struct {
 	ItemId string `json:"itemId"` // bundleItem id
+	Size   int64  `json:"size"`
 }
 
 type Fee struct {
