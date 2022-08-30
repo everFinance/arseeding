@@ -7,6 +7,7 @@ import (
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"github.com/shopspring/decimal"
+	"gorm.io/gorm"
 	"math"
 	"strings"
 	"time"
@@ -132,6 +133,20 @@ func (s *Arseeding) ParseAndSaveBundleItems(arId string, data []byte) error {
 		if err = s.saveItem(item); err != nil {
 			log.Error("s.saveItem(item)", "err", err, "arId", arId)
 			return err
+		}
+		// process manifest
+		if s.EnableManifest && getTagValue(item.Tags, schema.ContentType) == schema.ManifestType {
+			mfUrl := expectedTxSandbox(item.Id)
+			if _, err = s.wdb.GetManifestId(mfUrl); err == gorm.ErrRecordNotFound {
+				// insert new record
+				if err = s.wdb.InsertManifest(schema.Manifest{
+					ManifestUrl: mfUrl,
+					ManifestId:  item.Id,
+				}); err != nil {
+					log.Error("s.wdb.InsertManifest(res)", "err", err, "itemId", item.Id)
+					return err
+				}
+			}
 		}
 		itemIds = append(itemIds, item.Id)
 	}

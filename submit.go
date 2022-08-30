@@ -6,6 +6,7 @@ import (
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
+	"gorm.io/gorm"
 	"math/big"
 	"strconv"
 )
@@ -156,6 +157,22 @@ func (s *Arseeding) FetchAndStoreTx(arId string) (err error) {
 	// store data to local
 	if err = setTxDataChunks(*arTxMeta, data, s.store); err != nil {
 		return err
+	}
+
+	// process manifest
+	tags, _ := utils.TagsDecode(arTxMeta.Tags)
+	if s.EnableManifest && getTagValue(tags, schema.ContentType) == schema.ManifestType {
+		mfUrl := expectedTxSandbox(arId)
+		// insert new record
+		if _, err = s.wdb.GetManifestId(mfUrl); err == gorm.ErrRecordNotFound {
+			if err = s.wdb.InsertManifest(schema.Manifest{
+				ManifestUrl: mfUrl,
+				ManifestId:  arId,
+			}); err != nil {
+				log.Error("s.wdb.InsertManifest(res)", "err", err, "arId", arId)
+				return err
+			}
+		}
 	}
 
 	// parse ANS-104 bundle data
