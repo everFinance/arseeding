@@ -94,7 +94,7 @@ func (s *Arseeding) runAPI(port string) {
 func (s *Arseeding) arseedInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"Name":          "Arseeding",
-		"Version":       "v1.0.18",
+		"Version":       "v1.0.19",
 		"Documentation": "https://web3infra.dev",
 	})
 }
