@@ -9,7 +9,13 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/everFinance/arseeding/schema"
+	"net"
+	"net/url"
 	"strings"
+)
+
+const (
+	ForeverLandEndpoint = "https://endpoint.4everland.co"
 )
 
 type S3DB struct {
@@ -19,12 +25,18 @@ type S3DB struct {
 	bucketPrefix string
 }
 
-func NewS3DB(accKey, secretKey, region, bktPrefix string, use4EVER bool) (*S3DB, error) {
+func NewS3DB(accKey, secretKey, region, bktPrefix, endpoint string) (*S3DB, error) {
 	mySession := session.Must(session.NewSession())
 	cred := credentials.NewStaticCredentials(accKey, secretKey, "")
 	cfgs := aws.NewConfig().WithRegion(region).WithCredentials(cred)
-	if use4EVER {
-		cfgs.WithEndpoint("https://endpoint.4everland.co") // inject 4everland endpoint
+	if endpoint != "" {
+		cfgs.WithEndpoint(endpoint) // inject endpoint
+		// if endpoint is an IP address, use path-style addressing.
+		if u, err := url.Parse(endpoint); err == nil {
+			if net.ParseIP(u.Hostname()) != nil {
+				cfgs.S3ForcePathStyle = aws.Bool(true)
+			}
+		}
 	}
 	s3Api := s3.New(mySession, cfgs)
 	err := createS3Bucket(s3Api, bktPrefix)

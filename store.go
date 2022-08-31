@@ -14,8 +14,8 @@ type Store struct {
 	KVDb rawdb.KeyValueDB
 }
 
-func NewS3Store(accKey, secretKey, region, bucketPrefix string, use4EVER bool) (*Store, error) {
-	Db, err := rawdb.NewS3DB(accKey, secretKey, region, bucketPrefix, use4EVER)
+func NewS3Store(accKey, secretKey, region, bucketPrefix, endpoint string) (*Store, error) {
+	Db, err := rawdb.NewS3DB(accKey, secretKey, region, bucketPrefix, endpoint)
 	if err != nil {
 		return nil, err
 	}
