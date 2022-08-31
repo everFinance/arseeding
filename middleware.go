@@ -90,7 +90,8 @@ func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
 
 			mfId, err := wdb.GetManifestId(prefixUri)
 			if err != nil {
-				c.Next()
+				c.JSON(http.StatusNotFound, "not found mainfestId")
+				c.Abort()
 				return
 			}
 			_, mfData, err := getArTxOrItemData(mfId, store)
