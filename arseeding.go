@@ -2,6 +2,7 @@ package arseeding
 
 import (
 	"github.com/everFinance/arseeding/config"
+	"github.com/everFinance/arseeding/rawdb"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/arseeding/sdk"
 	"github.com/everFinance/everpay-go/common"
@@ -44,13 +45,16 @@ type Arseeding struct {
 func New(
 	boltDirPath, dsn string,
 	arWalletKeyPath string, arNode, payUrl string, noFee bool, enableManifest bool,
-	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region string, use4EVER bool,
-	port string,
+	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region, s3Endpoint string,
+	use4EVER bool, port string,
 ) *Arseeding {
 	var err error
 	KVDb := &Store{}
 	if useS3 {
-		KVDb, err = NewS3Store(s3AccKey, s3SecretKey, s3Region, s3BucketPrefix, use4EVER)
+		if use4EVER {
+			s3Endpoint = rawdb.ForeverLandEndpoint //inject 4everland endpoint
+		}
+		KVDb, err = NewS3Store(s3AccKey, s3SecretKey, s3Region, s3BucketPrefix, s3Endpoint)
 	} else {
 		KVDb, err = NewBoltStore(boltDirPath)
 	}

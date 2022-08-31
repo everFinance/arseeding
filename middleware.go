@@ -17,6 +17,7 @@ import (
 
 var (
 	ERR_TOO_MANY_REQUESTS = errors.New("err_limit_exceeded")
+	MANIFEST_ID_NOT_FOUND = errors.New("err_manifest_id_not_found")
 )
 
 // LimiterMiddleware period: "S"<Second>,"M"<Minute>,"H"<Hour>,"D"<Day>; limit: limit frequency
@@ -90,7 +91,9 @@ func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
 
 			mfId, err := wdb.GetManifestId(prefixUri)
 			if err != nil {
-				c.JSON(http.StatusNotFound, "not found mainfestId")
+				c.JSON(http.StatusNotFound, gin.H{
+					"error": MANIFEST_ID_NOT_FOUND.Error(),
+				})
 				c.Abort()
 				return
 			}
