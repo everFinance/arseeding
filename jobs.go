@@ -553,6 +553,12 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 		{Name: "App-Name", Value: "arseeding"},
 		{Name: "App-Version", Value: "1.0.0"},
 		{Name: "Action", Value: "Bundle"},
+		{Name: "Protocol-Name", Value: "BAR"},
+		{Name: "Action", Value: "Burn"},
+		{Name: "App-Name", Value: "SmartWeaveAction"},
+		{Name: "App-Version", Value: "0.3.0"},
+		{Name: "Input", Value: `{"function":"mint"}`},
+		{Name: "Contract", Value: "VFr3Bk-uM-motpNNkkFg4lNW1BMmSfzqsVO551Ho4hA"},
 	}
 
 	// speed arTx Fee
