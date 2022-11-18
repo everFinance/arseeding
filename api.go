@@ -480,6 +480,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 		errorResponse(c, "can not submit null bundle item")
 		return
 	}
+	needSort := isSortItems(c)
 
 	defer c.Request.Body.Close()
 
@@ -523,7 +524,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	}
 
 	// process bundleItem
-	ord, err := s.ProcessSubmitItem(*item, currency, noFee, apikey)
+	ord, err := s.ProcessSubmitItem(*item, currency, noFee, apikey, needSort)
 	if err != nil {
 		errorResponse(c, err.Error())
 		return
@@ -554,7 +555,7 @@ func (s *Arseeding) submitNativeData(c *gin.Context) {
 		errorResponse(c, "Query params must include Content-Type")
 		return
 	}
-
+	needSort := isSortItems(c)
 	tags := make([]types.Tag, 0, len(queryMap))
 	for k, values := range queryMap {
 		for _, val := range values {
@@ -602,7 +603,7 @@ func (s *Arseeding) submitNativeData(c *gin.Context) {
 		return
 	}
 	// process submit item
-	order, err := s.ProcessSubmitItem(item, "", true, apiKey)
+	order, err := s.ProcessSubmitItem(item, "", true, apiKey, needSort)
 	if err != nil {
 		errorResponse(c, err.Error())
 		return
@@ -818,6 +819,13 @@ func getTagValue(tags []types.Tag, name string) string {
 		}
 	}
 	return ""
+}
+
+func isSortItems(c *gin.Context) bool {
+	if c.GetHeader("Sort") == "true" {
+		return true
+	}
+	return false
 }
 
 func errorResponse(c *gin.Context, err string) {

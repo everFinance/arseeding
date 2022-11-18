@@ -55,7 +55,7 @@ func (s *SDK) SendData(data []byte, currency string, apikey string, option *sche
 	if err != nil {
 		return
 	}
-	order, err = s.Cli.SubmitItem(bundleItem.ItemBinary, currency, apikey)
+	order, err = s.Cli.SubmitItem(bundleItem.ItemBinary, currency, apikey, option.NeedSequence)
 	return
 }
 

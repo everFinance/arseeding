@@ -39,6 +39,8 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 	}
 
 	s.scheduler.Every(bundleInterval).Seconds().SingletonMode().Do(s.onChainBundleItems) // can set a longer time, if the items are less. such as 2m
+	// onChainBundleItems by upload order
+	s.scheduler.Every(bundleInterval).Seconds().SingletonMode().Do(s.onChainItemsBySeq)
 	s.scheduler.Every(3).Minute().SingletonMode().Do(s.watchArTx)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.retryOnChainArTx)
 
@@ -369,6 +371,39 @@ func (s *Arseeding) onChainBundleItems() {
 		log.Error("s.wdb.GetNeedOnChainOrders()", "err", err)
 		return
 	}
+	// send arTx to arweave
+	arTx, onChainItemIds, err := s.onChainOrds(ords)
+	if err != nil {
+		return
+	}
+
+	s.updateOnChainInfo(onChainItemIds, arTx, schema.PendingOnChain)
+
+}
+
+func (s *Arseeding) onChainItemsBySeq() {
+	ords, err := s.wdb.GetNeedOnChainOrdersSorted()
+	if err != nil {
+		log.Error("s.wdb.GetNeedOnChainOrders()", "err", err)
+		return
+	}
+
+	arTx, onChainItemIds, err := s.onChainOrds(ords)
+	if err != nil {
+		return
+	}
+
+	// block until arTx.confirmation > 3
+	status := arTxWatcher(s.arCli, arTx.ID)
+	if !status {
+		log.Error("watch tx status failed", "ar id", arTx.ID, "status", status)
+		return
+	}
+
+	s.updateOnChainInfo(onChainItemIds, arTx, schema.SuccOnChain)
+}
+
+func (s *Arseeding) onChainOrds(ords []schema.Order) (arTx types.Transaction, onChainItemIds []string, err error) {
 	// once total size limit 500 MB
 	itemIds := make([]string, 0, len(ords))
 	totalSize := int64(0)
@@ -388,11 +423,10 @@ func (s *Arseeding) onChainBundleItems() {
 	}
 
 	// send arTx to arweave
-	arTx, onChainItemIds, err := s.onChainBundleTx(itemIds)
-	if err != nil {
-		return
-	}
+	return s.onChainBundleTx(itemIds)
+}
 
+func (s *Arseeding) updateOnChainInfo(onChainItemIds []string, arTx types.Transaction, onChainStatus string) {
 	// insert arTx record
 	onChainItemIdsJs, err := json.Marshal(onChainItemIds)
 	if err != nil {
@@ -414,7 +448,7 @@ func (s *Arseeding) onChainBundleItems() {
 
 	// update order onChainStatus to pending
 	for _, itemId := range onChainItemIds {
-		if err = s.wdb.UpdateOrdOnChainStatus(itemId, schema.PendingOnChain, nil); err != nil {
+		if err = s.wdb.UpdateOrdOnChainStatus(itemId, onChainStatus, nil); err != nil {
 			log.Error("s.wdb.UpdateOrdOnChainStatus(item.Id,schema.PendingOnChain)", "err", err, "itemId", itemId)
 		}
 	}
@@ -714,4 +748,38 @@ func calculateFactor(price, speedFee int64) int64 {
 		val = 1
 	}
 	return val
+}
+
+func arTxWatcher(arCli *goar.Client, arTxHash string) bool {
+	// loop watcher on chain tx status
+	// total time 59 minute
+	tmp := 0
+	for i := 1; i <= 21; i++ {
+		// sleep
+		num := 60 + i*10
+		time.Sleep(time.Second * time.Duration(num))
+
+		tmp += num
+		log.Debug("watcher tx sleep time", "wait total time(s)", tmp)
+		log.Debug("retry get tx status", "txHash", arTxHash)
+
+		// watcher on-chain tx
+		status, err := arCli.GetTransactionStatus(arTxHash)
+		if err != nil {
+			if err.Error() == goar.ErrPendingTx.Error() {
+				log.Debug("tx is pending", "txHash", arTxHash)
+			} else {
+				log.Error("get tx status", "err", err, "txHash", arTxHash)
+			}
+			continue
+		}
+
+		// when err is nil
+		// confirms block height must >= 3
+		if status.NumberOfConfirmations < 3 {
+			log.Debug("arseeding send sequence tx must more than 2 block confirms", "txHash", arTxHash, "currentConfirms", status.NumberOfConfirmations)
+			continue
+		}
+	}
+	return false
 }

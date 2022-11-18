@@ -48,6 +48,7 @@ type Order struct {
 
 	OnChainStatus string `json:"onChainStatus"` // "waiting","pending","success","failed"
 	ApiKey        string `gorm:"index:idx2" json:"-"`
+	Sort          bool   `json:"sort"` // upload items to arweave by sequence
 }
 
 type ReceiptEverTx struct {
