@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string, isNoFeeMode bool, apiKey string) (schema.Order, error) {
+func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string, isNoFeeMode bool, apiKey string, isSort bool) (schema.Order, error) {
 	if err := utils.VerifyBundleItem(item); err != nil {
 		return schema.Order{}, err
 	}
@@ -39,6 +39,7 @@ func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string, is
 		ExpectedBlock: s.cache.GetInfo().Height + s.expectedRange,
 		OnChainStatus: schema.WaitOnChain,
 		ApiKey:        apiKey,
+		Sort:          isSort,
 	}
 
 	// calc fee

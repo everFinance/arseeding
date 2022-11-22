@@ -16,12 +16,12 @@ import (
 )
 
 func (s *SDK) UploadFolder(rootPath string, batchSize int, indexFile string, currency string) (orders []*seedSchema.RespOrder, manifestId string, err error) {
-	orders, manifestId, err = s.uploadFolder(rootPath, batchSize, indexFile, currency, "")
+	orders, manifestId, err = s.uploadFolder(rootPath, batchSize, indexFile, currency, "", false)
 	return
 }
 
 func (s *SDK) UploadFolderAndPay(rootPath string, batchSize int, indexFile string, currency string) (orders []*seedSchema.RespOrder, manifestId string, everTxs []*paySchema.Transaction, err error) {
-	orders, manifestId, err = s.uploadFolder(rootPath, batchSize, indexFile, currency, "")
+	orders, manifestId, err = s.uploadFolder(rootPath, batchSize, indexFile, currency, "", false)
 	if err != nil {
 		return
 	}
@@ -30,11 +30,16 @@ func (s *SDK) UploadFolderAndPay(rootPath string, batchSize int, indexFile strin
 }
 
 func (s *SDK) UploadFolderWithNoFee(rootPath string, batchSize int, indexFile string, noFeeApikey string) (orders []*seedSchema.RespOrder, manifestId string, err error) {
-	orders, manifestId, err = s.uploadFolder(rootPath, batchSize, indexFile, "", noFeeApikey)
+	orders, manifestId, err = s.uploadFolder(rootPath, batchSize, indexFile, "", noFeeApikey, false)
 	return
 }
 
-func (s *SDK) uploadFolder(rootPath string, batchSize int, indexFile string, currency string, noFeeApikey string) ([]*seedSchema.RespOrder, string, error) {
+func (s *SDK) UploadFolderWithSequence(rootPath string, batchSize int, indexFile string, noFeeApikey string) (orders []*seedSchema.RespOrder, manifestId string, err error) {
+	orders, manifestId, err = s.uploadFolder(rootPath, batchSize, indexFile, "", noFeeApikey, true)
+	return
+}
+
+func (s *SDK) uploadFolder(rootPath string, batchSize int, indexFile string, currency string, noFeeApikey string, needSequence bool) ([]*seedSchema.RespOrder, string, error) {
 	if indexFile == "" {
 		indexFile = "index.html"
 	}
@@ -71,7 +76,7 @@ func (s *SDK) uploadFolder(rootPath string, batchSize int, indexFile string, cur
 			panic(err)
 		}
 		// bundle item and send to arseeding
-		order, err := s.SendData(data, currency, noFeeApikey, nil)
+		order, err := s.SendData(data, currency, noFeeApikey, nil, needSequence)
 		if err != nil {
 			panic(err)
 		}
@@ -102,7 +107,7 @@ func (s *SDK) uploadFolder(rootPath string, batchSize int, indexFile string, cur
 	}
 	order, err := s.SendData(manifestFileBy, currency, noFeeApikey, &schema.OptionItem{
 		Tags: []types.Tag{{Name: "Type", Value: "manifest"}, {Name: "Content-Type", Value: "application/x.arweave-manifest+json"}},
-	})
+	}, needSequence)
 	if err != nil {
 		return nil, "", err
 	}
