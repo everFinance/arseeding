@@ -8,6 +8,7 @@ import (
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"gopkg.in/h2non/gentleman.v2"
+	"strconv"
 )
 
 type ArSeedCli struct {
@@ -236,10 +237,10 @@ func (a *ArSeedCli) BundleFee(size int64, currency string) (schema.RespFee, erro
 	return fee, err
 }
 
-func (a *ArSeedCli) GetOrders(addr string) ([]schema.Order, error) {
+func (a *ArSeedCli) GetOrders(addr string, startId int) ([]schema.Order, error) {
 	req := a.SCli.Get()
 	req.Path(fmt.Sprintf("/bundle/orders/%s", addr))
-
+	req.AddQuery("cursorId", strconv.Itoa(startId))
 	resp, err := req.Send()
 	if err != nil {
 		return nil, err
