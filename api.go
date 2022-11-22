@@ -822,7 +822,7 @@ func getTagValue(tags []types.Tag, name string) string {
 }
 
 func isSortItems(c *gin.Context) bool {
-	if c.GetHeader("Sort") == "true" {
+	if c.GetHeader("Sort") == "true" || c.GetHeader("sort") == "true" {
 		return true
 	}
 	return false
