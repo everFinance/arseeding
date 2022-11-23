@@ -25,7 +25,7 @@ func TestSDK_SendDataAndPay_EccSigner(t *testing.T) {
 	tags := []types.Tag{
 		{"Content-Type", "text"},
 	}
-	tx, itemId, err := sdk.SendDataAndPay(data, "usdt", &schema.OptionItem{Tags: tags}) // your account must have enough balance in everpay
+	tx, itemId, err := sdk.SendDataAndPay(data, "usdt", &schema.OptionItem{Tags: tags}, false) // your account must have enough balance in everpay
 	assert.NoError(t, err)
 	t.Log("itemId:", itemId)
 	t.Log(tx.HexHash())
@@ -47,7 +47,7 @@ func TestSDK_SendDataAndPay_RsaSigner(t *testing.T) {
 	tags := []types.Tag{
 		{"Content-Type", "text"},
 	}
-	tx, itemId, err := sdk.SendDataAndPay(data, "usdt", &schema.OptionItem{Tags: tags}) // your account must have enough balance in everpay
+	tx, itemId, err := sdk.SendDataAndPay(data, "usdt", &schema.OptionItem{Tags: tags}, false) // your account must have enough balance in everpay
 	assert.NoError(t, err)
 	t.Log("itemId:", itemId)
 	t.Log(tx.HexHash())
