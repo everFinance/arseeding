@@ -3,19 +3,26 @@ package arseeding
 import (
 	"github.com/everFinance/arseeding/schema"
 	"gorm.io/driver/mysql"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 	"math"
+	"os"
+	"path"
 	"strings"
 	"time"
+)
+
+const (
+	sqliteName = "seed.db"
 )
 
 type Wdb struct {
 	Db *gorm.DB
 }
 
-func NewWdb(dsn string) *Wdb {
+func NewMysqlDb(dsn string) *Wdb {
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger:          logger.Default.LogMode(logger.Silent),
 		CreateBatchSize: 200,
@@ -23,8 +30,24 @@ func NewWdb(dsn string) *Wdb {
 	if err != nil {
 		panic(err)
 	}
-	log.Info("connect db success")
+	log.Info("connect mysql db success")
 	return &Wdb{Db: db}
+}
+
+func NewSqliteDb(dbDir string) *Wdb {
+	if err := os.MkdirAll(dbDir, os.ModePerm); err != nil {
+		panic(err)
+	}
+	db, err := gorm.Open(sqlite.Open(path.Join(dbDir, sqliteName)), &gorm.Config{
+		Logger:          logger.Default.LogMode(logger.Silent),
+		CreateBatchSize: 200,
+	})
+	if err != nil {
+		panic(err)
+	}
+	log.Info("connect sqlite db success")
+	return &Wdb{Db: db}
+
 }
 
 func (w *Wdb) Migrate(noFee, enableManifest bool) error {

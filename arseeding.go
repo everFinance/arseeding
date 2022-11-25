@@ -43,7 +43,7 @@ type Arseeding struct {
 }
 
 func New(
-	boltDirPath, dsn string,
+	boltDirPath, mySqlDsn string, sqliteDir string, useSqlite bool,
 	arWalletKeyPath string, arNode, payUrl string, noFee bool, enableManifest bool,
 	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region, s3Endpoint string,
 	use4EVER bool, port string,
@@ -52,7 +52,7 @@ func New(
 	KVDb := &Store{}
 	if useS3 {
 		if use4EVER {
-			s3Endpoint = rawdb.ForeverLandEndpoint //inject 4everland endpoint
+			s3Endpoint = rawdb.ForeverLandEndpoint // inject 4everland endpoint
 		}
 		KVDb, err = NewS3Store(s3AccKey, s3SecretKey, s3Region, s3BucketPrefix, s3Endpoint)
 	} else {
@@ -66,8 +66,12 @@ func New(
 	if err := jobmg.InitTaskMg(KVDb); err != nil {
 		panic(err)
 	}
-
-	wdb := NewWdb(dsn)
+	wdb := &Wdb{}
+	if useSqlite {
+		wdb = NewSqliteDb(sqliteDir)
+	} else {
+		wdb = NewMysqlDb(mySqlDsn)
+	}
 	if err = wdb.Migrate(noFee, enableManifest); err != nil {
 		panic(err)
 	}
@@ -87,7 +91,7 @@ func New(
 
 	localArseedUrl := "http://127.0.0.1" + port
 	a := &Arseeding{
-		config:              config.New(dsn),
+		config:              config.New(mySqlDsn, sqliteDir, useSqlite),
 		store:               KVDb,
 		engine:              gin.Default(),
 		submitLocker:        sync.Mutex{},
