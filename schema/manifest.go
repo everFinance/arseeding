@@ -49,6 +49,6 @@ type Resource struct {
 
 type Manifest struct {
 	ID          uint   `gorm:"primarykey" json:"-"`
-	ManifestUrl string `gorm:"index:idx1,unique" json:"manifestUrl"`
+	ManifestUrl string `gorm:"index:idxMani0,unique" json:"manifestUrl"`
 	ManifestId  string `json:"manifestId"` // arId
 }

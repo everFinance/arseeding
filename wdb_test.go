@@ -20,9 +20,10 @@ func TestNewWdb(t *testing.T) {
 }
 
 func TestSqlite(t *testing.T) {
-	db := NewMysqlDb("testSqlite")
-
-	err := db.InsertOrder(schema.Order{ID: 1, Fee: "123"})
+	db := NewSqliteDb("testSqlite")
+	err := db.Migrate(true, true)
+	assert.NoError(t, err)
+	err = db.InsertOrder(schema.Order{ID: 2, Fee: "123"})
 	assert.NoError(t, err)
 	ord := &schema.Order{}
 	err = db.Db.First(ord).Error

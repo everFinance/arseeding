@@ -50,6 +50,8 @@ func NewSqliteDb(dbDir string) *Wdb {
 
 }
 
+// when use sqlite,same index name in different table will lead to migrate failed,
+
 func (w *Wdb) Migrate(noFee, enableManifest bool) error {
 	err := w.Db.AutoMigrate(&schema.Order{}, &schema.OnChainTx{})
 	if err != nil {
