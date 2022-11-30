@@ -14,8 +14,13 @@ type Config struct {
 	scheduler      *gocron.Scheduler
 }
 
-func New(configDSN string) *Config {
-	wdb := NewWdb(configDSN)
+func New(configDSN, sqliteDir string, useSqlite bool) *Config {
+	wdb := &Wdb{}
+	if useSqlite {
+		wdb = NewSqliteDb(sqliteDir)
+	} else {
+		wdb = NewMysqlDb(configDSN)
+	}
 	err := wdb.Migrate()
 	if err != nil {
 		panic(err)

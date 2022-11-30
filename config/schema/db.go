@@ -7,7 +7,7 @@ type FeeConfig struct {
 
 type IpRateWhitelist struct {
 	OriginOrIP  string // e.g "188.0.2.2"
-	Available   bool   `gorm:"index:idx1"` // true means effective
+	Available   bool   `gorm:"index:idx3"` // true means effective
 	Description string
 }
 

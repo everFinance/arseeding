@@ -8,6 +8,7 @@ import (
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"gopkg.in/h2non/gentleman.v2"
+	"strconv"
 )
 
 type ArSeedCli struct {
@@ -128,7 +129,7 @@ func (a *ArSeedCli) GetBundler() (string, error) {
 	return addr, err
 }
 
-func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string, apikey string) (*schema.RespOrder, error) {
+func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string, apikey string, needSequence bool) (*schema.RespOrder, error) {
 	req := a.SCli.Post()
 	if currency != "" {
 		req.Path(fmt.Sprintf("/bundle/tx/%s", currency))
@@ -139,6 +140,9 @@ func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string, apikey string
 	req.SetHeader("Content-Type", "application/octet-stream")
 	if len(apikey) > 0 {
 		req.SetHeader("X-API-KEY", apikey)
+	}
+	if needSequence {
+		req.SetHeader("Sort", "true")
 	}
 
 	req.Body(bytes.NewReader(itemBinary))
@@ -233,10 +237,10 @@ func (a *ArSeedCli) BundleFee(size int64, currency string) (schema.RespFee, erro
 	return fee, err
 }
 
-func (a *ArSeedCli) GetOrders(addr string) ([]schema.Order, error) {
+func (a *ArSeedCli) GetOrders(addr string, startId int) ([]schema.Order, error) {
 	req := a.SCli.Get()
 	req.Path(fmt.Sprintf("/bundle/orders/%s", addr))
-
+	req.AddQuery("cursorId", strconv.Itoa(startId))
 	resp, err := req.Send()
 	if err != nil {
 		return nil, err
