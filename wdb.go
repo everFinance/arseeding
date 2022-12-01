@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	sqliteName = "seed.db"
+	sqliteName = "seed.sqlite"
 )
 
 type Wdb struct {

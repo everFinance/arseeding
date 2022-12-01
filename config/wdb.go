@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	sqliteName = "seed.db"
+	sqliteName = "seed.sqlite"
 )
 
 var log = common.NewLog("config")
