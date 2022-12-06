@@ -5,11 +5,11 @@ go 1.17
 require (
 	github.com/aws/aws-sdk-go v1.27.0
 	github.com/everFinance/everpay-go v0.0.2
-	github.com/everFinance/goar v1.4.6
+	github.com/everFinance/goar v1.4.7-0.20221206150827-96fd4e89886b
 	github.com/everFinance/goether v1.1.8
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-co-op/gocron v1.11.0
-	github.com/panjf2000/ants/v2 v2.5.0
+	github.com/panjf2000/ants/v2 v2.6.0
 	github.com/prometheus/client_golang v1.12.2
 	github.com/shopspring/decimal v1.2.0
 	github.com/stretchr/testify v1.8.0

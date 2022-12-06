@@ -25,7 +25,7 @@ func (s *Arseeding) runAPI(port string) {
 	}
 
 	if !s.NoFee {
-		r.Use(LimiterMiddleware(30000, "M", s.config.GetIPWhiteList()))
+		r.Use(LimiterMiddleware(300000, "M", s.config.GetIPWhiteList()))
 	}
 	v1 := r.Group("/")
 	{

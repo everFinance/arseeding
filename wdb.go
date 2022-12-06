@@ -123,13 +123,13 @@ func (w *Wdb) UpdateOrderPay(id uint, everHash string, paymentStatus string, tx 
 
 func (w *Wdb) GetNeedOnChainOrders() ([]schema.Order, error) {
 	res := make([]schema.Order, 0)
-	err := w.Db.Model(&schema.Order{}).Where("payment_status = ?  and on_chain_status = ? and sort = ?", schema.SuccPayment, schema.WaitOnChain, false).Limit(500).Find(&res).Error
+	err := w.Db.Model(&schema.Order{}).Where("payment_status = ?  and on_chain_status = ? and sort = ?", schema.SuccPayment, schema.WaitOnChain, false).Limit(2000).Find(&res).Error
 	return res, err
 }
 
 func (w *Wdb) GetNeedOnChainOrdersSorted() ([]schema.Order, error) {
 	res := make([]schema.Order, 0)
-	err := w.Db.Model(&schema.Order{}).Where("payment_status = ?  and on_chain_status = ? and sort = ?", schema.SuccPayment, schema.WaitOnChain, true).Limit(500).Find(&res).Error
+	err := w.Db.Model(&schema.Order{}).Where("payment_status = ?  and on_chain_status = ? and sort = ?", schema.SuccPayment, schema.WaitOnChain, true).Limit(2000).Find(&res).Error
 	return res, err
 }
 

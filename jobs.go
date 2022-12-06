@@ -595,6 +595,10 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 		{Name: "Contract", Value: "VFr3Bk-uM-motpNNkkFg4lNW1BMmSfzqsVO551Ho4hA"},
 	}
 
+	if len(s.customTags) > 0 {
+		arTxtags = append(s.customTags, arTxtags...)
+	}
+
 	// speed arTx Fee
 	price := calculatePrice(s.cache.GetFee(), int64(len(bundle.BundleBinary)))
 	speedFactor := calculateFactor(price, s.config.GetSpeedFee())
