@@ -76,7 +76,8 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/bundle/fees", s.bundleFees)
 		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
 		v1.GET("/bundle/orders/:signer", s.getOrders)
-		v1.GET("/:id", s.dataRoute) // get arTx data or bundleItem data
+		v1.GET("/:id", s.dataRoute)  // get arTx data or bundleItem data
+		v1.HEAD("/:id", s.dataRoute) // get arTx data or bundleItem data
 		if s.EnableManifest {
 			v1.POST("/manifest_url/:id", s.setManifestUrl)
 		}
