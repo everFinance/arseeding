@@ -783,6 +783,8 @@ func arTxWatcher(arCli *goar.Client, arTxHash string) bool {
 		if status.NumberOfConfirmations < 3 {
 			log.Debug("arseeding send sequence tx must more than 2 block confirms", "txHash", arTxHash, "currentConfirms", status.NumberOfConfirmations)
 			continue
+		} else {
+			return true
 		}
 	}
 	return false
