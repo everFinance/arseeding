@@ -15,7 +15,7 @@ func (s *Arseeding) SaveSubmitChunk(chunk types.GetChunk) error {
 	// 1. verify chunk
 	err, ok := verifyChunk(chunk)
 	if err != nil || !ok {
-		log.Error("verifyChunk(chunk) failed", "err", err, "chunk", chunk)
+		log.Error("verifyChunk(chunk) failed", "err", err, "chunk.DataRoot", chunk.DataRoot)
 		return fmt.Errorf("verifyChunk error:%v", err)
 	}
 
@@ -26,14 +26,14 @@ func (s *Arseeding) SaveSubmitChunk(chunk types.GetChunk) error {
 	if !s.store.IsExistTxDataEndOffset(chunk.DataRoot, chunk.DataSize) {
 		// add TxDataEndOffset
 		if err := s.syncAddTxDataEndOffset(chunk.DataRoot, chunk.DataSize); err != nil {
-			log.Error("syncAddTxDataEndOffset(s.store,chunk.DataRoot,chunk.DataSize)", "err", err, "chunk", chunk)
+			log.Error("syncAddTxDataEndOffset(s.store,chunk.DataRoot,chunk.DataSize)", "err", err, "chunk.DataRoot", chunk.DataRoot)
 			return err
 		}
 	}
 
 	// 3. store chunk
 	if err := storeChunk(chunk, s.store); err != nil {
-		log.Error("storeChunk(chunk,s.store)", "err", err, "chunk", chunk)
+		log.Error("storeChunk(chunk,s.store)", "err", err, "chunk.DataRoot", chunk.DataRoot)
 		return err
 	}
 
@@ -76,7 +76,7 @@ func (s *Arseeding) SaveSubmitTx(arTx types.Transaction) error {
 		// set chunks
 		dataBy, err := utils.Base64Decode(arTx.Data)
 		if err != nil {
-			log.Error("utils.Base64Decode(arTx.Data)", "err", err, "data", arTx.Data)
+			log.Error("utils.Base64Decode(arTx.Data)", "err", err, "arTx", arTx.ID)
 			return err
 		}
 		if err := setTxDataChunks(arTx, dataBy, s.store); err != nil {
@@ -219,7 +219,7 @@ func setTxDataChunks(arTx types.Transaction, txData []byte, db *Store) error {
 		}
 
 		if err := storeChunk(*chunk, db); err != nil {
-			log.Error("storeChunk(*chunk,s.store)", "err", err, "chunk", *chunk)
+			log.Error("storeChunk(*chunk,s.store)", "err", err)
 			return err
 		}
 	}

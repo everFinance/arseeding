@@ -96,6 +96,7 @@ func (s *Arseeding) arseedInfo(c *gin.Context) {
 		"Name":          "Arseeding",
 		"Version":       "v1.0.19",
 		"Documentation": "https://web3infra.dev",
+		"ConcurrentNum": s.config.Param.ChunkConcurrentNum,
 	})
 }
 

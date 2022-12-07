@@ -1,6 +1,7 @@
 package arseeding
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -602,7 +603,8 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 	// speed arTx Fee
 	price := calculatePrice(s.cache.GetFee(), int64(len(bundle.BundleBinary)))
 	speedFactor := calculateFactor(price, s.config.GetSpeedFee())
-	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, speedFactor)
+	concurrentNum := s.config.Param.ChunkConcurrentNum
+	arTx, err = s.bundler.SendBundleTxSpeedUp(context.TODO(), concurrentNum, bundle.BundleBinary, arTxtags, speedFactor)
 	if err != nil {
 		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags)", "err", err)
 		return

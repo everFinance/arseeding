@@ -52,7 +52,8 @@ func NewSqliteDb(dbDir string) *Wdb {
 func (w *Wdb) Migrate() error {
 	return w.Db.AutoMigrate(&schema.FeeConfig{},
 		&schema.IpRateWhitelist{},
-		&schema.ApiKey{})
+		&schema.ApiKey{},
+		&schema.Param{})
 }
 
 func (w *Wdb) Close() {
@@ -84,4 +85,15 @@ func (w *Wdb) GetAllApiKey() ([]schema.ApiKey, error) {
 	res := make([]schema.ApiKey, 0, 10)
 	err := w.Db.Model(&schema.ApiKey{}).Find(&res).Error
 	return res, err
+}
+
+func (w *Wdb) GetParam() (param schema.Param, err error) {
+	err = w.Db.First(&param).Error
+	if err == gorm.ErrRecordNotFound {
+		param = schema.Param{
+			ChunkConcurrentNum: 0,
+		}
+		return param, nil
+	}
+	return
 }
