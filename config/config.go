@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/everFinance/arseeding/config/schema"
 	"github.com/go-co-op/gocron"
 	"time"
 )
@@ -12,6 +13,7 @@ type Config struct {
 	ipWhiteList    map[string]struct{}
 	apiKeyMap      map[string]struct{}
 	scheduler      *gocron.Scheduler
+	Param          schema.Param
 }
 
 func New(configDSN, sqliteDir string, useSqlite bool) *Config {
@@ -29,11 +31,18 @@ func New(configDSN, sqliteDir string, useSqlite bool) *Config {
 	if err != nil {
 		panic(err)
 	}
+	param, err := wdb.GetParam()
+	if err != nil {
+		panic(err)
+	}
 	return &Config{
 		wdb:            wdb,
 		speedTxFee:     fee.SpeedTxFee,
 		bundleServeFee: fee.BundleServeFee,
+		ipWhiteList:    make(map[string]struct{}),
+		apiKeyMap:      make(map[string]struct{}),
 		scheduler:      gocron.NewScheduler(time.UTC),
+		Param:          param,
 	}
 }
 

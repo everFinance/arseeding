@@ -1,6 +1,7 @@
 package arseeding
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -595,10 +596,15 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 		{Name: "Contract", Value: "VFr3Bk-uM-motpNNkkFg4lNW1BMmSfzqsVO551Ho4hA"},
 	}
 
+	if len(s.customTags) > 0 {
+		arTxtags = append(s.customTags, arTxtags...)
+	}
+
 	// speed arTx Fee
 	price := calculatePrice(s.cache.GetFee(), int64(len(bundle.BundleBinary)))
 	speedFactor := calculateFactor(price, s.config.GetSpeedFee())
-	arTx, err = s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary, arTxtags, speedFactor)
+	concurrentNum := s.config.Param.ChunkConcurrentNum
+	arTx, err = s.bundler.SendBundleTxSpeedUp(context.TODO(), concurrentNum, bundle.BundleBinary, arTxtags, speedFactor)
 	if err != nil {
 		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags)", "err", err)
 		return
@@ -606,8 +612,8 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 	log.Info("send bundle arTx", "arTx", arTx.ID)
 
 	// arseeding broadcast tx data
-	if err := s.arseedCli.SubmitTx(arTx); err != nil {
-		log.Error("s.arseedCli.SubmitTx(arTx)", "err", err, "arId", arTx.ID)
+	if err := s.arseedCli.SubmitTxConcurrent(context.TODO(), concurrentNum, arTx); err != nil {
+		log.Error("s.arseedCli.SubmitTxConcurrent(arTx)", "err", err, "arId", arTx.ID)
 	}
 	return
 }
@@ -779,6 +785,8 @@ func arTxWatcher(arCli *goar.Client, arTxHash string) bool {
 		if status.NumberOfConfirmations < 3 {
 			log.Debug("arseeding send sequence tx must more than 2 block confirms", "txHash", arTxHash, "currentConfirms", status.NumberOfConfirmations)
 			continue
+		} else {
+			return true
 		}
 	}
 	return false

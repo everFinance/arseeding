@@ -8,6 +8,7 @@ import (
 	"github.com/everFinance/everpay-go/common"
 	paySdk "github.com/everFinance/everpay-go/sdk"
 	"github.com/everFinance/goar"
+	"github.com/everFinance/goar/types"
 	"github.com/gin-gonic/gin"
 	"github.com/go-co-op/gocron"
 	"sync"
@@ -40,13 +41,14 @@ type Arseeding struct {
 	bundlePerFeeMap     map[string]schema.Fee // key: tokenSymbol, val: fee per chunk_size(256KB)
 	paymentExpiredRange int64                 // default 1 hour
 	expectedRange       int64                 // default 50 block
+	customTags          []types.Tag
 }
 
 func New(
 	boltDirPath, mySqlDsn string, sqliteDir string, useSqlite bool,
 	arWalletKeyPath string, arNode, payUrl string, noFee bool, enableManifest bool,
 	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region, s3Endpoint string,
-	use4EVER bool, port string,
+	use4EVER bool, port string, customTags []types.Tag,
 ) *Arseeding {
 	var err error
 	KVDb := &Store{}
@@ -109,6 +111,7 @@ func New(
 		bundlePerFeeMap:     make(map[string]schema.Fee),
 		paymentExpiredRange: schema.DefaultPaymentExpiredRange,
 		expectedRange:       schema.DefaultExpectedRange,
+		customTags:          customTags,
 	}
 
 	// init cache

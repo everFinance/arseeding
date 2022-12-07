@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"github.com/everFinance/arseeding"
 	"github.com/everFinance/arseeding/common"
+	"github.com/everFinance/goar/types"
 	"log"
 	"os"
 	"os/signal"
@@ -36,6 +38,7 @@ func main() {
 			&cli.BoolFlag{Name: "use_4ever", Value: false, Usage: "run with 4everland s3 service", EnvVars: []string{"USE_4EVER"}},
 
 			&cli.StringFlag{Name: "port", Value: ":8080", EnvVars: []string{"PORT"}},
+			&cli.StringFlag{Name: "tags", Value: `{"Community":"PermaDAO","Website":"permadao.com"}`, EnvVars: []string{"TAGS"}},
 		},
 		Action: run,
 	}
@@ -50,11 +53,24 @@ func run(c *cli.Context) error {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
+	tagJs := c.String("tags")
+	tagsMap := make(map[string]string)
+	if err := json.Unmarshal([]byte(tagJs), &tagsMap); err != nil {
+		panic(err)
+	}
+	customTags := make([]types.Tag, 0)
+	for k, v := range tagsMap {
+		customTags = append(customTags, types.Tag{
+			Name:  k,
+			Value: v,
+		})
+	}
+
 	s := arseeding.New(
 		c.String("db_dir"), c.String("mysql"), c.String("sqlite_dir"), c.Bool("use_sqlite"),
 		c.String("key_path"), c.String("ar_node"), c.String("pay"), c.Bool("no_fee"), c.Bool("manifest"),
 		c.Bool("use_s3"), c.String("s3_acc_key"), c.String("s3_secret_key"), c.String("s3_prefix"), c.String("s3_region"), c.String("s3_endpoint"),
-		c.Bool("use_4ever"), c.String("port"))
+		c.Bool("use_4ever"), c.String("port"), customTags)
 	s.Run(c.String("port"), c.Int("bundle_interval"))
 
 	common.NewMetricServer()

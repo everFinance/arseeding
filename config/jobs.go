@@ -4,6 +4,7 @@ func (c *Config) runJobs() {
 	c.scheduler.Every(1).Minute().SingletonMode().Do(c.updateFee)
 	c.scheduler.Every(1).Minute().SingletonMode().Do(c.updateIPWhiteList)
 	c.scheduler.Every(5).Seconds().SingletonMode().Do(c.updateApiKey)
+	c.scheduler.Every(10).Seconds().SingletonMode().Do(c.updateParam)
 
 	c.scheduler.StartAsync()
 }
@@ -41,4 +42,12 @@ func (c *Config) updateApiKey() {
 		apiKeyMap[k.Key] = struct{}{}
 	}
 	c.apiKeyMap = apiKeyMap
+}
+
+func (c *Config) updateParam() {
+	param, err := c.wdb.GetParam()
+	if err != nil {
+		return
+	}
+	c.Param = param
 }
