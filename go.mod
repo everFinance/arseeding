@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/aws/aws-sdk-go v1.27.0
 	github.com/everFinance/everpay-go v0.0.2
-	github.com/everFinance/goar v1.4.7-0.20221207065824-03975cff75e0
+	github.com/everFinance/goar v1.4.7
 	github.com/everFinance/goether v1.1.8
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-co-op/gocron v1.11.0
