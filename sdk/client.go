@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
@@ -29,6 +30,14 @@ func (a *ArSeedCli) SubmitTx(arTx types.Transaction) error {
 		return err
 	}
 	return uploader.Once()
+}
+
+func (a *ArSeedCli) SubmitTxConcurrent(ctx context.Context, concurrentNum int, arTx types.Transaction) error {
+	uploader, err := goar.CreateUploader(a.ACli, &arTx, nil)
+	if err != nil {
+		return err
+	}
+	return uploader.ConcurrentOnce(ctx, concurrentNum)
 }
 
 func (a *ArSeedCli) BroadcastTxData(arId string) error {
