@@ -25,7 +25,7 @@ func (s *Arseeding) runAPI(port string) {
 	}
 
 	if !s.NoFee {
-		r.Use(LimiterMiddleware(30000, "M", s.config.GetIPWhiteList()))
+		r.Use(LimiterMiddleware(300000, "M", s.config.GetIPWhiteList()))
 	}
 	v1 := r.Group("/")
 	{
@@ -96,6 +96,7 @@ func (s *Arseeding) arseedInfo(c *gin.Context) {
 		"Name":          "Arseeding",
 		"Version":       "v1.0.19",
 		"Documentation": "https://web3infra.dev",
+		"ConcurrentNum": s.config.Param.ChunkConcurrentNum,
 	})
 }
 
