@@ -76,7 +76,11 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/bundle/fees", s.bundleFees)
 		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
 		v1.GET("/bundle/orders/:signer", s.getOrders)
-		v1.GET("/:id", s.dataRoute) // get arTx data or bundleItem data
+		v1.GET("/:id", s.dataRoute)                // get arTx data or bundleItem data
+		v1.HEAD("/:id", s.dataRoute)               // get arTx data or bundleItem data
+		v1.GET("/bridge/:id", s.dataBridgeToArio)  // bridge to ario
+		v1.HEAD("/bridge/:id", s.dataBridgeToArio) // bridge to ario
+
 		if s.EnableManifest {
 			v1.POST("/manifest_url/:id", s.setManifestUrl)
 		}
@@ -741,6 +745,18 @@ func (s *Arseeding) getOrders(c *gin.Context) {
 
 func (s *Arseeding) bundleFees(c *gin.Context) {
 	c.JSON(http.StatusOK, s.bundlePerFeeMap)
+}
+
+func (s *Arseeding) dataBridgeToArio(c *gin.Context) {
+	txId := c.Param("id")
+	tags, data, err := getArTxOrItemData(txId, s.store)
+	if err != nil {
+		c.JSON(http.StatusNotFound, "Not Found")
+		return
+	}
+	contentLength := len(data)
+	c.Header("x-content-length", strconv.Itoa(contentLength))
+	c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
 }
 
 func (s *Arseeding) dataRoute(c *gin.Context) {
