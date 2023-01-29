@@ -3,6 +3,7 @@ module github.com/everFinance/arseeding
 go 1.17
 
 require (
+	github.com/aliyun/aliyun-oss-go-sdk v2.2.6+incompatible
 	github.com/aws/aws-sdk-go v1.27.0
 	github.com/everFinance/everpay-go v0.0.2
 	github.com/everFinance/goar v1.4.7
@@ -75,6 +76,7 @@ require (
 	golang.org/x/net v0.2.0 // indirect
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 // indirect
 	golang.org/x/sys v0.2.0 // indirect
+	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba // indirect
 	google.golang.org/protobuf v1.26.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

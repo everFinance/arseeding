@@ -33,6 +33,16 @@ func NewBoltStore(boltDirPath string) (*Store, error) {
 	return &Store{KVDb: Db}, nil
 }
 
+func NewAliyunStore(endpoint, accKey, secretKey, bucketPrefix string) (*Store, error) {
+	Db, err := rawdb.NewAliyunDB(endpoint, accKey, secretKey, bucketPrefix)
+	if err != nil {
+		return nil, err
+	}
+	return &Store{
+		KVDb: Db,
+	}, nil
+}
+
 func (s *Store) Close() error {
 	return s.KVDb.Close()
 }

@@ -48,18 +48,26 @@ func New(
 	boltDirPath, mySqlDsn string, sqliteDir string, useSqlite bool,
 	arWalletKeyPath string, arNode, payUrl string, noFee bool, enableManifest bool,
 	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region, s3Endpoint string,
-	use4EVER bool, port string, customTags []types.Tag,
+	use4EVER bool, useAliyun bool, aliyunEndpoint, aliyunAccKey, aliyunSecretKey, aliyunPrefix string,
+	port string, customTags []types.Tag,
 ) *Arseeding {
 	var err error
 	KVDb := &Store{}
-	if useS3 {
+
+	switch {
+	case useS3 && useAliyun:
+		panic("can not use both s3 and aliyun")
+	case useS3:
 		if use4EVER {
 			s3Endpoint = rawdb.ForeverLandEndpoint // inject 4everland endpoint
 		}
 		KVDb, err = NewS3Store(s3AccKey, s3SecretKey, s3Region, s3BucketPrefix, s3Endpoint)
-	} else {
+	case useAliyun:
+		KVDb, err = NewAliyunStore(aliyunEndpoint, aliyunAccKey, aliyunSecretKey, aliyunPrefix)
+	default:
 		KVDb, err = NewBoltStore(boltDirPath)
 	}
+
 	if err != nil {
 		panic(err)
 	}
