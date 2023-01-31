@@ -146,7 +146,7 @@ func (w *Wdb) GetOrdersBySigner(signer string, cursorId int64, num int) ([]schem
 		cursorId = math.MaxInt64
 	}
 	records := make([]schema.Order, 0, num)
-	err := w.Db.Model(&schema.Order{}).Where("signer = ? and id < ?", signer, cursorId).Order("id DESC").Limit(num).Find(&records).Error
+	err := w.Db.Model(&schema.Order{}).Where("id < ? and signer = ? and on_chain_status != ?", cursorId, signer, schema.FailedOnChain).Order("id DESC").Limit(num).Find(&records).Error
 	return records, err
 }
 
