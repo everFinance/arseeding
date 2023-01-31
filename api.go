@@ -734,8 +734,13 @@ func (s *Arseeding) getOrders(c *gin.Context) {
 		errorResponse(c, err.Error())
 		return
 	}
-	num := 200
-	orders, err := s.wdb.GetOrdersBySigner(signerAddr, cursorId, num)
+	num, err := strconv.ParseInt(c.DefaultQuery("num", "20"), 10, 64)
+	if err != nil {
+		errorResponse(c, err.Error())
+		return
+	}
+
+	orders, err := s.wdb.GetOrdersBySigner(signerAddr, cursorId, int(num))
 	if err != nil {
 		internalErrorResponse(c, err.Error())
 		return
