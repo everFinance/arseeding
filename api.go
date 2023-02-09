@@ -901,6 +901,8 @@ func dataResponse(c *gin.Context, dataReader *os.File, data []byte, tags []types
 			internalErrorResponse(c, err.Error())
 			return
 		}
+		contentLen := fmt.Sprintf("%d", fileInfo.Size()-dataStartCursor)
+		c.Writer.Header().Set("Content-Length", contentLen)
 		c.DataFromReader(200, fileInfo.Size()-dataStartCursor, getTagValue(tags, schema.ContentType), dataReader, nil)
 	} else {
 		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
