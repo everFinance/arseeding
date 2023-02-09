@@ -1,18 +1,15 @@
 package bundle_item
 
 import (
-	"encoding/json"
 	"github.com/everFinance/arseeding/sdk"
-	paySdk "github.com/everFinance/everpay-go/sdk"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goether"
-	"math/big"
+	"io/ioutil"
 	"testing"
 )
 
-func TestItemUseCase(t *testing.T) {
-	// create a eth signer for sign bundle item
+func TestPostItemStream(t *testing.T) {
 	priv := "88834ac18009182c07d116fe4a7903c0bcc8a66190f0967b719b2b3974a69c2f" // your eth private key
 	eccSigner, err := goether.NewSigner(priv)
 	if err != nil {
@@ -25,12 +22,14 @@ func TestItemUseCase(t *testing.T) {
 	}
 
 	// create Arseeding SDK
-	url := "https://arseed.web3infura.io" // your arseeding service address
+	url := "http://127.0.0.1:8080" // your arseeding service address
 	arseedSdk := sdk.New(url)
-
-	// create bundle item with goar
-	data := []byte("your data") // your data,maybe read from files
-	item, err := itemSigner.CreateAndSignItem(data, "", "", []types.Tag{})
+	// data size must > maxAllowByte
+	data, err := ioutil.ReadFile("img.jpeg") // your data,maybe read from files
+	if err != nil {
+		panic(err)
+	}
+	item, err := itemSigner.CreateAndSignItem(data, "", "", []types.Tag{{"Content-Type", "jpeg"}})
 	if err != nil {
 		panic(err)
 	}
@@ -41,20 +40,18 @@ func TestItemUseCase(t *testing.T) {
 		t.Log(err)
 	}
 	t.Log(order)
+}
 
-	// use everpay payment fee
-	amount, _ := new(big.Int).SetString(order.Fee, 10)
-	dataJs, err := json.Marshal(&order)
+func TestPostNativeDataStream(t *testing.T) {
+	url := "http://127.0.0.1:8080" // your arseeding service address
+	arseedSdk := sdk.New(url)
+	data, err := ioutil.ReadFile("img.jpeg") // your data,maybe read from files
 	if err != nil {
 		panic(err)
 	}
-	payCli, err := paySdk.New(eccSigner, "https://api.everpay.io")
+	res, err := arseedSdk.SubmitNativeData("123", data, "jpeg", map[string]string{"Content-Type": "jpeg", "Name": "test"})
 	if err != nil {
 		panic(err)
 	}
-	_, err = payCli.Transfer(order.Currency, amount, order.Bundler, string(dataJs))
-	if err != nil {
-		t.Log("send failed", "err", err)
-		return
-	}
+	t.Log(res.ItemId)
 }

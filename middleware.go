@@ -10,7 +10,9 @@ import (
 	"github.com/ulule/limiter/v3"
 	mgin "github.com/ulule/limiter/v3/drivers/middleware/gin"
 	"github.com/ulule/limiter/v3/drivers/store/memory"
+	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -97,11 +99,25 @@ func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
 				c.Abort()
 				return
 			}
-			_, mfData, err := getArTxOrItemData(mfId, store)
+			_, dataReader, mfData, err := getArTxOrItemData(mfId, store)
+			defer func() {
+				if dataReader != nil {
+					dataReader.Close()
+					os.Remove(dataReader.Name())
+				}
+			}()
 			if err != nil {
 				c.Abort()
 				internalErrorResponse(c, err.Error())
 				return
+			}
+			if dataReader != nil {
+				mfData, err = io.ReadAll(dataReader)
+				if err != nil {
+					c.Abort()
+					internalErrorResponse(c, err.Error())
+					return
+				}
 			}
 			tags, data, err := handleManifest(mfData, c.Request.URL.Path, store)
 			if err != nil {

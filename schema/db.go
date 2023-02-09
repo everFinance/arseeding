@@ -25,6 +25,8 @@ const (
 	RefundErr = "refundErr"
 
 	MaxPerOnChainSize = 500 * 1024 * 1024 // 500 MB
+
+	TmpFileDir = "./tmpFile"
 )
 
 type Order struct {

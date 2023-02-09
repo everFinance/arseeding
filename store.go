@@ -8,6 +8,7 @@ import (
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
+	"os"
 )
 
 type Store struct {
@@ -252,12 +253,12 @@ func (s *Store) LoadTask(taskId string) (tk *schema.Task, err error) {
 }
 
 // about bundle
-func (s *Store) AtomicSaveItem(item types.BundleItem, itemId string, itemBinary []byte) (err error) {
-	if err = s.SaveItemBinary(itemId, itemBinary); err != nil {
+func (s *Store) AtomicSaveItem(item types.BundleItem) (err error) {
+	if err = s.SaveItemBinary(item); err != nil {
 		return
 	}
 	if err = s.SaveItemMeta(item); err != nil {
-		_ = s.DelItemBinary(itemId)
+		_ = s.DelItemBinary(item.Id)
 	}
 	return
 }
@@ -270,21 +271,38 @@ func (s *Store) AtomicDelItem(itemId string) (err error) {
 	return s.DelItemBinary(itemId)
 }
 
-func (s *Store) SaveItemBinary(itemId string, itemBinary []byte) (err error) {
-	return s.KVDb.Put(schema.BundleItemBinary, itemId, itemBinary)
+func (s *Store) SaveItemBinary(item types.BundleItem) (err error) {
+	if item.BinaryReader != nil { // post big native data
+		return s.KVDb.Put(schema.BundleItemBinary, item.Id, item.BinaryReader)
+	} else if item.DataReader != nil { // post big itemBinary
+		return s.KVDb.Put(schema.BundleItemBinary, item.Id, item.DataReader)
+	} else {
+		return s.KVDb.Put(schema.BundleItemBinary, item.Id, item.ItemBinary)
+	}
 }
 
 func (s *Store) IsExistItemBinary(itemId string) bool {
-	_, err := s.LoadItemBinary(itemId)
+	reader, _, err := s.LoadItemBinary(itemId)
+	defer func() {
+		if reader != nil {
+			log.Debug(reader.Name())
+			reader.Close()
+			os.Remove(reader.Name())
+		}
+	}()
 	if err == schema.ErrNotExist {
 		return false
 	}
 	return true
 }
 
-func (s *Store) LoadItemBinary(itemId string) (itemBinary []byte, err error) {
+func (s *Store) LoadItemBinary(itemId string) (binaryReader *os.File, itemBinary []byte, err error) {
 	itemBinary = make([]byte, 0)
-	itemBinary, err = s.KVDb.Get(schema.BundleItemBinary, itemId)
+	// if store implement with s3, then get binary stream
+	binaryReader, err = s.KVDb.GetStream(schema.BundleItemBinary, itemId)
+	if err == schema.ErrNotImplement {
+		itemBinary, err = s.KVDb.Get(schema.BundleItemBinary, itemId)
+	}
 	return
 }
 

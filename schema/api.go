@@ -5,8 +5,8 @@ import (
 )
 
 const (
-	AllowMaxItemSize       = 500 * 1024 * 1024 // 500 MB
-	AllowMaxNativeDataSize = 500 * 1024 * 1024 // 500 MB
+	AllowMaxItemSize       = 50 * 1024 * 1024  // 50 MB
+	AllowMaxNativeDataSize = 50 * 1024 * 1024  // 50 MB
 	AllowMaxRespDataSize   = 500 * 1024 * 1024 // 500 MB
 )
 

@@ -16,7 +16,9 @@ import (
 	"github.com/panjf2000/ants/v2"
 	"github.com/tidwall/gjson"
 	"gorm.io/gorm"
+	"io"
 	"math/big"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -375,6 +377,7 @@ func (s *Arseeding) onChainBundleItems() {
 	// send arTx to arweave
 	arTx, onChainItemIds, err := s.onChainOrds(ords)
 	if err != nil {
+		log.Error("s.onChainOrds()", "err", err)
 		return
 	}
 
@@ -529,10 +532,19 @@ func (s *Arseeding) retryOnChainArTx() {
 func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, onChainItemIds []string, err error) {
 	onChainItems := make([]types.BundleItem, 0, len(itemIds))
 	for _, itemId := range itemIds {
-		itemBinary, err := s.store.LoadItemBinary(itemId)
+		binaryReader, itemBinary, err := s.store.LoadItemBinary(itemId)
 		if err != nil {
 			log.Error("s.store.LoadItemBinary(itemId)", "err", err, "itemId", itemId)
 			continue
+		}
+		if binaryReader != nil { // todo onChain AR tx use binaryReader
+			itemBinary, err = io.ReadAll(binaryReader)
+			binaryReader.Close()
+			os.Remove(binaryReader.Name())
+			if err != nil {
+				log.Error("s.store.LoadItemBinary(itemId)", "err", err, "itemId", itemId)
+				continue
+			}
 		}
 		item, err := utils.DecodeBundleItem(itemBinary)
 		if err != nil {

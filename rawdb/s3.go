@@ -2,6 +2,7 @@ package rawdb
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -9,8 +10,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/everFinance/arseeding/schema"
+	"io"
 	"net"
 	"net/url"
+	"os"
+	"reflect"
 	"strings"
 )
 
@@ -57,13 +61,21 @@ func NewS3DB(accKey, secretKey, region, bktPrefix, endpoint string) (*S3DB, erro
 	}, nil
 }
 
-func (s *S3DB) Put(bucket, key string, value []byte) (err error) {
+func (s *S3DB) Put(bucket, key string, value interface{}) (err error) {
 	bkt := getS3Bucket(s.bucketPrefix, bucket)
+
 	uploadInfo := &s3manager.UploadInput{
 		Bucket: aws.String(bkt),
 		Key:    aws.String(key),
-		Body:   bytes.NewReader(value),
 	}
+	if _, ok := value.([]byte); ok {
+		uploadInfo.Body = bytes.NewReader(value.([]byte))
+	} else if _, ok := value.(io.Reader); ok {
+		uploadInfo.Body = value.(io.Reader)
+	} else {
+		return fmt.Errorf("unknown data type: %s, db: s3 db", reflect.TypeOf(value))
+	}
+
 	_, err = s.uploader.Upload(uploadInfo)
 	return
 }
@@ -80,6 +92,26 @@ func (s *S3DB) Get(bucket, key string) (data []byte, err error) {
 		return nil, schema.ErrNotExist
 	}
 	data = buf.Bytes()
+	return
+}
+
+func (s *S3DB) GetStream(bucket, key string) (data *os.File, err error) {
+	bkt := getS3Bucket(s.bucketPrefix, bucket)
+	downloadInfo := &s3.GetObjectInput{
+		Bucket: aws.String(bkt),
+		Key:    aws.String(key),
+	}
+	data, err = os.CreateTemp("./tmpFile", "s3-")
+	log.Debug("fileInfo", "name", data.Name(), "itemId", key)
+	if err != nil {
+		return
+	}
+	n, err := s.downloader.Download(data, downloadInfo)
+	if n == 0 {
+		data.Close()
+		os.Remove(data.Name())
+		return nil, schema.ErrNotExist
+	}
 	return
 }
 

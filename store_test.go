@@ -1,6 +1,7 @@
 package arseeding
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
@@ -157,7 +158,7 @@ func TestItem(t *testing.T) {
 		ItemBinary:    nil,
 	}
 	itemId := item.Id
-	err = s.SaveItemBinary(itemId, itemB)
+	err = s.SaveItemBinary(item)
 	assert.NoError(t, err)
 	flag := s.IsExistItemBinary(itemId)
 	assert.Equal(t, true, flag)
@@ -167,7 +168,7 @@ func TestItem(t *testing.T) {
 	item2, err := s.LoadItemMeta(itemId)
 	assert.NoError(t, err)
 	assert.Equal(t, item, item2)
-	data, err := s.LoadItemBinary(itemId)
+	_, data, err := s.LoadItemBinary(itemId)
 	assert.NoError(t, err)
 	assert.Equal(t, itemB, data)
 	err = s.DelItemMeta(itemId)
@@ -218,4 +219,11 @@ func TestIntByte(t *testing.T) {
 	str := itob(v)
 	v2 := btoi(str)
 	assert.Equal(t, v, v2)
+}
+
+func TestNew(t *testing.T) {
+	b := make([]byte, 64)
+	v := uint64(233333)
+	binary.BigEndian.PutUint64(b, v)
+	t.Log(b)
 }

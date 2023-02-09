@@ -1,6 +1,7 @@
 package arseeding
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
@@ -13,6 +14,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -486,33 +488,42 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 		return
 	}
 	needSort := isSortItems(c)
-
-	defer c.Request.Body.Close()
-
-	itemBinary := make([]byte, 0, 256*1024)
-	buf := make([]byte, 256*1024) // todo add to temp file
-	for {
-		if len(itemBinary) > schema.AllowMaxItemSize {
-			err := fmt.Errorf("allow max item size is 100 MB")
+	itemBinaryFile, err := os.CreateTemp(schema.TmpFileDir, "arseed-")
+	if err != nil {
+		c.Request.Body.Close()
+		errorResponse(c, err.Error())
+		return
+	}
+	defer func() {
+		c.Request.Body.Close()
+		itemBinaryFile.Close()
+		os.Remove(itemBinaryFile.Name())
+	}()
+	var itemBuf bytes.Buffer
+	var item *types.BundleItem
+	// write up to schema.AllowMaxItemSize to memory
+	size, err := io.CopyN(&itemBuf, c.Request.Body, schema.AllowMaxItemSize+1)
+	if err != nil && err != io.EOF {
+		errorResponse(c, err.Error())
+		return
+	}
+	if size > schema.AllowMaxItemSize { // the body size > schema.AllowMaxItemSize, need write to tmp file
+		size, err = io.Copy(itemBinaryFile, io.MultiReader(&itemBuf, c.Request.Body))
+		if err != nil {
 			errorResponse(c, err.Error())
 			return
 		}
-
-		n, err := c.Request.Body.Read(buf)
-		if err != nil && err != io.EOF {
-			errorResponse(c, "read req failed")
-			log.Error("read req failed", "err", err)
+		// reset io stream to origin of the file
+		_, err = itemBinaryFile.Seek(0, 0)
+		if err != nil {
+			errorResponse(c, err.Error())
 			return
 		}
-
-		if n == 0 {
-			break
-		}
-		itemBinary = append(itemBinary, buf[:n]...)
+		item, err = utils.DecodeBundleItemStream(itemBinaryFile)
+	} else {
+		item, err = utils.DecodeBundleItem(itemBuf.Bytes())
 	}
 
-	// decode
-	item, err := utils.DecodeBundleItem(itemBinary)
 	if err != nil {
 		errorResponse(c, "decode item binary failed")
 		return
@@ -529,7 +540,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	}
 
 	// process bundleItem
-	ord, err := s.ProcessSubmitItem(*item, currency, noFee, apikey, needSort)
+	ord, err := s.ProcessSubmitItem(*item, currency, noFee, apikey, needSort, size)
 	if err != nil {
 		errorResponse(c, err.Error())
 		return
@@ -576,39 +587,49 @@ func (s *Arseeding) submitNativeData(c *gin.Context) {
 		return
 	}
 
-	defer c.Request.Body.Close()
-
-	nativeData := make([]byte, 0, 256*1024)
-	buf := make([]byte, 256*1024) // todo add to temp file
-	for {
-		if len(nativeData) > schema.AllowMaxNativeDataSize {
-			err := fmt.Errorf("allow max item size is 500 MB")
+	dataFile, err := os.CreateTemp(schema.TmpFileDir, "arseed-")
+	if err != nil {
+		c.Request.Body.Close()
+		errorResponse(c, err.Error())
+		return
+	}
+	defer func() {
+		c.Request.Body.Close()
+		dataFile.Close()
+		os.Remove(dataFile.Name())
+	}()
+	var dataBuf bytes.Buffer
+	var item types.BundleItem
+	// write up to schema.AllowMaxNativeDataSize to memory
+	size, err := io.CopyN(&dataBuf, c.Request.Body, schema.AllowMaxNativeDataSize+1)
+	if err != nil && err != io.EOF {
+		errorResponse(c, err.Error())
+		return
+	}
+	if size > schema.AllowMaxNativeDataSize { // the body size > schema.AllowMaxItemSize, need write to tmp file
+		size, err = io.Copy(dataFile, io.MultiReader(&dataBuf, c.Request.Body))
+		if err != nil {
 			errorResponse(c, err.Error())
 			return
 		}
-
-		n, err := c.Request.Body.Read(buf)
-		if err != nil && err != io.EOF {
-			errorResponse(c, "read req failed")
-			log.Error("read req failed", "err", err)
+		// reset io stream to origin of the file
+		_, err = dataFile.Seek(0, 0)
+		if err != nil {
+			errorResponse(c, err.Error())
 			return
 		}
-
-		if n == 0 {
-			break
-		}
-		nativeData = append(nativeData, buf[:n]...)
+		item, err = s.bundlerItemSigner.CreateAndSignItemStream(dataFile, "", "", tags)
+	} else {
+		item, err = s.bundlerItemSigner.CreateAndSignItem(dataBuf.Bytes(), "", "", tags)
 	}
 
-	// use bundler private assemble bundle item
-	item, err := s.bundlerItemSigner.CreateAndSignItem(nativeData, "", "", tags)
 	if err != nil {
 		errorResponse(c, "assemble bundle item failed")
 		log.Error("s.bundlerItemSigner.CreateAndSignItem", "err", err)
 		return
 	}
 	// process submit item
-	order, err := s.ProcessSubmitItem(item, "", true, apiKey, needSort)
+	order, err := s.ProcessSubmitItem(item, "", true, apiKey, needSort, size)
 	if err != nil {
 		errorResponse(c, err.Error())
 		return
@@ -684,12 +705,13 @@ func (s *Arseeding) getItemField(c *gin.Context) {
 	case "signatureType":
 		c.Data(200, "text/html; charset=utf-8", []byte(strconv.Itoa(txMeta.SignatureType)))
 	case "data", "data.json", "data.txt", "data.pdf", "data.png", "data.jpeg", "data.gif", "data.mp4":
-		tags, data, err := getBundleItemData(id, s.store)
+		tags, dataReader, data, err := getBundleItemData(id, s.store)
 		if err != nil {
 			internalErrorResponse(c, err.Error())
 			return
 		}
-		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
+
+		dataResponse(c, dataReader, data, tags)
 	default:
 		errorResponse(c, "invalid_field")
 	}
@@ -749,19 +771,17 @@ func (s *Arseeding) bundleFees(c *gin.Context) {
 
 func (s *Arseeding) dataBridgeToArio(c *gin.Context) {
 	txId := c.Param("id")
-	tags, data, err := getArTxOrItemData(txId, s.store)
+	tags, dataReader, data, err := getArTxOrItemData(txId, s.store)
 	if err != nil {
 		c.JSON(http.StatusNotFound, "Not Found")
 		return
 	}
-	contentLength := len(data)
-	c.Header("x-content-length", strconv.Itoa(contentLength))
-	c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
+	dataResponse(c, dataReader, data, tags)
 }
 
 func (s *Arseeding) dataRoute(c *gin.Context) {
 	txId := c.Param("id")
-	tags, data, err := getArTxOrItemData(txId, s.store)
+	tags, dataReader, data, err := getArTxOrItemData(txId, s.store)
 	switch err {
 	case nil:
 		// process manifest
@@ -786,7 +806,7 @@ func (s *Arseeding) dataRoute(c *gin.Context) {
 
 			c.Redirect(302, redirectUrl)
 		} else {
-			c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
+			dataResponse(c, dataReader, data, tags)
 		}
 
 	case schema.ErrLocalNotExist:
@@ -863,4 +883,26 @@ func internalErrorResponse(c *gin.Context, err string) {
 	c.JSON(http.StatusInternalServerError, schema.RespErr{
 		Err: err,
 	})
+}
+
+func dataResponse(c *gin.Context, dataReader *os.File, data []byte, tags []types.Tag) {
+	defer func() {
+		if dataReader != nil {
+			dataReader.Close()
+			os.Remove(dataReader.Name())
+		}
+	}()
+
+	if dataReader != nil {
+		fileInfo, _ := dataReader.Stat()
+		var dataStartCursor int64
+		dataStartCursor, err := dataReader.Seek(0, 1)
+		if err != nil {
+			internalErrorResponse(c, err.Error())
+			return
+		}
+		c.DataFromReader(200, fileInfo.Size()-dataStartCursor, getTagValue(tags, schema.ContentType), dataReader, nil)
+	} else {
+		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
+	}
 }

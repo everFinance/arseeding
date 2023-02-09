@@ -13,11 +13,15 @@ import (
 	"time"
 )
 
-func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string, isNoFeeMode bool, apiKey string, isSort bool) (schema.Order, error) {
+func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string, isNoFeeMode bool, apiKey string, isSort bool, size int64) (schema.Order, error) {
 	if err := utils.VerifyBundleItem(item); err != nil {
 		return schema.Order{}, err
 	}
-
+	if item.DataReader != nil { // reset io stream to origin of the file
+		if _, err := item.DataReader.Seek(0, 0); err != nil {
+			return schema.Order{}, err
+		}
+	}
 	// store item
 	if err := s.saveItem(item); err != nil {
 		return schema.Order{}, err
@@ -35,7 +39,7 @@ func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string, is
 		ItemId:        item.Id,
 		Signer:        accId,
 		SignType:      item.SignatureType,
-		Size:          int64(len(item.ItemBinary)),
+		Size:          size,
 		ExpectedBlock: s.cache.GetInfo().Height + s.expectedRange,
 		OnChainStatus: schema.WaitOnChain,
 		ApiKey:        apiKey,
@@ -160,7 +164,7 @@ func (s *Arseeding) saveItem(item types.BundleItem) error {
 	if s.store.IsExistItemBinary(item.Id) {
 		return nil
 	}
-	return s.store.AtomicSaveItem(item, item.Id, item.ItemBinary)
+	return s.store.AtomicSaveItem(item)
 }
 
 func (s *Arseeding) DelItem(itemId string) error {
