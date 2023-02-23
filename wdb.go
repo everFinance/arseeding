@@ -53,7 +53,7 @@ func NewSqliteDb(dbDir string) *Wdb {
 // when use sqlite,same index name in different table will lead to migrate failed,
 
 func (w *Wdb) Migrate(noFee, enableManifest bool) error {
-	err := w.Db.AutoMigrate(&schema.Order{}, &schema.OnChainTx{})
+	err := w.Db.AutoMigrate(&schema.Order{}, &schema.OnChainTx{}, &schema.ApiKey{}, &schema.ExpandRecord{})
 	if err != nil {
 		return err
 	}
@@ -269,4 +269,57 @@ func (w *Wdb) GetManifestId(mfUrl string) (string, error) {
 
 func (w *Wdb) DelManifest(id string) error {
 	return w.Db.Where("manifest_id = ?", id).Delete(&schema.Manifest{}).Error
+}
+
+func (w *Wdb) InsertApiKey(ak schema.ApiKey) error {
+	return w.Db.Create(&ak).Error
+}
+
+func (w *Wdb) GetApiKeyDetail(key string) (schema.ApiKey, error) {
+	res := schema.ApiKey{}
+	err := w.Db.Model(&schema.ApiKey{}).Where("key = ?", key).Find(&res).Error
+	return res, err
+}
+
+func (w *Wdb) GetApiKeyDetailByAddr(addr string) ([]schema.HeldApiKeys, error) {
+	var res []schema.HeldApiKeys
+	err := w.Db.Model(&schema.ApiKey{}).Where("address = ?", addr).Find(&res).Error
+	return res, err
+}
+
+func (w *Wdb) IsEverHashUsed(everHash string) bool {
+	var res schema.ApiKey
+	err := w.Db.Model(&schema.ApiKey{}).Where("ever_hash = ?", everHash).Find(&res).Error
+	if err == gorm.ErrRecordNotFound {
+		return false
+	}
+	return true
+}
+
+func (w *Wdb) IsEverHashUsed2(p string, c string) bool {
+	var res schema.ExpandRecord
+	err := w.Db.Model(&schema.ApiKey{}).Where("parent_hash = ? and child_hash = ?", p, c).Find(&res).Error
+	if err == gorm.ErrRecordNotFound {
+		return false
+	}
+	return true
+}
+
+func (w *Wdb) UpdateCap(key string, cap int64) error {
+	tx := w.Db.Begin()
+	d := schema.ApiKey{}
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("key = ?", key).First(&d).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := tx.Model(&schema.ApiKey{}).Where("key = ?", key).Update("cap", cap).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	tx.Commit()
+	return nil
+}
+
+func (w *Wdb) InsertRecord(record schema.ExpandRecord) error {
+	return w.Db.Create(&record).Error
 }

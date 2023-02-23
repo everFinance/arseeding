@@ -1,13 +1,21 @@
 package arseeding
 
 import (
+	"crypto/ecdsa"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay-go/account"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 	"io"
 	"io/ioutil"
@@ -88,6 +96,11 @@ func (s *Arseeding) runAPI(port string) {
 		// submit native data with X-API-KEY
 		v1.POST("/bundle/data", s.submitNativeData)
 		v1.GET("/bundle/orders", s.getOrdersByApiKey) // http header need X-API-KEY
+
+		//apikey register&add cap&get apikey by address
+		v1.POST("/apikey/register/:pubkey/:paymentId", s.registerApiKey)
+		v1.POST("/apikey/add_cap/:paymentId", s.expandCap)
+		v1.GET("/apikey/:address", s.getUsersApiKey)
 	}
 
 	if err := r.Run(port); err != nil {
@@ -868,4 +881,117 @@ func internalErrorResponse(c *gin.Context, err string) {
 	c.JSON(http.StatusInternalServerError, schema.RespErr{
 		Err: err,
 	})
+}
+
+func (s *Arseeding) registerApiKey(c *gin.Context) {
+	var fromAddr string
+	var pub *ecdsa.PublicKey
+	pubkey := c.Param("pubkey")
+	everhash := c.Param("paymentId")
+	tx, e := s.everpaySdk.Cli.TxByHash(everhash)
+	if e != nil {
+		errorResponse(c, e.Error())
+	}
+	if strings.HasPrefix("0x", pubkey) {
+		//ECC
+		decode, e := hexutil.Decode(pubkey)
+		if e != nil {
+			errorResponse(c, e.Error())
+		}
+		pub, e = crypto.UnmarshalPubkey(decode)
+		if e != nil {
+			errorResponse(c, e.Error())
+		}
+		fromAddr = crypto.PubkeyToAddress(*pub).String()
+	} else {
+		//RSA
+		errorResponse(c, "Error PublicKey")
+	}
+	from, to, currency, amount, fee := tx.Tx.From, tx.Tx.To, tx.Tx.TokenSymbol, tx.Tx.Amount, tx.Tx.Fee
+	if from != fromAddr || to != "0x5B7eb9190B1320898c15576a2F71c025C641c12F" || s.wdb.IsEverHashUsed(everhash) {
+		errorResponse(c, "The transaction was not found or the everHash has been used")
+	}
+	perFee, ok := s.bundlePerFeeMap[strings.ToUpper(currency)]
+	if !ok {
+		errorResponse(c, fmt.Sprintf("not support currency: %s", currency))
+	}
+	amountDecimal, err := decimal.NewFromString(amount)
+	if err != nil {
+		errorResponse(c, e.Error())
+	}
+	feeDecimal, err := decimal.NewFromString(fee)
+	if err != nil {
+		errorResponse(c, e.Error())
+	}
+	capacity := amountDecimal.Sub(feeDecimal).Div(perFee.PerChunk).Mul(decimal.NewFromInt(types.MAX_CHUNK_SIZE)).IntPart()
+	key, err := uuid.NewUUID()
+	if err != nil {
+		internalErrorResponse(c, err.Error())
+	}
+	keyStr := key.String()
+	data, err := ecies.Encrypt(rand.Reader, ecies.ImportECDSAPublic(pub), []byte(keyStr), nil, nil)
+	if err != nil {
+		errorResponse(c, e.Error())
+	}
+	encryptedStr := hex.EncodeToString(data)
+	err = s.wdb.InsertApiKey(schema.ApiKey{Key: keyStr, PubKey: pubkey, Address: from, EncryptedKey: encryptedStr, EverHash: everhash, Cap: capacity})
+	if err != nil {
+		internalErrorResponse(c, err.Error())
+	}
+	c.JSON(http.StatusOK, schema.RegisterResp{
+		Key: keyStr,
+		Cap: capacity,
+	})
+}
+
+func (s *Arseeding) expandCap(c *gin.Context) {
+	apiKey := c.GetHeader("X-API-KEY")
+	if _, ok := s.config.GetApiKey()[apiKey]; !ok {
+		errorResponse(c, "Wrong X-API-KEY")
+		return
+	}
+	everhash := c.Param("paymentId")
+	tx, e := s.everpaySdk.Cli.TxByHash(everhash)
+	if e != nil {
+		errorResponse(c, e.Error())
+	}
+	to, currency, amount, fee := tx.Tx.To, tx.Tx.TokenSymbol, tx.Tx.Amount, tx.Tx.Fee
+	detail, err := s.wdb.GetApiKeyDetail(apiKey)
+	if err != nil {
+		errorResponse(c, e.Error())
+	}
+	if to != "0x5B7eb9190B1320898c15576a2F71c025C641c12F" || s.wdb.IsEverHashUsed2(detail.EverHash, everhash) {
+		errorResponse(c, "The transaction was not found or the everHash has been used")
+	}
+	perFee, ok := s.bundlePerFeeMap[strings.ToUpper(currency)]
+	if !ok {
+		errorResponse(c, fmt.Sprintf("not support currency: %s", currency))
+	}
+	amountDecimal, err := decimal.NewFromString(amount)
+	if err != nil {
+		errorResponse(c, e.Error())
+	}
+	feeDecimal, err := decimal.NewFromString(fee)
+	if err != nil {
+		errorResponse(c, e.Error())
+	}
+	capacity := amountDecimal.Sub(feeDecimal).Div(perFee.PerChunk).Mul(decimal.NewFromInt(types.MAX_CHUNK_SIZE)).IntPart()
+	if err := s.wdb.UpdateCap(apiKey, detail.Cap+capacity); err != nil {
+		errorResponse(c, err.Error())
+	}
+	if err := s.wdb.InsertRecord(schema.ExpandRecord{ParentHash: detail.EverHash, ChildHash: everhash}); err != nil {
+		internalErrorResponse(c, err.Error())
+	}
+	c.JSON(http.StatusOK, schema.ExpandResp{
+		Cap: detail.Cap + capacity,
+	})
+}
+
+func (s *Arseeding) getUsersApiKey(c *gin.Context) {
+	address := c.Param("address")
+	detail, err := s.wdb.GetApiKeyDetailByAddr(address)
+	if err != nil {
+		internalErrorResponse(c, err.Error())
+	}
+	c.JSON(http.StatusOK, detail)
 }
