@@ -91,7 +91,7 @@ func (s *Arseeding) updatePeerMap() {
 	peerMap := updatePeerMap(s.cache.GetPeerMap(), availablePeers)
 
 	s.cache.UpdatePeers(peerMap)
-	if err = s.store.SavePeers(peerMap); err != nil {
+	if err = s.store.SavePeers(s.cache.GetPeerMap()); err != nil {
 		log.Warn("save new peer list fail")
 	}
 }
