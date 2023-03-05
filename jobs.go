@@ -129,6 +129,10 @@ func (s *Arseeding) updateTokenPrice() {
 			log.Error("config.GetTokenPriceByRedstone(tp.Symbol,\"USDC\")", "err", err, "symbol", tp.Symbol)
 			continue
 		}
+		if price <= 0.0 {
+			log.Error("GetTokenPriceByRedstone return price less than 0.0", "token", tp.Symbol)
+			continue
+		}
 		// update tokenPrice
 		if err := s.wdb.UpdatePrice(tp.Symbol, price); err != nil {
 			log.Error("s.wdb.UpdateFee(tp.Symbol,fee)", "err", err, "symbol", tp.Symbol, "fee", price)
