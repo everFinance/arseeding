@@ -606,12 +606,20 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 	}
 
 	// speed arTx Fee
-	price := calculatePrice(s.cache.GetFee(), int64(len(bundle.BundleBinary)))
-	speedFactor := calculateFactor(price, s.config.GetSpeedFee())
+
 	concurrentNum := s.config.Param.ChunkConcurrentNum
 	if len(bundle.BundleBinary) > 0 {
+		price := calculatePrice(s.cache.GetFee(), int64(len(bundle.BundleBinary)))
+		speedFactor := calculateFactor(price, s.config.GetSpeedFee())
 		arTx, err = s.bundler.SendBundleTxSpeedUp(context.TODO(), concurrentNum, bundle.BundleBinary, arTxtags, speedFactor)
 	} else {
+		fileInfo, err1 := bundle.BundleDataReader.Stat()
+		if err1 != nil {
+			err = err1
+			return
+		}
+		price := calculatePrice(s.cache.GetFee(), fileInfo.Size())
+		speedFactor := calculateFactor(price, s.config.GetSpeedFee())
 		arTx, err = s.bundler.SendBundleTxSpeedUp(context.TODO(), concurrentNum, bundle.BundleDataReader, arTxtags, speedFactor)
 	}
 	if err != nil {
