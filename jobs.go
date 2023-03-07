@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/everFinance/arseeding/rawdb"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay-go/account"
 	"github.com/everFinance/everpay-go/config"
@@ -531,7 +532,8 @@ func (s *Arseeding) retryOnChainArTx() {
 func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, onChainItemIds []string, err error) {
 	onChainItems := make([]types.BundleItem, 0)
 	bundle := &types.Bundle{}
-	if _, err = s.store.KVDb.GetStream(schema.TxMetaBucket, "0x01"); err == schema.ErrNotImplement {
+
+	if s.store.KVDb.Type() != rawdb.S3Type {
 		onChainItems, err = s.getOnChainBundle(itemIds)
 		// assemble and send to arweave
 		bundle, err = utils.NewBundle(onChainItems...)
@@ -545,16 +547,25 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 			err = errors.New(fmt.Sprintf("Verify bundle failed; err:%v", err))
 			return
 		}
-	} else {
+	} else { // only s3 support stream
 		defer func() {
 			for _, item := range onChainItems {
-				item.DataReader.Close()
-				os.Remove(item.DataReader.Name())
+				if item.DataReader != nil {
+					item.DataReader.Close()
+					os.Remove(item.DataReader.Name())
+				}
 			}
-			bundle.BundleDataReader.Close()
-			os.Remove(bundle.BundleDataReader.Name())
+			if bundle.BundleDataReader != nil {
+				bundle.BundleDataReader.Close()
+				os.Remove(bundle.BundleDataReader.Name())
+			}
 		}()
+
 		onChainItems, err = s.getOnChainBundleStream(itemIds)
+		if err != nil {
+			log.Error("s.getOnChainBundleStream(itemIds)", "err", err)
+			return
+		}
 		// assemble and send to arweave
 		bundle, err = utils.NewBundleStream(onChainItems...)
 		if err != nil {
@@ -605,10 +616,10 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 	}
 	log.Info("send bundle arTx", "arTx", arTx.ID)
 
-	// arseeding broadcast tx data
-	if err := s.arseedCli.SubmitTxConcurrent(context.TODO(), concurrentNum, arTx); err != nil {
-		log.Error("s.arseedCli.SubmitTxConcurrent(arTx)", "err", err, "arId", arTx.ID)
-	}
+	// // arseeding broadcast tx data
+	// if err := s.arseedCli.SubmitTxConcurrent(context.TODO(), concurrentNum, arTx); err != nil {
+	// 	log.Error("s.arseedCli.SubmitTxConcurrent(arTx)", "err", err, "arId", arTx.ID)
+	// }
 	return
 }
 
@@ -663,8 +674,8 @@ func (s *Arseeding) getOnChainBundleStream(itemIds []string) (onChainItems []typ
 			continue
 		}
 
-		item, err := utils.DecodeBundleItemStream(binaryReader)
-		if err != nil {
+		item, err2 := utils.DecodeBundleItemStream(binaryReader)
+		if err2 != nil {
 			log.Error("utils.DecodeBundleItem(itemBinary)", "err", err, "itemId", itemId)
 			continue
 		}

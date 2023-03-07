@@ -20,6 +20,7 @@ import (
 
 const (
 	ForeverLandEndpoint = "https://endpoint.4everland.co"
+	S3Type              = "s3"
 )
 
 type S3DB struct {
@@ -61,6 +62,9 @@ func NewS3DB(accKey, secretKey, region, bktPrefix, endpoint string) (*S3DB, erro
 	}, nil
 }
 
+func (s *S3DB) Type() string {
+	return S3Type
+}
 func (s *S3DB) Put(bucket, key string, value interface{}) (err error) {
 	bkt := getS3Bucket(s.bucketPrefix, bucket)
 
@@ -102,12 +106,13 @@ func (s *S3DB) GetStream(bucket, key string) (data *os.File, err error) {
 		Key:    aws.String(key),
 	}
 	data, err = os.CreateTemp("./tmpFile", "s3-")
-	log.Debug("fileInfo", "name", data.Name(), "itemId", key)
 	if err != nil {
 		return
 	}
+	log.Debug("fileInfo", "name", data.Name(), "itemId", key)
+
 	n, err := s.downloader.Download(data, downloadInfo)
-	if n == 0 {
+	if n == 0 { // if key not exist, need delete temp file
 		data.Close()
 		os.Remove(data.Name())
 		return nil, schema.ErrNotExist

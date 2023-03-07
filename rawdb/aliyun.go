@@ -13,6 +13,7 @@ import (
 // refer https://help.aliyun.com/document_detail/32157.html?spm=a2c4g.11186623.0.0.1a4b32bcxaC4kR
 const (
 	ossErrorNoSuchKey = "NoSuchKey"
+	AliyunType        = "aliyun"
 )
 
 type AliyunDB struct {
@@ -37,6 +38,10 @@ func NewAliyunDB(endpoint, accKey, accessKeySecret, bktPrefix string) (*AliyunDB
 		bucketPrefix: bktPrefix,
 		client:       client,
 	}, nil
+}
+
+func (a *AliyunDB) Type() string {
+	return AliyunType
 }
 
 func (a *AliyunDB) Put(bucket, key string, value interface{}) (err error) {

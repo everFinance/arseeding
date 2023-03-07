@@ -19,4 +19,6 @@ type KeyValueDB interface {
 	Delete(bucket, key string) (err error)
 
 	Close() (err error)
+
+	Type() string
 }

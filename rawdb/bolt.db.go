@@ -14,6 +14,7 @@ import (
 const (
 	boltAllocSize = 8 * 1024 * 1024
 	boltName      = "seed.db"
+	BoltType      = "boltdb"
 )
 
 type BoltDB struct {
@@ -58,6 +59,9 @@ func NewBoltDB(boltDirPath string) (*BoltDB, error) {
 	return boltDB, nil
 }
 
+func (s *BoltDB) Type() string {
+	return BoltType
+}
 func (s *BoltDB) Put(bucket, key string, value interface{}) (err error) {
 	if _, ok := value.([]byte); !ok {
 		return fmt.Errorf("unknown data type: %s, db: bolt db", reflect.TypeOf(value))

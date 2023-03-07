@@ -301,8 +301,9 @@ func (s *Store) IsExistItemBinary(itemId string) bool {
 func (s *Store) LoadItemBinary(itemId string) (binaryReader *os.File, itemBinary []byte, err error) {
 	itemBinary = make([]byte, 0)
 	// if store implement with s3, then get binary stream
-	binaryReader, err = s.KVDb.GetStream(schema.BundleItemBinary, itemId)
-	if err == schema.ErrNotImplement {
+	if s.KVDb.Type() == rawdb.S3Type {
+		binaryReader, err = s.KVDb.GetStream(schema.BundleItemBinary, itemId)
+	} else {
 		itemBinary, err = s.KVDb.Get(schema.BundleItemBinary, itemId)
 	}
 	return
