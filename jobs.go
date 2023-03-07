@@ -374,6 +374,9 @@ func (s *Arseeding) onChainBundleItems() {
 		log.Error("s.wdb.GetNeedOnChainOrders()", "err", err)
 		return
 	}
+	if len(ords) == 0 {
+		return
+	}
 	// send arTx to arweave
 	arTx, onChainItemIds, err := s.onChainOrds(ords)
 	if err != nil {
@@ -392,6 +395,9 @@ func (s *Arseeding) onChainItemsBySeq() {
 		return
 	}
 
+	if len(ords) == 0 {
+		return
+	}
 	arTx, onChainItemIds, err := s.onChainOrds(ords)
 	if err != nil {
 		return
@@ -410,11 +416,7 @@ func (s *Arseeding) onChainItemsBySeq() {
 func (s *Arseeding) onChainOrds(ords []schema.Order) (arTx types.Transaction, onChainItemIds []string, err error) {
 	// once total size limit 500 MB
 	itemIds := make([]string, 0, len(ords))
-	totalSize := int64(0)
 	for _, ord := range ords {
-		if totalSize >= schema.MaxPerOnChainSize {
-			break
-		}
 		od, exist := s.wdb.ExistProcessedOrderItem(ord.ItemId)
 		if exist {
 			if err = s.wdb.UpdateOrdOnChainStatus(od.ItemId, od.OnChainStatus, nil); err != nil {
@@ -423,7 +425,6 @@ func (s *Arseeding) onChainOrds(ords []schema.Order) (arTx types.Transaction, on
 			continue
 		}
 		itemIds = append(itemIds, ord.ItemId)
-		totalSize += ord.Size
 	}
 
 	// send arTx to arweave
@@ -511,6 +512,9 @@ func (s *Arseeding) retryOnChainArTx() {
 	txs, err := s.wdb.GetArTxByStatus(schema.FailedOnChain)
 	if err != nil {
 		log.Error("s.wdb.GetArTxByStatus(schema.PendingOnChain)", "err", err)
+		return
+	}
+	if len(txs) == 0 {
 		return
 	}
 	for _, tx := range txs {
