@@ -163,16 +163,15 @@ func fetchArFee(arCli *goar.Client, peers []string) (schema.ArFee, error) {
 	// base fee /fee/0  datasize = 0,data = nil
 	var basePrice, deltaPrice int64
 	var err1, err2 error
-	littleData := make([]byte, 1)
-	basePrice, err1 = arCli.GetTransactionPrice(nil, nil)
-	deltaPrice, err2 = arCli.GetTransactionPrice(littleData, nil)
+	basePrice, err1 = arCli.GetTransactionPrice(0, nil)
+	deltaPrice, err2 = arCli.GetTransactionPrice(1, nil)
 	if err1 != nil || err2 != nil {
 		pNode := goar.NewTempConn()
 		for _, peer := range peers {
 			pNode.SetTempConnUrl("http://" + peer)
 			pNode.SetTimeout(time.Second * 10)
-			basePrice, err1 = pNode.GetTransactionPrice(nil, nil)
-			deltaPrice, err2 = pNode.GetTransactionPrice(littleData, nil)
+			basePrice, err1 = pNode.GetTransactionPrice(0, nil)
+			deltaPrice, err2 = pNode.GetTransactionPrice(1, nil)
 			if err1 == nil && err2 == nil { // fetch fee from one peer
 				break
 			}
