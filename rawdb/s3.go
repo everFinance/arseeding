@@ -109,7 +109,6 @@ func (s *S3DB) GetStream(bucket, key string) (data *os.File, err error) {
 	if err != nil {
 		return
 	}
-	log.Debug("fileInfo", "name", data.Name(), "itemId", key)
 
 	n, err := s.downloader.Download(data, downloadInfo)
 	if n == 0 { // if key not exist, need delete temp file

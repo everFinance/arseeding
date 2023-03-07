@@ -45,10 +45,9 @@ func handleManifest(maniData []byte, path string, db *Store) ([]types.Tag, []byt
 
 func getArTxOrItemData(id string, db *Store) (decodeTags []types.Tag, binaryReader *os.File, data []byte, err error) {
 	// find bundle item
-	binaryReader, itemBinary, err := db.LoadItemBinary(id)
+	_, err = db.LoadItemMeta(id)
 	if err == nil {
-		decodeTags, data, err = parseBundleItem(binaryReader, itemBinary)
-		return
+		return getBundleItemData(id, db)
 	}
 
 	// not bundle item
@@ -82,29 +81,32 @@ func getArTxOrItemTags(id string, db *Store) (decodeTags []types.Tag, err error)
 	return nil, schema.ErrLocalNotExist
 }
 
-func getBundleItemData(id string, db *Store) (decodeTags []types.Tag, binaryReader *os.File, data []byte, err error) {
+func getBundleItemData(id string, db *Store) (decodeTags []types.Tag, dataReader *os.File, data []byte, err error) {
 	binaryReader, itemBinary, err := db.LoadItemBinary(id)
+	item := &types.BundleItem{}
 	if err == nil {
-		decodeTags, data, err = parseBundleItem(binaryReader, itemBinary)
+		item, err = parseBundleItem(binaryReader, itemBinary)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		decodeTags = item.Tags
+		if binaryReader != nil {
+			binaryReader.Close()
+			os.Remove(binaryReader.Name())
+			dataReader = item.DataReader
+		} else {
+			data, err = utils.Base64Decode(item.Data)
+		}
 		return
 	}
 	return
 }
 
-func parseBundleItem(binaryReader *os.File, itemBinary []byte) (decodeTags []types.Tag, data []byte, err error) {
-	var item *types.BundleItem
-	data = make([]byte, 0)
+func parseBundleItem(binaryReader *os.File, itemBinary []byte) (item *types.BundleItem, err error) {
 	if binaryReader != nil {
 		item, err = utils.DecodeBundleItemStream(binaryReader)
 	} else {
 		item, err = utils.DecodeBundleItem(itemBinary)
-	}
-	if err != nil {
-		return
-	}
-	decodeTags = item.Tags
-	if len(item.Data) > 0 {
-		data, err = utils.Base64Decode(item.Data)
 	}
 	return
 }

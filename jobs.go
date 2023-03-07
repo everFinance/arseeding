@@ -536,7 +536,7 @@ func (s *Arseeding) retryOnChainArTx() {
 func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, onChainItemIds []string, err error) {
 	onChainItems := make([]types.BundleItem, 0)
 	bundle := &types.Bundle{}
-
+	verifyBundle := &types.Bundle{}
 	if s.store.KVDb.Type() != rawdb.S3Type {
 		onChainItems, err = s.getOnChainBundle(itemIds)
 		// assemble and send to arweave
@@ -554,6 +554,12 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 	} else { // only s3 support stream
 		defer func() {
 			for _, item := range onChainItems {
+				if item.DataReader != nil {
+					item.DataReader.Close()
+					os.Remove(item.DataReader.Name())
+				}
+			}
+			for _, item := range verifyBundle.Items {
 				if item.DataReader != nil {
 					item.DataReader.Close()
 					os.Remove(item.DataReader.Name())
@@ -578,7 +584,7 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 		}
 
 		// verify bundle, ensure that the bundle is exactly right before sending
-		if _, err = utils.DecodeBundleStream(bundle.BundleDataReader); err != nil {
+		if verifyBundle, err = utils.DecodeBundleStream(bundle.BundleDataReader); err != nil {
 			err = errors.New(fmt.Sprintf("Verify bundle failed; err:%v", err))
 			return
 		}
