@@ -5,6 +5,7 @@ import (
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goether"
+	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"testing"
 )
@@ -22,7 +23,7 @@ func TestPostItemStream(t *testing.T) {
 	}
 
 	// create Arseeding SDK
-	url := "http://127.0.0.1:8080" // your arseeding service address
+	url := "https://arseed-dev.web3infura.io" // your arseeding service address
 	arseedSdk := sdk.New(url)
 	// data size must > maxAllowByte
 	data, err := ioutil.ReadFile("img.jpeg") // your data,maybe read from files
@@ -43,15 +44,23 @@ func TestPostItemStream(t *testing.T) {
 }
 
 func TestPostNativeDataStream(t *testing.T) {
-	url := "http://127.0.0.1:8080" // your arseeding service address
+	url := "https://seed-dev.everpay.io" // your arseeding service address
 	arseedSdk := sdk.New(url)
-	data, err := ioutil.ReadFile("img.jpeg") // your data,maybe read from files
+	data, err := ioutil.ReadFile("/Users/kevin/Downloads/mv.mp4") // your data,maybe read from files
 	if err != nil {
 		panic(err)
 	}
-	res, err := arseedSdk.SubmitNativeData("123", data, "jpeg", map[string]string{"Content-Type": "jpeg", "Name": "test"})
+	res, err := arseedSdk.SubmitNativeData("arseed-abc", data, "video/mp4", map[string]string{"Content-Type": "video/mp4", "Name": "test"})
 	if err != nil {
 		panic(err)
 	}
 	t.Log(res.ItemId)
+}
+
+func TestGetTx(t *testing.T) {
+	url := "https://arseed-dev.web3infura.io" // your arseeding service address
+	arseedSdk := sdk.New(url)
+	res, err := arseedSdk.GetItemMeta("nL24nfsIg7KlqtVAUsDjmMCq_YIn6CfTftb3U2gtMc6")
+	assert.NoError(t, err)
+	t.Log(res)
 }

@@ -272,10 +272,12 @@ func (s *Store) AtomicDelItem(itemId string) (err error) {
 }
 
 func (s *Store) SaveItemBinary(item types.BundleItem) (err error) {
-	if item.BinaryReader != nil { // post big native data
-		return s.KVDb.Put(schema.BundleItemBinary, item.Id, item.BinaryReader)
-	} else if item.DataReader != nil { // post big itemBinary
-		return s.KVDb.Put(schema.BundleItemBinary, item.Id, item.DataReader)
+	if item.DataReader != nil {
+		binaryReader, err := utils.GenerateItemBinaryStream(&item)
+		if err != nil {
+			return err
+		}
+		return s.KVDb.Put(schema.BundleItemBinary, item.Id, binaryReader)
 	} else {
 		return s.KVDb.Put(schema.BundleItemBinary, item.Id, item.ItemBinary)
 	}

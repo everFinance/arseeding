@@ -487,18 +487,6 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 		errorResponse(c, "can not submit null bundle item")
 		return
 	}
-	needSort := isSortItems(c)
-	itemBinaryFile, err := os.CreateTemp(schema.TmpFileDir, "arseed-")
-	if err != nil {
-		c.Request.Body.Close()
-		errorResponse(c, err.Error())
-		return
-	}
-	defer func() {
-		c.Request.Body.Close()
-		itemBinaryFile.Close()
-		os.Remove(itemBinaryFile.Name())
-	}()
 	var itemBuf bytes.Buffer
 	var item *types.BundleItem
 	// write up to schema.AllowMaxItemSize to memory
@@ -508,25 +496,28 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 		return
 	}
 	if size > schema.AllowMaxItemSize { // the body size > schema.AllowMaxItemSize, need write to tmp file
-		size, err = io.Copy(itemBinaryFile, io.MultiReader(&itemBuf, c.Request.Body))
-		if err != nil {
-			errorResponse(c, err.Error())
-			return
-		}
-		// reset io stream to origin of the file
-		_, err = itemBinaryFile.Seek(0, 0)
-		if err != nil {
-			errorResponse(c, err.Error())
-			return
-		}
-		item, err = utils.DecodeBundleItemStream(itemBinaryFile)
+		item, err = utils.DecodeBundleItemStream(io.MultiReader(&itemBuf, c.Request.Body))
 	} else {
 		item, err = utils.DecodeBundleItem(itemBuf.Bytes())
 	}
+	defer func() {
+		if item.DataReader != nil {
+			item.DataReader.Close()
+			os.Remove(item.DataReader.Name())
+		}
+	}()
 
 	if err != nil {
 		errorResponse(c, "decode item binary failed")
 		return
+	}
+	if item.DataReader != nil {
+		fileInfo, err := item.DataReader.Stat()
+		if err != nil {
+			errorResponse(c, err.Error())
+			return
+		}
+		size = fileInfo.Size() // this size ignore item meta size,may be plus 1MB or else?
 	}
 	currency := c.Param("currency")
 
@@ -540,6 +531,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	}
 
 	// process bundleItem
+	needSort := isSortItems(c)
 	ord, err := s.ProcessSubmitItem(*item, currency, noFee, apikey, needSort, size)
 	if err != nil {
 		errorResponse(c, err.Error())
