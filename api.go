@@ -487,40 +487,27 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 		errorResponse(c, "can not submit null bundle item")
 		return
 	}
+	itemBinaryFile, err := os.CreateTemp(schema.TmpFileDir, "arseed-")
+	if err != nil {
+		c.Request.Body.Close()
+		errorResponse(c, err.Error())
+		return
+	}
+	defer func() {
+		c.Request.Body.Close()
+		itemBinaryFile.Close()
+		os.Remove(itemBinaryFile.Name())
+	}()
 
 	var itemBuf bytes.Buffer
 	var item *types.BundleItem
 	// write up to schema.AllowMaxItemSize to memory
-	size, err := io.CopyN(&itemBuf, c.Request.Body, schema.AllowMaxItemSize+1)
-	if err != nil && err != io.EOF {
+	size, err := setItemData(c, itemBinaryFile, &itemBuf)
+	if err != nil {
 		errorResponse(c, err.Error())
 		return
 	}
 	if size > schema.AllowMaxItemSize { // the body size > schema.AllowMaxItemSize, need write to tmp file
-		var itemBinaryFile *os.File
-		itemBinaryFile, err = os.CreateTemp(schema.TmpFileDir, "arseed-")
-		if err != nil {
-			c.Request.Body.Close()
-			errorResponse(c, err.Error())
-			return
-		}
-		defer func() {
-			c.Request.Body.Close()
-			itemBinaryFile.Close()
-			os.Remove(itemBinaryFile.Name())
-		}()
-
-		size, err = io.Copy(itemBinaryFile, io.MultiReader(&itemBuf, c.Request.Body))
-		if err != nil {
-			errorResponse(c, err.Error())
-			return
-		}
-		// reset io stream to origin of the file
-		_, err = itemBinaryFile.Seek(0, 0)
-		if err != nil {
-			errorResponse(c, err.Error())
-			return
-		}
 		item, err = utils.DecodeBundleItemStream(itemBinaryFile)
 	} else {
 		item, err = utils.DecodeBundleItem(itemBuf.Bytes())
@@ -610,23 +597,12 @@ func (s *Arseeding) submitNativeData(c *gin.Context) {
 	var dataBuf bytes.Buffer
 	var item types.BundleItem
 	// write up to schema.AllowMaxNativeDataSize to memory
-	size, err := io.CopyN(&dataBuf, c.Request.Body, schema.AllowMaxNativeDataSize+1)
-	if err != nil && err != io.EOF {
+	size, err := setItemData(c, dataFile, &dataBuf)
+	if err != nil {
 		errorResponse(c, err.Error())
 		return
 	}
 	if size > schema.AllowMaxNativeDataSize { // the body size > schema.AllowMaxItemSize, need write to tmp file
-		size, err = io.Copy(dataFile, io.MultiReader(&dataBuf, c.Request.Body))
-		if err != nil {
-			errorResponse(c, err.Error())
-			return
-		}
-		// reset io stream to origin of the file
-		_, err = dataFile.Seek(0, 0)
-		if err != nil {
-			errorResponse(c, err.Error())
-			return
-		}
 		item, err = s.bundlerItemSigner.CreateAndSignItemStream(dataFile, "", "", tags)
 	} else {
 		item, err = s.bundlerItemSigner.CreateAndSignItem(dataBuf.Bytes(), "", "", tags)
@@ -856,6 +832,26 @@ func (s *Arseeding) setManifestUrl(c *gin.Context) {
 		ManifestUrl: mfUrl,
 		ManifestId:  txId,
 	})
+}
+
+func setItemData(c *gin.Context, tmpFile *os.File, itemBuf *bytes.Buffer) (size int64, err error) {
+	size, err = io.CopyN(itemBuf, c.Request.Body, schema.AllowMaxItemSize+1)
+	if err != nil && err != io.EOF {
+		return
+	}
+	if size > schema.AllowMaxItemSize { // the body size > schema.AllowMaxItemSize, need write to tmp file
+
+		size, err = io.Copy(tmpFile, io.MultiReader(itemBuf, c.Request.Body))
+		if err != nil {
+			return
+		}
+		// reset io stream to origin of the file
+		_, err = tmpFile.Seek(0, 0)
+		if err != nil {
+			return
+		}
+	}
+	return
 }
 
 func getTagValue(tags []types.Tag, name string) string {
