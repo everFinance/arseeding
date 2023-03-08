@@ -503,7 +503,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	var item *types.BundleItem
 	// write up to schema.AllowMaxItemSize to memory
 	size, err := setItemData(c, itemBinaryFile, &itemBuf)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		errorResponse(c, err.Error())
 		return
 	}
@@ -598,7 +598,7 @@ func (s *Arseeding) submitNativeData(c *gin.Context) {
 	var item types.BundleItem
 	// write up to schema.AllowMaxNativeDataSize to memory
 	size, err := setItemData(c, dataFile, &dataBuf)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		errorResponse(c, err.Error())
 		return
 	}
