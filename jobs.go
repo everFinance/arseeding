@@ -537,7 +537,7 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 	onChainItems := make([]types.BundleItem, 0)
 	bundle := &types.Bundle{}
 	verifyBundle := &types.Bundle{}
-	if s.store.KVDb.Type() == rawdb.S3Type {
+	if s.store.KVDb.Type() != rawdb.S3Type {
 		onChainItems, err = s.getOnChainBundle(itemIds)
 		// assemble and send to arweave
 		bundle, err = utils.NewBundle(onChainItems...)
@@ -626,6 +626,8 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 		}
 		price := calculatePrice(s.cache.GetFee(), fileInfo.Size())
 		speedFactor := calculateFactor(price, s.config.GetSpeedFee())
+		n, err := bundle.BundleDataReader.Seek(0, 0)
+		log.Debug("bundle data", "size", fileInfo.Size(), "cursor", n, "err", err)
 		arTx, err = s.bundler.SendBundleTxSpeedUp(context.TODO(), concurrentNum, bundle.BundleDataReader, arTxtags, speedFactor)
 	}
 	if err != nil {
