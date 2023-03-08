@@ -537,7 +537,7 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 	onChainItems := make([]types.BundleItem, 0)
 	bundle := &types.Bundle{}
 	verifyBundle := &types.Bundle{}
-	if s.store.KVDb.Type() != rawdb.S3Type {
+	if s.store.KVDb.Type() == rawdb.S3Type {
 		onChainItems, err = s.getOnChainBundle(itemIds)
 		// assemble and send to arweave
 		bundle, err = utils.NewBundle(onChainItems...)
