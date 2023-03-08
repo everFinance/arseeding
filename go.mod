@@ -6,7 +6,7 @@ require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.6+incompatible
 	github.com/aws/aws-sdk-go v1.27.0
 	github.com/everFinance/everpay-go v0.0.2
-	github.com/everFinance/goar v1.5.3-0.20230307102307-392019439bc6
+	github.com/everFinance/goar v1.5.3-0.20230308025940-d2e7d1a22636
 	github.com/everFinance/goether v1.1.8
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-co-op/gocron v1.11.0
