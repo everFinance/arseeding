@@ -54,6 +54,8 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundler)
 
+	// delete tmp file, one may be repeat request same data,tmp file can be reserve with short time
+	s.scheduler.Every(2).Minute().SingletonMode().Do(s.deleteTmpFile)
 	s.scheduler.StartAsync()
 }
 
@@ -782,6 +784,15 @@ func (s *Arseeding) updateBundler() {
 		return
 	}
 	metricBundlerBalance(bal, addr)
+}
+
+func (s *Arseeding) deleteTmpFile() {
+	for tmpFileName, cnt := range tmpFileMap {
+		if cnt <= 0 {
+			delTmpFileKey(tmpFileName)
+			os.Remove(tmpFileName)
+		}
+	}
 }
 
 func filterPeers(peers []string, constTx *types.Transaction) map[string]bool {
