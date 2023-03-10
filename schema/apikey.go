@@ -4,30 +4,30 @@ import "gorm.io/gorm"
 
 type ApiKey struct {
 	gorm.Model
-	Key          string `json:"apiKey"`
+	Key          string `gorm:"index" json:"apiKey"`
 	PubKey       string `json:"pubKey"`
-	Address      string `json:"address"`
+	Address      string `gorm:"index" json:"address"`
 	EncryptedKey string `json:"encryptedApikey"`
 	EverHash     string `json:"everHash"`
-	Cap          int64  `json:"cap"`
+	Cap          string `json:"cap"`
 }
 
 type RegisterResp struct {
 	Key string `json:"apikey"`
-	Cap int64  `json:"cap"`
+	Cap string `json:"cap"`
 }
 
 type ExpandResp struct {
-	Cap int64 `json:"cap"`
+	Cap string `json:"cap"`
 }
 
 type HeldApiKeys struct {
 	EncryptedKey string `json:"encryptedKey"`
-	Cap          int64  `json:"cap"`
+	Cap          string `json:"cap"`
 }
 
 type ExpandRecord struct {
 	gorm.Model
-	ParentHash string
-	ChildHash  string
+	ParentHash string `gorm:"index"`
+	ChildHash  string `gorm:"index"`
 }

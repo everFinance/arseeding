@@ -1,7 +1,9 @@
 package arseeding
 
 import (
+	"errors"
 	"github.com/everFinance/arseeding/schema"
+	"github.com/shopspring/decimal"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -289,7 +291,7 @@ func (w *Wdb) GetApiKeyDetailByAddr(addr string) ([]schema.HeldApiKeys, error) {
 
 func (w *Wdb) IsEverHashUsed(everHash string) bool {
 	var res schema.ApiKey
-	err := w.Db.Model(&schema.ApiKey{}).Where("ever_hash = ?", everHash).Find(&res).Error
+	err := w.Db.Model(&schema.ApiKey{}).Where("ever_hash = ?", everHash).First(&res).Error
 	if err == gorm.ErrRecordNotFound {
 		return false
 	}
@@ -298,28 +300,60 @@ func (w *Wdb) IsEverHashUsed(everHash string) bool {
 
 func (w *Wdb) IsEverHashUsed2(p string, c string) bool {
 	var res schema.ExpandRecord
-	err := w.Db.Model(&schema.ApiKey{}).Where("parent_hash = ? and child_hash = ?", p, c).Find(&res).Error
+	err := w.Db.Model(&schema.ExpandRecord{}).Where("parent_hash = ? and child_hash = ?", p, c).Find(&res).Error
 	if err == gorm.ErrRecordNotFound {
 		return false
 	}
 	return true
 }
 
-func (w *Wdb) UpdateCap(key string, cap int64) error {
+func (w *Wdb) UpdateCapAndRecord(key, cap, cur string, record schema.ExpandRecord) error {
 	tx := w.Db.Begin()
+	defer tx.Rollback()
 	d := schema.ApiKey{}
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("key = ?", key).First(&d).Error; err != nil {
-		tx.Rollback()
 		return err
 	}
-	if err := tx.Model(&schema.ApiKey{}).Where("key = ?", key).Update("cap", cap).Error; err != nil {
-		tx.Rollback()
+	if err := w.insertRecord(record); err != nil {
 		return err
 	}
-	tx.Commit()
-	return nil
+	if err := w.updateCap(key, cap, cur); err != nil {
+		return err
+	}
+	return tx.Commit().Error
 }
 
-func (w *Wdb) InsertRecord(record schema.ExpandRecord) error {
+func (w *Wdb) UseApiKey(key, usedSize string) error {
+	tx := w.Db.Begin()
+	defer tx.Rollback()
+	res := schema.ApiKey{}
+	if err := w.Db.Model(&schema.ApiKey{}).Where("key = ?", key).First(&res).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		return errors.New("non-existent api-key")
+	}
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("key = ?", key).First(&res).Error; err != nil {
+		return err
+	}
+	storage, err := decimal.NewFromString(res.Cap)
+	if err != nil {
+		return err
+	}
+	used, err := decimal.NewFromString(usedSize)
+	if err != nil {
+		return err
+	}
+	if storage.LessThan(used) {
+		return errors.New("insufficient usable capacity")
+	}
+	if err := w.updateCap(key, storage.Sub(used).String(), res.Cap); err != nil {
+		return err
+	}
+	return tx.Commit().Error
+}
+
+func (w *Wdb) updateCap(key, cap, cur string) error {
+	return w.Db.Model(&schema.ApiKey{}).Where("key = ? and cap = ?", key, cur).Update("cap", cap).Error
+}
+
+func (w *Wdb) insertRecord(record schema.ExpandRecord) error {
 	return w.Db.Create(&record).Error
 }

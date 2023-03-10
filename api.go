@@ -891,52 +891,57 @@ func (s *Arseeding) registerApiKey(c *gin.Context) {
 	tx, e := s.everpaySdk.Cli.TxByHash(everhash)
 	if e != nil {
 		errorResponse(c, e.Error())
+		return
 	}
 	if strings.HasPrefix("0x", pubkey) {
 		//ECC
 		decode, e := hexutil.Decode(pubkey)
 		if e != nil {
 			errorResponse(c, e.Error())
+			return
 		}
 		pub, e = crypto.UnmarshalPubkey(decode)
 		if e != nil {
 			errorResponse(c, e.Error())
+			return
 		}
 		fromAddr = crypto.PubkeyToAddress(*pub).String()
 	} else {
 		//RSA
 		errorResponse(c, "Error PublicKey")
+		return
 	}
-	from, to, currency, amount, fee := tx.Tx.From, tx.Tx.To, tx.Tx.TokenSymbol, tx.Tx.Amount, tx.Tx.Fee
+	from, to, currency, amount := tx.Tx.From, tx.Tx.To, tx.Tx.TokenSymbol, tx.Tx.Amount
 	if from != fromAddr || to != "0x5B7eb9190B1320898c15576a2F71c025C641c12F" || s.wdb.IsEverHashUsed(everhash) {
 		errorResponse(c, "The transaction was not found or the everHash has been used")
+		return
 	}
 	perFee, ok := s.bundlePerFeeMap[strings.ToUpper(currency)]
 	if !ok {
 		errorResponse(c, fmt.Sprintf("not support currency: %s", currency))
+		return
 	}
 	amountDecimal, err := decimal.NewFromString(amount)
 	if err != nil {
 		errorResponse(c, e.Error())
+		return
 	}
-	feeDecimal, err := decimal.NewFromString(fee)
-	if err != nil {
-		errorResponse(c, e.Error())
-	}
-	capacity := amountDecimal.Sub(feeDecimal).Div(perFee.PerChunk).Mul(decimal.NewFromInt(types.MAX_CHUNK_SIZE)).IntPart()
+	capacity := amountDecimal.Sub(perFee.Base).Div(perFee.PerChunk).Mul(decimal.NewFromInt(types.MAX_CHUNK_SIZE)).String()
 	key, err := uuid.NewUUID()
 	if err != nil {
 		internalErrorResponse(c, err.Error())
+		return
 	}
 	keyStr := key.String()
 	data, err := ecies.Encrypt(rand.Reader, ecies.ImportECDSAPublic(pub), []byte(keyStr), nil, nil)
 	if err != nil {
 		errorResponse(c, e.Error())
+		return
 	}
 	encryptedStr := hex.EncodeToString(data)
-	err = s.wdb.InsertApiKey(schema.ApiKey{Key: keyStr, PubKey: pubkey, Address: from, EncryptedKey: encryptedStr, EverHash: everhash, Cap: capacity})
-	if err != nil {
+	if err := s.wdb.InsertApiKey(schema.ApiKey{Key: keyStr, PubKey: pubkey, Address: from, EncryptedKey: encryptedStr, EverHash: everhash, Cap: capacity}); err != nil {
 		internalErrorResponse(c, err.Error())
+		return
 	}
 	c.JSON(http.StatusOK, schema.RegisterResp{
 		Key: keyStr,
@@ -954,36 +959,42 @@ func (s *Arseeding) expandCap(c *gin.Context) {
 	tx, e := s.everpaySdk.Cli.TxByHash(everhash)
 	if e != nil {
 		errorResponse(c, e.Error())
+		return
 	}
-	to, currency, amount, fee := tx.Tx.To, tx.Tx.TokenSymbol, tx.Tx.Amount, tx.Tx.Fee
+	to, currency, amount := tx.Tx.To, tx.Tx.TokenSymbol, tx.Tx.Amount
 	detail, err := s.wdb.GetApiKeyDetail(apiKey)
 	if err != nil {
 		errorResponse(c, e.Error())
+		return
 	}
-	if to != "0x5B7eb9190B1320898c15576a2F71c025C641c12F" || s.wdb.IsEverHashUsed2(detail.EverHash, everhash) {
+	if to != "0x5B7eb9190B1320898c15576a2F71c025C641c12F" || s.wdb.IsEverHashUsed2(detail.EverHash, everhash) || detail.EverHash == everhash {
 		errorResponse(c, "The transaction was not found or the everHash has been used")
+		return
 	}
 	perFee, ok := s.bundlePerFeeMap[strings.ToUpper(currency)]
 	if !ok {
 		errorResponse(c, fmt.Sprintf("not support currency: %s", currency))
+		return
 	}
 	amountDecimal, err := decimal.NewFromString(amount)
 	if err != nil {
 		errorResponse(c, e.Error())
+		return
 	}
-	feeDecimal, err := decimal.NewFromString(fee)
+	curCap, err := decimal.NewFromString(detail.Cap)
 	if err != nil {
 		errorResponse(c, e.Error())
+		return
 	}
-	capacity := amountDecimal.Sub(feeDecimal).Div(perFee.PerChunk).Mul(decimal.NewFromInt(types.MAX_CHUNK_SIZE)).IntPart()
-	if err := s.wdb.UpdateCap(apiKey, detail.Cap+capacity); err != nil {
+	capacity := amountDecimal.Sub(perFee.Base).Div(perFee.PerChunk).Mul(decimal.NewFromInt(types.MAX_CHUNK_SIZE))
+	updatecap := capacity.Add(curCap)
+	//capacity = amountDecimal.Sub(feeDecimal).Div(perFee.PerChunk).Mul(decimal.NewFromInt(types.MAX_CHUNK_SIZE)).IntPart()
+	if err := s.wdb.UpdateCapAndRecord(apiKey, updatecap.String(), curCap.String(), schema.ExpandRecord{ParentHash: detail.EverHash, ChildHash: everhash}); err != nil {
 		errorResponse(c, err.Error())
-	}
-	if err := s.wdb.InsertRecord(schema.ExpandRecord{ParentHash: detail.EverHash, ChildHash: everhash}); err != nil {
-		internalErrorResponse(c, err.Error())
+		return
 	}
 	c.JSON(http.StatusOK, schema.ExpandResp{
-		Cap: detail.Cap + capacity,
+		Cap: updatecap.String(),
 	})
 }
 
