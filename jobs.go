@@ -47,7 +47,7 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 	s.scheduler.Every(3).Minute().SingletonMode().Do(s.watchArTx)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.retryOnChainArTx)
 
-	s.scheduler.Every(10).Seconds().SingletonMode().Do(s.parseAndSaveBundleTx)
+	// s.scheduler.Every(10).Seconds().SingletonMode().Do(s.parseAndSaveBundleTx) // todo 测试是否是这里导致的堆泄露
 
 	// manager taskStatus
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseTasks)
