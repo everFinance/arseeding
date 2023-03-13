@@ -10,6 +10,8 @@ require (
 	github.com/everFinance/goether v1.1.8
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-co-op/gocron v1.11.0
+	github.com/gorilla/handlers v1.4.2
+	github.com/mkevac/debugcharts v0.0.0-20191222103121-ae1c48aa8615
 	github.com/panjf2000/ants/v2 v2.6.0
 	github.com/prometheus/client_golang v1.12.2
 	github.com/shopspring/decimal v1.2.0
@@ -61,7 +63,6 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/mattn/go-sqlite3 v1.14.5 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
-	github.com/mkevac/debugcharts v0.0.0-20191222103121-ae1c48aa8615 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

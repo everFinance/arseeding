@@ -9,9 +9,11 @@ import (
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/handlers"
 	"gorm.io/gorm"
 	"io"
 	"io/ioutil"
+	gLog "log"
 	"net/http"
 	"net/http/httputil"
 	"os"
@@ -98,6 +100,11 @@ func (s *Arseeding) runAPI(port string) {
 		v1.POST("/bundle/data", s.submitNativeData)
 		v1.GET("/bundle/orders", s.getOrdersByApiKey) // http header need X-API-KEY
 	}
+
+	go func() {
+		gLog.Fatal(http.ListenAndServe(":8081", handlers.CompressHandler(http.DefaultServeMux)))
+	}()
+	gLog.Printf("you can now open http://localhost:8080/debug/charts/ in your browser")
 
 	if err := r.Run(port); err != nil {
 		panic(err)
