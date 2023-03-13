@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	_ "github.com/mkevac/debugcharts"
 	"github.com/urfave/cli/v2"
 )
 
