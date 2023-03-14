@@ -6,6 +6,7 @@ import (
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goether"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
 
@@ -65,4 +66,41 @@ func TestArSeedCli_SubmitNativeData(t *testing.T) {
 	assert.NoError(t, err)
 	t.Log(res)
 
+}
+
+func TestArSeedCli_SubmitNativeDataStream(t *testing.T) {
+	apiKey := "aabbccddeee"
+	data, err := os.Open("fileName")
+	assert.NoError(t, err)
+	cli := New("http://127.0.0.1:8080")
+
+	res, err := cli.SubmitNativeDataStream(apiKey, data, "image/jpeg", map[string]string{
+		"key1": "arseeding test",
+		"key2": "sandy test bundle native data",
+	})
+	assert.NoError(t, err)
+	t.Log(res)
+}
+
+func TestSDK_SendDataStreamAndPay(t *testing.T) {
+	payUrl := "https://api-dev.everpay.io"
+	seedUrl := "https://seed-dev.everpay.io"
+
+	rsaSigner, err := goar.NewSignerFromPath("./rsakey.json")
+	if err != nil {
+		panic(err)
+	}
+	sdk, err := NewSDK(seedUrl, payUrl, rsaSigner)
+	if err != nil {
+		panic(err)
+	}
+	data, err := os.Open("fileName")
+	assert.NoError(t, err)
+	tags := []types.Tag{
+		{"Content-Type", "text"},
+	}
+	tx, itemId, err := sdk.SendDataStreamAndPay(data, "usdt", &schema.OptionItem{Tags: tags}, false) // your account must have enough balance in everpay
+	assert.NoError(t, err)
+	t.Log("itemId:", itemId)
+	t.Log(tx.HexHash())
 }

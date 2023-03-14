@@ -9,6 +9,7 @@ import (
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"gopkg.in/h2non/gentleman.v2"
+	"io"
 	"strconv"
 )
 
@@ -169,6 +170,37 @@ func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string, apikey string
 	return br, err
 }
 
+func (a *ArSeedCli) SubmitItemStream(itemBinary io.Reader, currency string, apikey string, needSequence bool) (*schema.RespOrder, error) {
+	req := a.SCli.Post()
+	if currency != "" {
+		req.Path(fmt.Sprintf("/bundle/tx/%s", currency))
+	} else {
+		req.Path("/bundle/tx")
+	}
+
+	req.SetHeader("Content-Type", "application/octet-stream")
+	if len(apikey) > 0 {
+		req.SetHeader("X-API-KEY", apikey)
+	}
+	if needSequence {
+		req.SetHeader("Sort", "true")
+	}
+
+	req.Body(itemBinary)
+
+	resp, err := req.Send()
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Close()
+	if !resp.Ok {
+		return nil, fmt.Errorf("send to bundler request failed; http code: %d, errMsg:%s", resp.StatusCode, resp.String())
+	}
+	br := &schema.RespOrder{}
+	err = resp.JSON(br)
+	return br, err
+}
+
 func (a *ArSeedCli) SubmitNativeData(apiKey string, data []byte, contentType string, tags map[string]string) (*schema.RespItemId, error) {
 	req := a.SCli.Post()
 	req.Path(fmt.Sprintf("/bundle/data"))
@@ -178,6 +210,29 @@ func (a *ArSeedCli) SubmitNativeData(apiKey string, data []byte, contentType str
 		req.AddQuery(k, v)
 	}
 	req.Body(bytes.NewReader(data))
+
+	resp, err := req.Send()
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Close()
+	if !resp.Ok {
+		return nil, fmt.Errorf("resp failed.http code: %d, errMsg:%s", resp.StatusCode, resp.String())
+	}
+	br := &schema.RespItemId{}
+	err = resp.JSON(br)
+	return br, err
+}
+
+func (a *ArSeedCli) SubmitNativeDataStream(apiKey string, data io.Reader, contentType string, tags map[string]string) (*schema.RespItemId, error) {
+	req := a.SCli.Post()
+	req.Path(fmt.Sprintf("/bundle/data"))
+	req.SetHeader("X-API-KEY", apiKey)
+	req.AddQuery("Content-Type", contentType)
+	for k, v := range tags {
+		req.AddQuery(k, v)
+	}
+	req.Body(data)
 
 	resp, err := req.Send()
 	if err != nil {
