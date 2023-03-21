@@ -2,9 +2,13 @@ package arseeding
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay-go/account"
 	"github.com/everFinance/everpay-go/config"
@@ -13,13 +17,20 @@ import (
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
+	"github.com/google/uuid"
 	"github.com/panjf2000/ants/v2"
+	"github.com/shopspring/decimal"
 	"github.com/tidwall/gjson"
 	"gorm.io/gorm"
 	"math/big"
 	"strings"
 	"sync"
 	"time"
+)
+
+const (
+	ItemPaymentAction   = "payment"
+	ApikeyPaymentAction = "apikeyPayment"
 )
 
 func (s *Arseeding) runJobs(bundleInterval int) {
@@ -34,7 +45,7 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 		s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateTokenPrice)
 		s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundlePerFee)
 		go s.watchEverReceiptTxs()
-		s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptAndOrder)
+		s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptEverTxs)
 		s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
 		s.scheduler.Every(1).Minute().SingletonMode().Do(s.processExpiredOrd)
 	}
@@ -142,7 +153,7 @@ func (s *Arseeding) updateBundlePerFee() {
 		log.Error("s.GetBundlePerFees()", "err", err)
 		return
 	}
-	s.bundlePerFeeMap = feeMap
+	s.SetPerFee(feeMap)
 }
 
 func (s *Arseeding) watcherAndCloseTasks() {
@@ -193,6 +204,7 @@ func (s *Arseeding) watchEverReceiptTxs() {
 				From:     from,
 				Amount:   tt.Amount,
 				Data:     tt.Data,
+				Sig:      tt.Sig,
 				Status:   schema.UnSpent,
 			}
 
@@ -203,15 +215,144 @@ func (s *Arseeding) watchEverReceiptTxs() {
 	}
 }
 
-func (s *Arseeding) mergeReceiptAndOrder() {
+func processPayItems(wdb *Wdb, itemIds []string, urtx schema.ReceiptEverTx) error {
+	// get orders by itemIds
+	ordArr, err := getUnPaidOrdersByItemIds(wdb, itemIds)
+	if err != nil {
+		log.Error("s.wdb.GetUnPaidOrder", "err", err, "id", urtx.RawId)
+		if err == gorm.ErrRecordNotFound {
+			log.Warn("need refund about not find order", "id", urtx.RawId)
+			// update receipt status is unrefund and waiting refund
+			if err = wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
+				log.Error("s.wdb.UpdateReceiptStatus2", "err", err, "id", urtx.RawId)
+			}
+		}
+		return err
+	}
+	// check currency, orders currency must == paymentTxSymbol
+	if err = checkOrdersCurrency(ordArr, urtx.Symbol); err != nil {
+		log.Error("checkOrdersCurrency(ordArr, urtx.Symbol)", "err", err, "urtx", urtx.EverHash)
+		if err = wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
+			log.Error("s.wdb.UpdateReceiptStatus3", "err", err, "id", urtx.RawId)
+		}
+		return err
+	}
+
+	// check amount
+	if err = checkOrdersAmount(ordArr, urtx.Amount); err != nil {
+		log.Error("checkOrdersAmount(ordArr, urtx.Amount)", "err", err, "urtx", urtx.EverHash)
+		if err = wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
+			log.Error("s.wdb.UpdateReceiptStatus4", "err", err, "id", urtx.RawId)
+		}
+		return err
+	}
+	// update order payment status
+	dbTx := wdb.Db.Begin()
+	for _, ord := range ordArr {
+		if err = wdb.UpdateOrderPay(ord.ID, urtx.EverHash, schema.SuccPayment, dbTx); err != nil {
+			log.Error("s.wdb.UpdateOrderPay(ord.ID,schema.SuccPayment,dbTx)", "err", err)
+			dbTx.Rollback()
+			break
+		}
+	}
+
+	if err = wdb.UpdateReceiptStatus(urtx.RawId, schema.Spent, dbTx); err != nil {
+		log.Error("s.wdb.UpdateReceiptStatus(urtx.ID,schema.Spent,dbTx)", "err", err)
+		dbTx.Rollback()
+		return err
+	}
+	dbTx.Commit()
+
+	return nil
+}
+
+func processPayApikey(wdb *Wdb, urtx schema.ReceiptEverTx) error {
+	if urtx.Amount == "0" {
+		if err := wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
+			log.Error("s.wdb.UpdateReceiptStatus5", "err", err, "id", urtx.RawId)
+		}
+		return errors.New("amount can not be 0")
+	}
+
+	// 查看该地址是否已经注册了 apikey
+	from := common.HexToAddress(urtx.From).String()
+	exist, apikey := wdb.ExistApikey(from)
+	if !exist {
+		// create new record
+		newKey, err := uuid.NewUUID()
+		if err != nil {
+			log.Error("uuid.NewUUID()", "err", err)
+			return err
+		}
+		newKeyStr := newKey.String()
+		// ecrcover public
+		public, err := ecrecoverPubkey(urtx.EverHash, urtx.Sig)
+		if err != nil {
+			log.Error("EcrecoverPubkey(urtx.EverHash,urtx.Sig)", "everHash", urtx.EverHash, "sig", urtx.Sig)
+			return err
+		}
+
+		publicKey, err := crypto.UnmarshalPubkey(common.Hex2Bytes(public))
+		if err != nil {
+			log.Error("crypto.UnmarshalPubkey(common.Hex2Bytes(public))", "err", err)
+			return err
+		}
+		encPub, err := ecies.Encrypt(rand.Reader, ecies.ImportECDSAPublic(publicKey), []byte(newKeyStr), nil, nil)
+		if err != nil {
+			log.Error("ecies.Encrypt", "err", err)
+			return err
+		}
+
+		err = wdb.InsertApiKey(schema.ApiKey{
+			Key:          newKeyStr,
+			PubKey:       public,
+			Address:      from,
+			EncryptedKey: common.Bytes2Hex(encPub),
+			TokenBalance: map[string]interface{}{
+				strings.ToUpper(urtx.Symbol): urtx.Amount,
+			},
+		})
+		if err != nil {
+			log.Error("s.wdb.InsertApiKey", "err", err)
+			return err
+		}
+	} else {
+		// add token balance
+		tokBalMap := make(map[string]interface{})
+		for k, v := range apikey.TokenBalance {
+			tokBalMap[k] = v
+		}
+		amountDe, _ := decimal.NewFromString(urtx.Amount)
+		if oldBal, ok := tokBalMap[strings.ToUpper(urtx.Symbol)]; ok {
+			oldBalDe, _ := decimal.NewFromString(oldBal.(string))
+			newBalDe := amountDe.Add(oldBalDe)
+			tokBalMap[strings.ToUpper(urtx.Symbol)] = newBalDe.String()
+		} else {
+			tokBalMap[strings.ToUpper(urtx.Symbol)] = urtx.Amount
+		}
+
+		// update db
+		if err := wdb.UpdateApikeyTokenBal(from, tokBalMap); err != nil {
+			log.Error("s.wdb.UpdateApikeyTokenBal(from,tokBalMap)", "err", err)
+			return err
+		}
+	}
+	//  更新 spent 状态
+	if err := wdb.UpdateReceiptStatus(urtx.RawId, schema.Spent, nil); err != nil {
+		log.Error("s.wdb.UpdateReceiptStatus8(urtx.ID,schema.Spent,nil)", "err", err, "id", urtx.RawId)
+		return err
+	}
+	return nil
+}
+
+func (s *Arseeding) mergeReceiptEverTxs() {
 	unspentRpts, err := s.wdb.GetReceiptsByStatus(schema.UnSpent)
 	if err != nil {
 		log.Error("s.wdb.GetUnSpentReceipts()", "err", err)
 		return
 	}
-
 	for _, urtx := range unspentRpts {
-		itemIds, err := parseItemIds(urtx.Data)
+		action, itemIds, err := parseTxData(urtx.Data)
 		if err != nil {
 			log.Error("parseItemIds(urtx.Data)", "err", err, "urtx", urtx.EverHash)
 			if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
@@ -219,55 +360,61 @@ func (s *Arseeding) mergeReceiptAndOrder() {
 			}
 			continue
 		}
-		// get orders by itemIds
-		ordArr, err := s.getUnPaidOrdersByItemIds(itemIds)
-		if err != nil {
-			log.Error("s.wdb.GetUnPaidOrder", "err", err, "id", urtx.RawId)
-			if err == gorm.ErrRecordNotFound {
-				log.Warn("need refund about not find order", "id", urtx.RawId)
-				// update receipt status is unrefund and waiting refund
+
+		switch action {
+		case ItemPaymentAction:
+			if err := processPayItems(s.wdb, itemIds, urtx); err != nil {
+				log.Error("processPayItemOrder", "err", err)
+				continue
+			}
+
+		case ApikeyPaymentAction:
+			if s.GetPerFee(urtx.Symbol) == nil {
+				log.Error("s.bundlePerFeeMap[strings.ToUpper(urtx.Symbol)]", "symbol", urtx.Symbol)
 				if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
-					log.Error("s.wdb.UpdateReceiptStatus2", "err", err, "id", urtx.RawId)
+					log.Error("s.wdb.UpdateReceiptStatus6", "err", err, "id", urtx.RawId)
 				}
+				continue
 			}
-			continue
-		}
-
-		// check currency, orders currency must == paymentTxSymbol
-		if err = checkOrdersCurrency(ordArr, urtx.Symbol); err != nil {
-			log.Error("checkOrdersCurrency(ordArr, urtx.Symbol)", "err", err, "urtx", urtx.EverHash)
+			if err := processPayApikey(s.wdb, urtx); err != nil {
+				log.Error("processPayApikey", "err", err)
+				continue
+			}
+		default:
+			log.Error(fmt.Sprintf("not support the action: %s", action))
 			if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
-				log.Error("s.wdb.UpdateReceiptStatus3", "err", err, "id", urtx.RawId)
+				log.Error("s.wdb.UpdateReceiptStatus7", "err", err, "id", urtx.RawId)
 			}
 			continue
 		}
-
-		// check amount
-		if err = checkOrdersAmount(ordArr, urtx.Amount); err != nil {
-			log.Error("checkOrdersAmount(ordArr, urtx.Amount)", "err", err, "urtx", urtx.EverHash)
-			if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.UnRefund, nil); err != nil {
-				log.Error("s.wdb.UpdateReceiptStatus4", "err", err, "id", urtx.RawId)
-			}
-			continue
-		}
-
-		// update order payment status
-		dbTx := s.wdb.Db.Begin()
-		for _, ord := range ordArr {
-			if err = s.wdb.UpdateOrderPay(ord.ID, urtx.EverHash, schema.SuccPayment, dbTx); err != nil {
-				log.Error("s.wdb.UpdateOrderPay(ord.ID,schema.SuccPayment,dbTx)", "err", err)
-				dbTx.Rollback()
-				break
-			}
-		}
-
-		if err = s.wdb.UpdateReceiptStatus(urtx.RawId, schema.Spent, dbTx); err != nil {
-			log.Error("s.wdb.UpdateReceiptStatus(urtx.ID,schema.Spent,dbTx)", "err", err)
-			dbTx.Rollback()
-			continue
-		}
-		dbTx.Commit()
 	}
+}
+
+func ecrecoverPubkey(everHash, everSig string) (pubkey string, err error) {
+	signature := common.FromHex(everSig)
+	sig := make([]byte, len(signature))
+	copy(sig, signature)
+	if len(sig) != 65 {
+		err = fmt.Errorf("invalid length of signture: %d", len(sig))
+		return
+	}
+
+	if sig[64] != 27 && sig[64] != 28 && sig[64] != 1 && sig[64] != 0 {
+		err = fmt.Errorf("invalid signature type")
+		return
+	}
+	if sig[64] >= 27 {
+		sig[64] -= 27
+	}
+
+	recoverPub, err := crypto.Ecrecover(common.FromHex(everHash), sig)
+	if err != nil {
+		err = fmt.Errorf("can not ecrecover: %v", err)
+		return
+	}
+
+	pubkey = common.Bytes2Hex(recoverPub)
+	return
 }
 
 func checkOrdersAmount(ordArr []schema.Order, txAmount string) error {
@@ -298,6 +445,32 @@ func checkOrdersCurrency(ordArr []schema.Order, txSymbol string) error {
 	return nil
 }
 
+func parseTxData(txData string) (action string, itemIds []string, err error) {
+	res := gjson.Parse(txData)
+	// appName must be arseeding
+	if res.Get("appName").String() != "arseeding" {
+		return "", nil, errors.New("txData.appName not be arseeding")
+	}
+
+	// action
+	act := res.Get("action").String()
+	switch act {
+	case ItemPaymentAction: // bundle item order payment
+		itemIds = make([]string, 0)
+		for _, it := range res.Get("itemIds").Array() {
+			itemIds = append(itemIds, it.String())
+		}
+		if len(itemIds) == 0 {
+			return "", nil, errors.New("itemIds is empty")
+		}
+		return ItemPaymentAction, itemIds, nil
+	case ApikeyPaymentAction:
+		return ApikeyPaymentAction, nil, nil
+	default:
+		return "", nil, errors.New(fmt.Sprintf("not support action: %s", act))
+	}
+}
+
 func parseItemIds(txData string) ([]string, error) {
 	itemIds := make([]string, 0)
 	res := gjson.Parse(txData)
@@ -314,10 +487,10 @@ func parseItemIds(txData string) ([]string, error) {
 	return itemIds, nil
 }
 
-func (s *Arseeding) getUnPaidOrdersByItemIds(itemIds []string) ([]schema.Order, error) {
+func getUnPaidOrdersByItemIds(wdb *Wdb, itemIds []string) ([]schema.Order, error) {
 	ordArr := make([]schema.Order, 0, len(itemIds))
 	for _, itemId := range itemIds {
-		ord, err := s.wdb.GetUnPaidOrder(itemId)
+		ord, err := wdb.GetUnPaidOrder(itemId)
 		if err != nil {
 			log.Error("s.wdb.GetUnPaidOrder(itemId)", "err", err, "itemId", itemId)
 			return nil, err

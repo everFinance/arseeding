@@ -141,3 +141,27 @@ func (s *SDK) PayOrders(orders []*arseedSchema.RespOrder) (everTx *paySchema.Tra
 	everTx, err = s.Pay.Transfer(orders[0].Currency, totalFee, orders[0].Bundler, string(dataJs))
 	return
 }
+
+func (s *SDK) PayApikey(tokenSymbol string, amount *big.Int) (everHash string, err error) {
+	payTxData := struct {
+		AppName string `json:"appName"`
+		Action  string `json:"action"`
+	}{
+		AppName: "arseeding",
+		Action:  "apikeyPayment",
+	}
+	dataJs, err := json.Marshal(&payTxData)
+	if err != nil {
+		return
+	}
+	bundler, err := s.Cli.GetBundler()
+	if err != nil {
+		return
+	}
+	everTx, err := s.Pay.Transfer(tokenSymbol, amount, bundler, string(dataJs))
+	if err != nil {
+		return
+	}
+	everHash = everTx.HexHash()
+	return
+}

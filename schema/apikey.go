@@ -1,33 +1,19 @@
 package schema
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/datatypes"
+	"time"
+)
 
 type ApiKey struct {
-	gorm.Model
-	Key          string `gorm:"index" json:"apiKey"`
-	PubKey       string `json:"pubKey"`
-	Address      string `gorm:"index" json:"address"`
-	EncryptedKey string `json:"encryptedApikey"`
-	EverHash     string `json:"everHash"`
-	Cap          string `json:"cap"`
-}
+	ID        uint      `gorm:"primarykey" json:"id"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 
-type RegisterResp struct {
-	Key string `json:"apikey"`
-	Cap string `json:"cap"`
-}
+	Key          string `gorm:"index:apikey01,unique"`
+	EncryptedKey string
 
-type ExpandResp struct {
-	Cap string `json:"cap"`
-}
-
-type HeldApiKeys struct {
-	EncryptedKey string `json:"encryptedKey"`
-	Cap          string `json:"cap"`
-}
-
-type ExpandRecord struct {
-	gorm.Model
-	ParentHash string `gorm:"index"`
-	ChildHash  string `gorm:"index"`
+	Address      string `gorm:"index:apikey02,unique"`
+	PubKey       string
+	TokenBalance datatypes.JSONMap // key: symbol,val: balance
 }
