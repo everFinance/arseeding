@@ -11,11 +11,6 @@ type IpRateWhitelist struct {
 	Description string
 }
 
-type ApiKey struct {
-	Key         string
-	Description string
-}
-
 type Param struct {
 	ChunkConcurrentNum int
 }

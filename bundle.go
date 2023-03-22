@@ -41,18 +41,18 @@ func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string, is
 		ApiKey:        apiKey,
 		Sort:          isSort,
 	}
-
 	// calc fee
+	respFee, err := s.CalcItemFee(currency, order.Size)
+	if err != nil {
+		return schema.Order{}, err
+	}
+	order.Decimals = respFee.Decimals
+	order.Fee = respFee.FinalFee
+	order.Currency = strings.ToUpper(currency)
+
 	if isNoFeeMode {
 		order.PaymentStatus = schema.SuccPayment
 	} else {
-		respFee, err := s.CalcItemFee(currency, order.Size)
-		if err != nil {
-			return schema.Order{}, err
-		}
-		order.Decimals = respFee.Decimals
-		order.Fee = respFee.FinalFee
-		order.Currency = strings.ToUpper(currency)
 		order.PaymentExpiredTime = time.Now().Unix() + s.paymentExpiredRange
 		order.PaymentStatus = schema.UnPayment
 	}
@@ -65,8 +65,8 @@ func (s *Arseeding) ProcessSubmitItem(item types.BundleItem, currency string, is
 }
 
 func (s *Arseeding) CalcItemFee(currency string, itemSize int64) (*schema.RespFee, error) {
-	perFee, ok := s.bundlePerFeeMap[strings.ToUpper(currency)]
-	if !ok {
+	perFee := s.GetPerFee(currency)
+	if perFee == nil {
 		return nil, fmt.Errorf("not support currency: %s", currency)
 	}
 

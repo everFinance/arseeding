@@ -5,11 +5,13 @@ go 1.17
 require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.6+incompatible
 	github.com/aws/aws-sdk-go v1.27.0
+	github.com/ethereum/go-ethereum v1.10.20
 	github.com/everFinance/everpay-go v0.0.2
 	github.com/everFinance/goar v1.4.7
 	github.com/everFinance/goether v1.1.8
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-co-op/gocron v1.11.0
+	github.com/google/uuid v1.3.0
 	github.com/panjf2000/ants/v2 v2.6.0
 	github.com/prometheus/client_golang v1.12.2
 	github.com/shopspring/decimal v1.2.0
@@ -50,7 +52,6 @@ require (
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.6 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/hamba/avro v1.5.6 // indirect
 	github.com/inconshreveable/log15 v0.0.0-20201112154412-8562bdadbbac // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect

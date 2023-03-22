@@ -59,6 +59,7 @@ type ReceiptEverTx struct {
 	From     string
 	Amount   string
 	Data     string
+	Sig      string
 
 	Status string //  "unspent","spent", "unrefund", "refund"
 	ErrMsg string
