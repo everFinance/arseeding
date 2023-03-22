@@ -53,7 +53,7 @@ func NewSqliteDb(dbDir string) *Wdb {
 // when use sqlite,same index name in different table will lead to migrate failed,
 
 func (w *Wdb) Migrate(noFee, enableManifest bool) error {
-	err := w.Db.AutoMigrate(&schema.Order{}, &schema.OnChainTx{}, &schema.ApiKey{})
+	err := w.Db.AutoMigrate(&schema.Order{}, &schema.OnChainTx{}, &schema.AutoApiKey{})
 	if err != nil {
 		return err
 	}
@@ -271,33 +271,33 @@ func (w *Wdb) DelManifest(id string) error {
 	return w.Db.Where("manifest_id = ?", id).Delete(&schema.Manifest{}).Error
 }
 
-func (w *Wdb) InsertApiKey(ak schema.ApiKey) error {
+func (w *Wdb) InsertApiKey(ak schema.AutoApiKey) error {
 	return w.Db.Create(&ak).Error
 }
 
-func (w *Wdb) GetApiKeyDetail(key string) (schema.ApiKey, error) {
-	res := schema.ApiKey{}
-	err := w.Db.Model(&schema.ApiKey{}).Where("key = ?", key).First(&res).Error
+func (w *Wdb) GetApiKeyDetail(key string) (schema.AutoApiKey, error) {
+	res := schema.AutoApiKey{}
+	err := w.Db.Model(&schema.AutoApiKey{}).Where("api_key = ?", key).First(&res).Error
 	return res, err
 }
 
-func (w *Wdb) GetApiKeyDetailByAddress(addr string) (res schema.ApiKey, err error) {
-	err = w.Db.Model(&schema.ApiKey{}).Where("address = ?", addr).First(&res).Error
+func (w *Wdb) GetApiKeyDetailByAddress(addr string) (res schema.AutoApiKey, err error) {
+	err = w.Db.Model(&schema.AutoApiKey{}).Where("address = ?", addr).First(&res).Error
 	return
 }
 
-func (w *Wdb) ExistApikey(addr string) (bool, schema.ApiKey) {
+func (w *Wdb) ExistApikey(addr string) (bool, schema.AutoApiKey) {
 	apikey, err := w.GetApiKeyDetailByAddress(addr)
 	return err == nil, apikey
 }
 
 func (w *Wdb) UpdateApikeyTokenBal(addr string, newTokBal map[string]interface{}) error {
-	return w.Db.Model(&schema.ApiKey{}).Where("address = ?", addr).Update("token_balance", newTokBal).Error
+	return w.Db.Model(&schema.AutoApiKey{}).Where("address = ?", addr).Update("token_balance", newTokBal).Error
 }
 
 func (w *Wdb) IsEverHashUsed(everHash string) bool {
-	var res schema.ApiKey
-	err := w.Db.Model(&schema.ApiKey{}).Where("ever_hash = ?", everHash).First(&res).Error
+	var res schema.AutoApiKey
+	err := w.Db.Model(&schema.AutoApiKey{}).Where("ever_hash = ?", everHash).First(&res).Error
 	if err == gorm.ErrRecordNotFound {
 		return false
 	}

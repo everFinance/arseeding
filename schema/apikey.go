@@ -5,12 +5,12 @@ import (
 	"time"
 )
 
-type ApiKey struct {
+type AutoApiKey struct {
 	ID        uint      `gorm:"primarykey" json:"id"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 
-	Key          string `gorm:"index:apikey01,unique"`
+	ApiKey       string `gorm:"index:apikey01,unique"`
 	EncryptedKey string
 
 	Address      string `gorm:"index:apikey02,unique"`

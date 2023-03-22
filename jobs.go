@@ -303,8 +303,8 @@ func processPayApikey(wdb *Wdb, urtx schema.ReceiptEverTx) error {
 			return err
 		}
 
-		err = wdb.InsertApiKey(schema.ApiKey{
-			Key:          newKeyStr,
+		err = wdb.InsertApiKey(schema.AutoApiKey{
+			ApiKey:       newKeyStr,
 			PubKey:       public,
 			Address:      from,
 			EncryptedKey: common.Bytes2Hex(encPub),
