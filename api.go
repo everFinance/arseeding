@@ -607,7 +607,7 @@ func (s *Arseeding) submitNativeData(c *gin.Context) {
 	}
 	_, err := s.wdb.GetApiKeyDetail(apiKey)
 	if err != nil {
-		errorResponse(c, "Wrong X-API-KEY")
+		errorResponse(c, fmt.Sprintf("Wrong X-API-KEY: %s", err.Error()))
 		return
 	}
 
