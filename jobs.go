@@ -274,7 +274,6 @@ func processPayApikey(wdb *Wdb, urtx schema.ReceiptEverTx) error {
 		return errors.New("amount can not be 0")
 	}
 
-	// 查看该地址是否已经注册了 apikey
 	from := common.HexToAddress(urtx.From).String()
 	exist, apikey := wdb.ExistApikey(from)
 	if !exist {

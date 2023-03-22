@@ -295,12 +295,3 @@ func (w *Wdb) ExistApikey(addr string) (bool, schema.AutoApiKey) {
 func (w *Wdb) UpdateApikeyTokenBal(addr string, newTokBal datatypes.JSONMap) error {
 	return w.Db.Model(&schema.AutoApiKey{}).Where("address = ?", addr).Update("token_balance", newTokBal).Error
 }
-
-func (w *Wdb) IsEverHashUsed(everHash string) bool {
-	var res schema.AutoApiKey
-	err := w.Db.Model(&schema.AutoApiKey{}).Where("ever_hash = ?", everHash).First(&res).Error
-	if err == gorm.ErrRecordNotFound {
-		return false
-	}
-	return true
-}
