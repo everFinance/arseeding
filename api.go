@@ -88,7 +88,7 @@ func (s *Arseeding) runAPI(port string) {
 		}
 
 		// submit native data with X-API-KEY
-		v1.POST("/bundle/data", s.submitNativeData)
+		v1.POST("/bundle/data/:currency", s.submitNativeData)
 		v1.GET("/bundle/orders", s.getOrdersByApiKey) // http header need X-API-KEY
 
 		// apikey

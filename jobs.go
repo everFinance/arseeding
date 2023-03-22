@@ -842,7 +842,7 @@ func (s *Arseeding) parseAndSaveBundleTx() {
 
 		data, err := getArTxData(arTxMeta.DataRoot, arTxMeta.DataSize, s.store)
 		if err != nil {
-			log.Error("get data failed, if is not_exist_record,then wait submit chunks fully", "err", err, "arId", arId)
+			// log.Error("get data failed, if is not_exist_record,then wait submit chunks fully", "err", err, "arId", arId)
 			continue
 		}
 		if err := s.ParseAndSaveBundleItems(arId, data); err != nil {

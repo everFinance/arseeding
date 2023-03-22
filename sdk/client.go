@@ -133,9 +133,9 @@ func (a *ArSeedCli) GetBundler() (string, error) {
 	if !resp.Ok {
 		return "", errors.New(fmt.Sprintf("resp failed: %s", resp.String()))
 	}
-	addr := ""
+	addr := schema.ResBundler{}
 	err = resp.JSON(&addr)
-	return addr, err
+	return addr.Bundler, err
 }
 
 func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string, apikey string, needSequence bool) (*schema.RespOrder, error) {
@@ -169,9 +169,9 @@ func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string, apikey string
 	return br, err
 }
 
-func (a *ArSeedCli) SubmitNativeData(apiKey string, data []byte, contentType string, tags map[string]string) (*schema.RespItemId, error) {
+func (a *ArSeedCli) SubmitNativeData(apiKey string, currency string, data []byte, contentType string, tags map[string]string) (*schema.RespItemId, error) {
 	req := a.SCli.Post()
-	req.Path(fmt.Sprintf("/bundle/data"))
+	req.Path(fmt.Sprintf("/bundle/data/%s", currency))
 	req.SetHeader("X-API-KEY", apiKey)
 	req.AddQuery("Content-Type", contentType)
 	for k, v := range tags {
@@ -262,4 +262,21 @@ func (a *ArSeedCli) GetOrders(addr string, startId int) ([]schema.Order, error) 
 	ords := make([]schema.Order, 0)
 	err = resp.JSON(&ords)
 	return ords, err
+}
+
+func (a *ArSeedCli) GetApiKey(addr string) (schema.RespApiKey, error) {
+	req := a.SCli.Get()
+	req.Path(fmt.Sprintf("/apikey/%s", addr))
+	resp, err := req.Send()
+	if err != nil {
+		return schema.RespApiKey{}, err
+	}
+	defer resp.Close()
+	if !resp.Ok {
+		return schema.RespApiKey{}, errors.New(fmt.Sprintf("resp failed: %s", resp.String()))
+	}
+
+	apiKey := schema.RespApiKey{}
+	err = resp.JSON(&apiKey)
+	return apiKey, err
 }
