@@ -2,6 +2,7 @@ package arseeding
 
 import (
 	"github.com/everFinance/arseeding/schema"
+	"gorm.io/datatypes"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -291,7 +292,7 @@ func (w *Wdb) ExistApikey(addr string) (bool, schema.AutoApiKey) {
 	return err == nil, apikey
 }
 
-func (w *Wdb) UpdateApikeyTokenBal(addr string, newTokBal map[string]interface{}) error {
+func (w *Wdb) UpdateApikeyTokenBal(addr string, newTokBal datatypes.JSONMap) error {
 	return w.Db.Model(&schema.AutoApiKey{}).Where("address = ?", addr).Update("token_balance", newTokBal).Error
 }
 

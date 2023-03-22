@@ -514,6 +514,7 @@ func (s *Arseeding) processApikeySpendBal(currency, apikey string, dataSize int6
 	// update db tokenBalance
 	apikeyDetail.TokenBalance[strings.ToUpper(currency)] = endBalDe.String()
 	if err = s.wdb.UpdateApikeyTokenBal(apikeyDetail.Address, apikeyDetail.TokenBalance); err != nil {
+		log.Error("UpdateApikeyTokenBal", "err", err)
 		return err
 	}
 	return nil
