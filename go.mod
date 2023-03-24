@@ -5,6 +5,7 @@ go 1.17
 require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.6+incompatible
 	github.com/aws/aws-sdk-go v1.27.0
+	github.com/ethereum/go-ethereum v1.10.20
 	github.com/everFinance/everpay-go v0.0.2
 	github.com/everFinance/goar v1.5.3-0.20230308063638-18b53e7e6807
 	github.com/everFinance/goether v1.1.8
@@ -12,6 +13,7 @@ require (
 	github.com/go-co-op/gocron v1.11.0
 	github.com/gorilla/handlers v1.4.2
 	github.com/mkevac/debugcharts v0.0.0-20191222103121-ae1c48aa8615
+	github.com/google/uuid v1.3.0
 	github.com/panjf2000/ants/v2 v2.6.0
 	github.com/prometheus/client_golang v1.12.2
 	github.com/shopspring/decimal v1.2.0
@@ -28,6 +30,11 @@ require (
 )
 
 require (
+	github.com/ethereum/go-ethereum v1.10.20
+	github.com/gabriel-vasile/mimetype v1.4.2
+)
+
+require (
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
@@ -36,7 +43,6 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
-	github.com/ethereum/go-ethereum v1.10.20 // indirect
 	github.com/everFinance/ethrpc v1.0.4 // indirect
 	github.com/everFinance/gojwk v1.0.0 // indirect
 	github.com/everFinance/ttcrsa v1.1.3 // indirect
@@ -81,8 +87,8 @@ require (
 	github.com/ugorji/go/codec v1.1.7 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	golang.org/x/crypto v0.3.0 // indirect
-	golang.org/x/net v0.2.0 // indirect
-	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 // indirect
+	golang.org/x/net v0.8.0 // indirect
+	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.6.0 // indirect
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba // indirect
 	google.golang.org/protobuf v1.26.0 // indirect

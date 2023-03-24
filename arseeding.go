@@ -11,6 +11,7 @@ import (
 	"github.com/everFinance/goar/types"
 	"github.com/gin-gonic/gin"
 	"github.com/go-co-op/gocron"
+	"strings"
 	"os"
 	"sync"
 	"time"
@@ -43,6 +44,7 @@ type Arseeding struct {
 	paymentExpiredRange int64                 // default 1 hour
 	expectedRange       int64                 // default 50 block
 	customTags          []types.Tag
+	locker              sync.RWMutex
 }
 
 func New(
@@ -140,4 +142,20 @@ func (s *Arseeding) Run(port string, bundleInterval int) {
 	go s.runAPI(port)
 	go s.runJobs(bundleInterval)
 	go s.runTask()
+}
+
+func (s *Arseeding) GetPerFee(tokenSymbol string) *schema.Fee {
+	s.locker.RLock()
+	defer s.locker.RUnlock()
+	perFee, ok := s.bundlePerFeeMap[strings.ToUpper(tokenSymbol)]
+	if !ok {
+		return nil
+	}
+	return &perFee
+}
+
+func (s *Arseeding) SetPerFee(feeMap map[string]schema.Fee) {
+	s.locker.Lock()
+	s.bundlePerFeeMap = feeMap
+	s.locker.Unlock()
 }

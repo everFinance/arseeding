@@ -48,7 +48,7 @@ type Order struct {
 	PaymentStatus string `gorm:"index:idx0" json:"paymentStatus"` // "unpaid", "paid", "expired"
 	PaymentId     string `json:"paymentId"`                       // everHash
 
-	OnChainStatus string `json:"onChainStatus"` // "waiting","pending","success","failed"
+	OnChainStatus string `gorm:"index:idx5" json:"onChainStatus"` // "waiting","pending","success","failed"
 	ApiKey        string `gorm:"index:idx2" json:"-"`
 	Sort          bool   `json:"sort"` // upload items to arweave by sequence
 }
@@ -61,6 +61,7 @@ type ReceiptEverTx struct {
 	From     string
 	Amount   string
 	Data     string
+	Sig      string
 
 	Status string //  "unspent","spent", "unrefund", "refund"
 	ErrMsg string

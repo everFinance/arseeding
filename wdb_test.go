@@ -21,12 +21,18 @@ func TestNewWdb(t *testing.T) {
 
 func TestSqlite(t *testing.T) {
 	db := NewSqliteDb("testSqlite")
-	err := db.Migrate(true, true)
+	err := db.Migrate(false, true)
 	assert.NoError(t, err)
-	err = db.InsertOrder(schema.Order{ID: 2, Fee: "123"})
+	err = db.InsertOrder(schema.Order{ID: 111, Fee: "123"})
 	assert.NoError(t, err)
 	ord := &schema.Order{}
 	err = db.Db.First(ord).Error
 	assert.NoError(t, err)
 	t.Log(ord)
+}
+
+func TestNew(t *testing.T) {
+	db := NewMysqlDb("root@tcp(127.0.0.1:3306)/arseed?charset=utf8mb4&parseTime=True&loc=Local")
+	err := db.Migrate(false, true)
+	assert.NoError(t, err)
 }
