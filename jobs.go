@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/everFinance/arseeding/rawdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
+	"github.com/everFinance/arseeding/rawdb"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay-go/account"
 	"github.com/everFinance/everpay-go/config"
@@ -472,22 +472,6 @@ func parseTxData(txData string) (action string, itemIds []string, err error) {
 	default:
 		return "", nil, errors.New(fmt.Sprintf("not support action: %s", act))
 	}
-}
-
-func parseItemIds(txData string) ([]string, error) {
-	itemIds := make([]string, 0)
-	res := gjson.Parse(txData)
-	// appName must be arseeding
-	if res.Get("appName").String() != "arseeding" {
-		return nil, errors.New("txData.appName not be arseeding")
-	}
-	for _, it := range res.Get("itemIds").Array() {
-		itemIds = append(itemIds, it.String())
-	}
-	if len(itemIds) == 0 {
-		return nil, errors.New("itemIds is empty")
-	}
-	return itemIds, nil
 }
 
 func getUnPaidOrdersByItemIds(wdb *Wdb, itemIds []string) ([]schema.Order, error) {
