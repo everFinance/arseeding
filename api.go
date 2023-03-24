@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay-go/account"
 	"github.com/everFinance/goar/types"
@@ -589,7 +590,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	apikey := c.GetHeader("X-API-KEY")
 	hasApikey := false
 	if len(apikey) > 0 {
-		if err := s.processApikeySpendBal(currency, apikey, int64(len(item.ItemBinary))); err != nil {
+		if err := s.processApikeySpendBal(currency, apikey, size); err != nil {
 			errorResponse(c, err.Error())
 			return
 		}
@@ -675,7 +676,7 @@ func (s *Arseeding) submitNativeData(c *gin.Context) {
 		errorResponse(c, err.Error())
 		return
 	}
-	if size > schema.AllowMaxNativeDataSize { // the body size > schema.AllowMaxItemSize, need write to tmp file
+	if size > schema.AllowMaxItemSize { // the body size > schema.AllowMaxItemSize, need write to tmp file
 		item, err = s.bundlerItemSigner.CreateAndSignItemStream(dataFile, "", "", tags)
 	} else {
 		item, err = s.bundlerItemSigner.CreateAndSignItem(dataBuf.Bytes(), "", "", tags)
@@ -688,7 +689,7 @@ func (s *Arseeding) submitNativeData(c *gin.Context) {
 	}
 	currency := c.Param("currency")
 	// cal apikey balance
-	if err := s.processApikeySpendBal(currency, apiKey, int64(len(item.ItemBinary))); err != nil {
+	if err := s.processApikeySpendBal(currency, apiKey, size); err != nil {
 		errorResponse(c, err.Error())
 		return
 	}
@@ -1095,7 +1096,7 @@ func dataRangeResponse(c *gin.Context, dataReader *os.File, contentType string) 
 	// send Range data
 	_, err = dataReader.Seek(start, 0)
 	if err != nil {
-		return fmt.Errorf("Error seeking file")
+		return fmt.Errorf("error seeking file, err: %v", err)
 	}
 
 	buffer := make([]byte, 1024*1024)
@@ -1153,6 +1154,11 @@ func delTmpFileKey(tmpFileName string) {
 
 func (s *Arseeding) getUsersApiKey(c *gin.Context) {
 	address := c.Param("address")
+	if !common.IsHexAddress(address) {
+		internalErrorResponse(c, "address incorrect")
+		return
+	}
+
 	detail, err := s.wdb.GetApiKeyDetailByAddress(address)
 	if err != nil {
 		internalErrorResponse(c, err.Error())

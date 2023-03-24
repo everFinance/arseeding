@@ -5,9 +5,8 @@ import (
 )
 
 const (
-	AllowMaxItemSize       = 1 * 1024 * 1024   // 1 MB
-	AllowMaxNativeDataSize = 1 * 1024 * 1024   // 1 MB
-	AllowMaxRespDataSize   = 500 * 1024 * 1024 // 500 MB
+	AllowMaxItemSize     = 5 * 1024 * 1024   // 5 MB
+	AllowMaxRespDataSize = 500 * 1024 * 1024 // 500 MB
 )
 
 type RespOrder struct {
