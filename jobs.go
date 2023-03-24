@@ -47,13 +47,15 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 	s.scheduler.Every(3).Minute().SingletonMode().Do(s.watchArTx)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.retryOnChainArTx)
 
-	s.scheduler.Every(10).Seconds().SingletonMode().Do(s.parseAndSaveBundleTx)
+	// s.scheduler.Every(10).Seconds().SingletonMode().Do(s.parseAndSaveBundleTx) // todo 测试是否是这里导致的堆泄露
 
 	// manager taskStatus
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseTasks)
 
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundler)
 
+	// delete tmp file, one may be repeat request same data,tmp file can be reserve with short time
+	s.scheduler.Every(2).Minute().SingletonMode().Do(s.deleteTmpFile)
 	s.scheduler.StartAsync()
 }
 
@@ -782,6 +784,15 @@ func (s *Arseeding) updateBundler() {
 		return
 	}
 	metricBundlerBalance(bal, addr)
+}
+
+func (s *Arseeding) deleteTmpFile() {
+	for tmpFileName, cnt := range tmpFileMap {
+		if cnt <= 0 {
+			delTmpFileKey(tmpFileName)
+			os.Remove(tmpFileName)
+		}
+	}
 }
 
 func filterPeers(peers []string, constTx *types.Transaction) map[string]bool {
