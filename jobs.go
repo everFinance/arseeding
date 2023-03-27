@@ -943,9 +943,11 @@ func (s *Arseeding) updateBundler() {
 }
 
 func (s *Arseeding) deleteTmpFile() {
+	tmpFileMapLock.Lock()
+	defer tmpFileMapLock.Unlock()
 	for tmpFileName, cnt := range tmpFileMap {
 		if cnt <= 0 {
-			delTmpFileKey(tmpFileName)
+			delete(tmpFileMap, tmpFileName)
 			os.Remove(tmpFileName)
 		}
 	}

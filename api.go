@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 var (
@@ -82,7 +81,6 @@ func (s *Arseeding) runAPI(port string) {
 		// ANS-104 bundle Data api
 		v1.GET("/bundle/bundler", s.getBundler)
 		v1.POST("/bundle/tx/:currency", s.submitItem)
-		v1.POST("/bundle/tx", s.submitItem)
 
 		v1.GET("/bundle/tx/:itemId", s.getItemMeta) // get item meta, without data
 		v1.GET("/bundle/tx/:itemId/:field", s.getItemField)
@@ -90,10 +88,8 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/bundle/fees", s.bundleFees)
 		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
 		v1.GET("/bundle/orders/:signer", s.getOrders)
-		v1.GET("/:id", s.dataRoute)                // get arTx data or bundleItem data
-		v1.HEAD("/:id", s.dataRoute)               // get arTx data or bundleItem data
-		v1.GET("/bridge/:id", s.dataBridgeToArio)  // bridge to ario
-		v1.HEAD("/bridge/:id", s.dataBridgeToArio) // bridge to ario
+		v1.GET("/:id", s.dataRoute)  // get arTx data or bundleItem data
+		v1.HEAD("/:id", s.dataRoute) // get arTx data or bundleItem data
 
 		if s.EnableManifest {
 			v1.POST("/manifest_url/:id", s.setManifestUrl)
@@ -546,7 +542,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 		errorResponse(c, "can not submit null bundle item")
 		return
 	}
-	itemBinaryFile, err := os.CreateTemp(schema.TmpFileDir, "arseed-")
+	itemBinaryFile, err := os.CreateTemp(schema.TmpFileDir, "arseedsubmit-")
 	if err != nil {
 		c.Request.Body.Close()
 		errorResponse(c, err.Error())
@@ -841,16 +837,6 @@ func (s *Arseeding) bundleFees(c *gin.Context) {
 	c.JSON(http.StatusOK, s.bundlePerFeeMap)
 }
 
-func (s *Arseeding) dataBridgeToArio(c *gin.Context) {
-	txId := c.Param("id")
-	tags, dataReader, data, err := getArTxOrItemData(txId, s.store)
-	if err != nil {
-		c.JSON(http.StatusNotFound, "Not Found")
-		return
-	}
-	dataResponse(c, dataReader, data, tags, txId)
-}
-
 func (s *Arseeding) dataRoute(c *gin.Context) {
 	txId := c.Param("id")
 	tmpFileName := genTmpFileName(c.ClientIP(), txId)
@@ -1118,7 +1104,7 @@ func dataRangeResponse(c *gin.Context, dataReader *os.File, contentType string) 
 }
 
 func genTmpFileName(ip, itemId string) string {
-	return fmt.Sprintf("%s/%s-%s", schema.TmpFileDir, ip, itemId)
+	return fmt.Sprintf("%s/%s-read-%s", schema.TmpFileDir, ip, itemId)
 }
 
 func existTmpFile(tmpFileName string) bool {
@@ -1126,12 +1112,6 @@ func existTmpFile(tmpFileName string) bool {
 	defer tmpFileMapLock.Unlock()
 	_, ok := tmpFileMap[tmpFileName]
 	return ok
-}
-
-func updateFileTime(tmpFileName string) {
-	tmpFileMapLock.Lock()
-	defer tmpFileMapLock.Unlock()
-	tmpFileMap[tmpFileName] = time.Now().UnixMilli()
 }
 
 func incFileCnt(tmpFileName string) {
@@ -1144,12 +1124,6 @@ func decFileCnt(tmpFileName string) {
 	tmpFileMapLock.Lock()
 	defer tmpFileMapLock.Unlock()
 	tmpFileMap[tmpFileName] -= 1
-}
-
-func delTmpFileKey(tmpFileName string) {
-	tmpFileMapLock.Lock()
-	defer tmpFileMapLock.Unlock()
-	delete(tmpFileMap, tmpFileName)
 }
 
 func (s *Arseeding) getUsersApiKey(c *gin.Context) {

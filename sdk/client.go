@@ -172,12 +172,7 @@ func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string, apikey string
 
 func (a *ArSeedCli) SubmitItemStream(itemBinary io.Reader, currency string, apikey string, needSequence bool) (*schema.RespOrder, error) {
 	req := a.SCli.Post()
-	if currency != "" {
-		req.Path(fmt.Sprintf("/bundle/tx/%s", currency))
-	} else {
-		req.Path("/bundle/tx")
-	}
-
+	req.Path(fmt.Sprintf("/bundle/tx/%s", currency))
 	req.SetHeader("Content-Type", "application/octet-stream")
 	if len(apikey) > 0 {
 		req.SetHeader("X-API-KEY", apikey)
@@ -224,9 +219,9 @@ func (a *ArSeedCli) SubmitNativeData(apiKey string, currency string, data []byte
 	return br, err
 }
 
-func (a *ArSeedCli) SubmitNativeDataStream(apiKey string, data io.Reader, contentType string, tags map[string]string) (*schema.RespItemId, error) {
+func (a *ArSeedCli) SubmitNativeDataStream(apiKey string, currency string, data io.Reader, contentType string, tags map[string]string) (*schema.RespItemId, error) {
 	req := a.SCli.Post()
-	req.Path(fmt.Sprintf("/bundle/data"))
+	req.Path(fmt.Sprintf("/bundle/data/%s", currency))
 	req.SetHeader("X-API-KEY", apiKey)
 	req.AddQuery("Content-Type", contentType)
 	for k, v := range tags {

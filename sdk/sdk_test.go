@@ -123,7 +123,7 @@ func TestArSeedCli_SubmitNativeDataStream(t *testing.T) {
 	assert.NoError(t, err)
 	cli := New("http://127.0.0.1:8080")
 
-	res, err := cli.SubmitNativeDataStream(apiKey, data, "image/jpeg", map[string]string{
+	res, err := cli.SubmitNativeDataStream(apiKey, "usdc", data, "image/jpeg", map[string]string{
 		"key1": "arseeding test",
 		"key2": "sandy test bundle native data",
 	})
