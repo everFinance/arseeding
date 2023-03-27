@@ -5,8 +5,9 @@ import (
 )
 
 const (
-	AllowMaxItemSize     = 5 * 1024 * 1024   // 5 MB
-	AllowMaxRespDataSize = 500 * 1024 * 1024 // 500 MB
+	AllowStreamMinItemSize = 5 * 1024 * 1024    // 5 MB
+	AllowMaxRespDataSize   = 50 * 1024 * 1024   // 50 MB
+	SubmitMaxSize          = 1024 * 1024 * 1024 // 1 GB
 )
 
 type RespOrder struct {

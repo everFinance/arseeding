@@ -58,7 +58,7 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 	s.scheduler.Every(3).Minute().SingletonMode().Do(s.watchArTx)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.retryOnChainArTx)
 
-	s.scheduler.Every(10).Seconds().SingletonMode().Do(s.parseAndSaveBundleTx)
+	// s.scheduler.Every(10).Seconds().SingletonMode().Do(s.parseAndSaveBundleTx) // todo stream
 
 	// manager taskStatus
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseTasks)
@@ -572,9 +572,13 @@ func (s *Arseeding) onChainItemsBySeq() {
 }
 
 func (s *Arseeding) onChainOrds(ords []schema.Order) (arTx types.Transaction, onChainItemIds []string, err error) {
-	// once total size limit 500 MB
+	// once total size limit 2 GB
 	itemIds := make([]string, 0, len(ords))
+	totalSize := int64(0)
 	for _, ord := range ords {
+		if totalSize+ord.Size > schema.MaxPerOnChainSize {
+			continue
+		}
 		od, exist := s.wdb.ExistProcessedOrderItem(ord.ItemId)
 		if exist {
 			if err = s.wdb.UpdateOrdOnChainStatus(od.ItemId, od.OnChainStatus, nil); err != nil {
@@ -583,6 +587,7 @@ func (s *Arseeding) onChainOrds(ords []schema.Order) (arTx types.Transaction, on
 			continue
 		}
 		itemIds = append(itemIds, ord.ItemId)
+		totalSize += od.Size
 	}
 
 	// send arTx to arweave
@@ -792,10 +797,10 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 	}
 	log.Info("send bundle arTx", "arTx", arTx.ID)
 
-	// // arseeding broadcast tx data
-	// if err := s.arseedCli.SubmitTxConcurrent(context.TODO(), concurrentNum, arTx); err != nil {
-	// 	log.Error("s.arseedCli.SubmitTxConcurrent(arTx)", "err", err, "arId", arTx.ID)
-	// }
+	// arseeding broadcast tx data
+	if err := s.arseedCli.SubmitTxConcurrent(context.TODO(), concurrentNum, arTx); err != nil {
+		log.Error("s.arseedCli.SubmitTxConcurrent(arTx)", "err", err, "arId", arTx.ID)
+	}
 	return
 }
 
@@ -852,7 +857,7 @@ func (s *Arseeding) getOnChainBundleStream(itemIds []string) (onChainItems []typ
 
 		item, err2 := utils.DecodeBundleItemStream(binaryReader)
 		if err2 != nil {
-			log.Error("utils.DecodeBundleItem(itemBinary)", "err", err, "itemId", itemId)
+			log.Error("utils.DecodeBundleItem(itemBinary)", "err", err2, "itemId", itemId)
 			continue
 		}
 		binaryReader.Close()

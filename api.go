@@ -345,6 +345,7 @@ func txDataByMeta(txMeta *types.Transaction, db *Store) ([]byte, error) {
 	return data, nil
 }
 
+// todo need stream
 func getArTxData(dataRoot, dataSize string, db *Store) ([]byte, error) {
 	size, err := strconv.ParseUint(dataSize, 10, 64)
 	if err != nil {
@@ -556,13 +557,18 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 
 	var itemBuf bytes.Buffer
 	var item *types.BundleItem
-	// write up to schema.AllowMaxItemSize to memory
+	// write up to schema.AllowStreamMinItemSize to memory
 	size, err := setItemData(c, itemBinaryFile, &itemBuf)
 	if err != nil && err != io.EOF {
 		errorResponse(c, err.Error())
 		return
 	}
-	if size > schema.AllowMaxItemSize { // the body size > schema.AllowMaxItemSize, need write to tmp file
+
+	if size > schema.SubmitMaxSize {
+		errorResponse(c, schema.ErrDataTooBig.Error())
+		return
+	}
+	if size > schema.AllowStreamMinItemSize { // the body size > schema.AllowStreamMinItemSize, need write to tmp file
 		item, err = utils.DecodeBundleItemStream(itemBinaryFile)
 	} else {
 		item, err = utils.DecodeBundleItem(itemBuf.Bytes())
@@ -672,7 +678,12 @@ func (s *Arseeding) submitNativeData(c *gin.Context) {
 		errorResponse(c, err.Error())
 		return
 	}
-	if size > schema.AllowMaxItemSize { // the body size > schema.AllowMaxItemSize, need write to tmp file
+	if size > schema.SubmitMaxSize {
+		errorResponse(c, schema.ErrDataTooBig.Error())
+		return
+	}
+
+	if size > schema.AllowStreamMinItemSize { // the body size > schema.AllowStreamMinItemSize, need write to tmp file
 		item, err = s.bundlerItemSigner.CreateAndSignItemStream(dataFile, "", "", tags)
 	} else {
 		item, err = s.bundlerItemSigner.CreateAndSignItem(dataBuf.Bytes(), "", "", tags)
@@ -923,11 +934,11 @@ func (s *Arseeding) setManifestUrl(c *gin.Context) {
 }
 
 func setItemData(c *gin.Context, tmpFile *os.File, itemBuf *bytes.Buffer) (size int64, err error) {
-	size, err = io.CopyN(itemBuf, c.Request.Body, schema.AllowMaxItemSize+1)
+	size, err = io.CopyN(itemBuf, c.Request.Body, schema.AllowStreamMinItemSize+1)
 	if err != nil && err != io.EOF {
 		return
 	}
-	if size > schema.AllowMaxItemSize { // the body size > schema.AllowMaxItemSize, need write to tmp file
+	if size > schema.AllowStreamMinItemSize { // the body size > schema.AllowStreamMinItemSize, need write to tmp file
 
 		size, err = io.Copy(tmpFile, io.MultiReader(itemBuf, c.Request.Body))
 		if err != nil {
