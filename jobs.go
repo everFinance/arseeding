@@ -788,6 +788,10 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 			err = err1
 			return
 		}
+		if fileInfo.Size() == 0 {
+			err = errors.New("bundle.BundleDataReader is null")
+			return
+		}
 		price := calculatePrice(s.cache.GetFee(), fileInfo.Size())
 		speedFactor := calculateFactor(price, s.config.GetSpeedFee())
 		arTx, err = s.bundler.SendBundleTxSpeedUp(context.TODO(), concurrentNum, bundle.BundleDataReader, arTxtags, speedFactor)
