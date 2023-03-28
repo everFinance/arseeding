@@ -751,6 +751,13 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 			err = errors.New(fmt.Sprintf("Verify bundle failed; err:%v", err))
 			return
 		}
+		for _, item := range verifyBundle.Items {
+			if err = utils.VerifyBundleItem(item); err != nil {
+				log.Error("utils.VerifyBundleItem(item)", "err", err, "itemId", item.Id)
+				err = errors.New("utils.VerifyBundleItem(item) failed")
+				return
+			}
+		}
 	}
 
 	// get onChainItemIds
