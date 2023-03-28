@@ -778,6 +778,7 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 
 	concurrentNum := s.config.Param.ChunkConcurrentNum
 	if len(bundle.BundleBinary) > 0 {
+		log.Debug("use binary submit bundle arTx", "binary length:", len(bundle.BundleBinary))
 		price := calculatePrice(s.cache.GetFee(), int64(len(bundle.BundleBinary)))
 		speedFactor := calculateFactor(price, s.config.GetSpeedFee())
 		arTx, err = s.bundler.SendBundleTxSpeedUp(context.TODO(), concurrentNum, bundle.BundleBinary, arTxtags, speedFactor)
