@@ -141,6 +141,15 @@ func (s *S3DB) Delete(bucket, key string) (err error) {
 	return
 }
 
+func (s *S3DB) Exist(bucket, key string) bool {
+	bkt := getS3Bucket(s.bucketPrefix, bucket)
+	_, err := s.s3Api.HeadObject(&s3.HeadObjectInput{
+		Bucket: aws.String(bkt),
+		Key:    aws.String(key),
+	})
+	return err == nil
+}
+
 func (s *S3DB) Close() (err error) {
 	return
 }

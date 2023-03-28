@@ -11,9 +11,9 @@ require (
 	github.com/everFinance/goether v1.1.8
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-co-op/gocron v1.11.0
+	github.com/google/uuid v1.3.0
 	github.com/gorilla/handlers v1.4.2
 	github.com/mkevac/debugcharts v0.0.0-20191222103121-ae1c48aa8615
-	github.com/google/uuid v1.3.0
 	github.com/panjf2000/ants/v2 v2.6.0
 	github.com/prometheus/client_golang v1.12.2
 	github.com/shopspring/decimal v1.2.0
@@ -29,10 +29,7 @@ require (
 	gorm.io/gorm v1.22.4
 )
 
-require (
-	github.com/ethereum/go-ethereum v1.10.20
-	github.com/gabriel-vasile/mimetype v1.4.2
-)
+require github.com/gabriel-vasile/mimetype v1.4.2
 
 require (
 	github.com/StackExchange/wmi v1.2.1 // indirect
@@ -56,7 +53,6 @@ require (
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.6 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hamba/avro v1.5.6 // indirect
 	github.com/inconshreveable/log15 v0.0.0-20201112154412-8562bdadbbac // indirect

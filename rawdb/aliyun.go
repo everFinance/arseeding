@@ -126,6 +126,15 @@ func (a *AliyunDB) Delete(bucket, key string) (err error) {
 	return bkt.DeleteObject(key)
 }
 
+func (a *AliyunDB) Exist(bucket, key string) bool {
+	bkt, err := a.client.Bucket(getS3Bucket(a.bucketPrefix, bucket))
+	if err != nil {
+		return false
+	}
+	exist, _ := bkt.IsObjectExist(key)
+	return exist
+}
+
 func (a *AliyunDB) Close() (err error) {
 	return
 }

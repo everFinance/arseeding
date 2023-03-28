@@ -21,4 +21,6 @@ type KeyValueDB interface {
 	Close() (err error)
 
 	Type() string
+
+	Exist(bucket, key string) bool
 }

@@ -283,21 +283,6 @@ func (s *Store) SaveItemBinary(item types.BundleItem) (err error) {
 	}
 }
 
-func (s *Store) IsExistItemBinary(itemId string) bool {
-	reader, _, err := s.LoadItemBinary(itemId)
-	defer func() {
-		if reader != nil {
-			log.Debug(reader.Name())
-			reader.Close()
-			os.Remove(reader.Name())
-		}
-	}()
-	if err == schema.ErrNotExist {
-		return false
-	}
-	return true
-}
-
 func (s *Store) LoadItemBinary(itemId string) (binaryReader *os.File, itemBinary []byte, err error) {
 	itemBinary = make([]byte, 0)
 	// if store implement with s3, then get binary stream
@@ -307,6 +292,10 @@ func (s *Store) LoadItemBinary(itemId string) (binaryReader *os.File, itemBinary
 		itemBinary, err = s.KVDb.Get(schema.BundleItemBinary, itemId)
 	}
 	return
+}
+
+func (s *Store) IsExistItemBinary(itemId string) bool {
+	return s.KVDb.Exist(schema.BundleItemBinary, itemId)
 }
 
 func (s *Store) DelItemBinary(itemId string) (err error) {

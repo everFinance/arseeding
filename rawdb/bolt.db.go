@@ -107,6 +107,11 @@ func (s *BoltDB) Delete(bucket, key string) (err error) {
 	return
 }
 
+func (s *BoltDB) Exist(bucket, key string) bool {
+	_, err := s.Get(bucket, key)
+	return err == nil
+}
+
 func (s *BoltDB) Close() (err error) {
 	return s.Db.Close()
 }
