@@ -52,7 +52,7 @@ func TestSDK_SendDataAndPay_RsaSigner(t *testing.T) {
 }
 
 func TestSDK_SendData_EccSigner(t *testing.T) {
-	priKey := "2b8258cde747e3820e56a40aec5cd473150c6078819b45afe61baaf1fa1c75e6"
+	priKey := "2b8258cde747e3820e56a40aec5cd473150c6078819b45afe61baaf1fa1c75e6" // for test
 	eccSigner, err := goether.NewSigner(priKey)
 	if err != nil {
 		panic(err)
@@ -67,10 +67,10 @@ func TestSDK_SendData_EccSigner(t *testing.T) {
 	tags := []types.Tag{
 		{"Content-Type", "video/mpeg4"},
 	}
-	data, err := ioutil.ReadFile("/Users/sandyzhou/Downloads/环华十年进入新疆伊犁河源头隐居没有网络只能泡温泉你愿意来吗.mp4")
+	data, err := ioutil.ReadFile("")
 	// data,err := ioutil.ReadFile("/Users/sandyzhou/Downloads/在北海道的大雪里露营.mp4")
 	assert.NoError(t, err)
-	apikey := "7268f534-c866-11ed-b467-cedcf45dbf05"
+	apikey := "7268f534-c866-11ed-b467-cedcf45dbf05" // for test
 	t.Log("aaaa")
 	ord, err := sdk.SendData(data, "usdc", apikey, &schema.OptionItem{Tags: tags}, false) // your account must have enough balance in everpay
 	assert.NoError(t, err)
