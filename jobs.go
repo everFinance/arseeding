@@ -795,7 +795,7 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags)", "err", err)
 		return
 	}
-	log.Info("send bundle arTx", "arTx", arTx.ID)
+	log.Info("Send bundle arTx", "arTx", arTx.ID)
 
 	// arseeding broadcast tx data
 	if err := s.arseedCli.SubmitTxConcurrent(context.TODO(), concurrentNum, arTx); err != nil {

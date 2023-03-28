@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 var (
@@ -607,9 +606,7 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 
 	// process bundleItem
 	needSort := isSortItems(c)
-	log.Debug("start ProcessSubmitItem", "time: ", time.Now().String())
 	ord, err := s.ProcessSubmitItem(*item, currency, noFee, apikey, needSort, size)
-	log.Debug("end ProcessSubmitItem", "time: ", time.Now().String())
 	if err != nil {
 		errorResponse(c, err.Error())
 		return
