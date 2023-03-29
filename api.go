@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay-go/account"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
+	"github.com/everFinance/goether"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/handlers"
 	"github.com/shopspring/decimal"
@@ -100,7 +102,8 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/bundle/orders", s.getOrdersByApiKey) // http header need X-API-KEY
 
 		// apikey
-		v1.GET("/apikey/:address", s.getUsersApiKey)
+		v1.GET("/apikey_info/:address", s.getUsersApiKey)
+		v1.GET("/apikey/:address/:signature", s.getApiKey)
 	}
 
 	go func() {
@@ -1139,12 +1142,13 @@ func decFileCnt(tmpFileName string) {
 
 func (s *Arseeding) getUsersApiKey(c *gin.Context) {
 	address := c.Param("address")
-	if !common.IsHexAddress(address) {
-		internalErrorResponse(c, "address incorrect")
+	_, addr, err := account.IDCheck(address)
+	if err != nil {
+		internalErrorResponse(c, err.Error())
 		return
 	}
 
-	detail, err := s.wdb.GetApiKeyDetailByAddress(address)
+	detail, err := s.wdb.GetApiKeyDetailByAddress(addr)
 	if err != nil {
 		internalErrorResponse(c, err.Error())
 		return
@@ -1168,8 +1172,29 @@ func (s *Arseeding) getUsersApiKey(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, schema.RespApiKey{
-		EncryptedKey: detail.EncryptedKey,
+		// EncryptedKey: detail.EncryptedKey,
 		EstimateCap:  estimateCapDe.String(),
 		TokenBalance: detail.TokenBalance,
 	})
+}
+
+func (s *Arseeding) getApiKey(c *gin.Context) {
+	address := c.Param("address")
+	signature := c.Param("signature")
+
+	addr, err := goether.Ecrecover(accounts.TextHash([]byte(address)), common.FromHex(signature))
+	if err != nil {
+		internalErrorResponse(c, err.Error())
+		return
+	}
+	if strings.ToLower(addr.String()) != strings.ToLower(address) {
+		internalErrorResponse(c, "signature failed")
+		return
+	}
+	detail, err := s.wdb.GetApiKeyDetailByAddress(addr.String())
+	if err != nil {
+		internalErrorResponse(c, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, detail.ApiKey)
 }

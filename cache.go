@@ -91,7 +91,12 @@ func (c *Cache) UpdateFee(price schema.ArFee) {
 func (c *Cache) GetPeerMap() map[string]int64 {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.peerMap
+	peerMap := make(map[string]int64)
+	for peerIp, count := range c.peerMap {
+		peerMap[peerIp] = count
+	}
+
+	return peerMap
 }
 
 func (c *Cache) GetPeers() []string {
