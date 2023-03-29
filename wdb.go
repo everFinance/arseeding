@@ -2,6 +2,7 @@ package arseeding
 
 import (
 	"github.com/everFinance/arseeding/schema"
+	"gorm.io/datatypes"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -53,7 +54,7 @@ func NewSqliteDb(dbDir string) *Wdb {
 // when use sqlite,same index name in different table will lead to migrate failed,
 
 func (w *Wdb) Migrate(noFee, enableManifest bool) error {
-	err := w.Db.AutoMigrate(&schema.Order{}, &schema.OnChainTx{})
+	err := w.Db.AutoMigrate(&schema.Order{}, &schema.OnChainTx{}, &schema.AutoApiKey{})
 	if err != nil {
 		return err
 	}
@@ -269,4 +270,28 @@ func (w *Wdb) GetManifestId(mfUrl string) (string, error) {
 
 func (w *Wdb) DelManifest(id string) error {
 	return w.Db.Where("manifest_id = ?", id).Delete(&schema.Manifest{}).Error
+}
+
+func (w *Wdb) InsertApiKey(ak schema.AutoApiKey) error {
+	return w.Db.Create(&ak).Error
+}
+
+func (w *Wdb) GetApiKeyDetail(key string) (schema.AutoApiKey, error) {
+	res := schema.AutoApiKey{}
+	err := w.Db.Model(&schema.AutoApiKey{}).Where("api_key = ?", key).First(&res).Error
+	return res, err
+}
+
+func (w *Wdb) GetApiKeyDetailByAddress(addr string) (res schema.AutoApiKey, err error) {
+	err = w.Db.Model(&schema.AutoApiKey{}).Where("address = ?", addr).First(&res).Error
+	return
+}
+
+func (w *Wdb) ExistApikey(addr string) (bool, schema.AutoApiKey) {
+	apikey, err := w.GetApiKeyDetailByAddress(addr)
+	return err == nil, apikey
+}
+
+func (w *Wdb) UpdateApikeyTokenBal(addr string, newTokBal datatypes.JSONMap) error {
+	return w.Db.Model(&schema.AutoApiKey{}).Where("address = ?", addr).Update("token_balance", newTokBal).Error
 }

@@ -3,6 +3,7 @@ package sdk
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	arseedSchema "github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/arseeding/sdk/schema"
 	paySchema "github.com/everFinance/everpay-go/pay/schema"
@@ -139,5 +140,33 @@ func (s *SDK) PayOrders(orders []*arseedSchema.RespOrder) (everTx *paySchema.Tra
 		return
 	}
 	everTx, err = s.Pay.Transfer(orders[0].Currency, totalFee, orders[0].Bundler, string(dataJs))
+	return
+}
+
+func (s *SDK) PayApikey(tokenSymbol string, amount *big.Int) (everHash string, err error) {
+	bundler, err := s.Cli.GetBundler()
+	if err != nil {
+		return
+	}
+	payTxData := struct {
+		AppName string `json:"appName"`
+		Action  string `json:"action"`
+		Bundler string `json:"bundler"` // option
+	}{
+		AppName: "arseeding",
+		Action:  "apikeyPayment",
+		Bundler: bundler,
+	}
+	dataJs, err := json.Marshal(payTxData)
+	if err != nil {
+		return
+	}
+
+	everTx, err := s.Pay.Transfer(tokenSymbol, amount, bundler, string(dataJs))
+	if err != nil {
+		fmt.Println("2")
+		return
+	}
+	everHash = everTx.HexHash()
 	return
 }

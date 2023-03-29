@@ -11,7 +11,6 @@ type Config struct {
 	speedTxFee     int64
 	bundleServeFee int64
 	ipWhiteList    map[string]struct{}
-	apiKeyMap      map[string]struct{}
 	scheduler      *gocron.Scheduler
 	Param          schema.Param
 }
@@ -40,7 +39,6 @@ func New(configDSN, sqliteDir string, useSqlite bool) *Config {
 		speedTxFee:     fee.SpeedTxFee,
 		bundleServeFee: fee.BundleServeFee,
 		ipWhiteList:    make(map[string]struct{}),
-		apiKeyMap:      make(map[string]struct{}),
 		scheduler:      gocron.NewScheduler(time.UTC),
 		Param:          param,
 	}
@@ -56,10 +54,6 @@ func (c *Config) GetServeFee() int64 {
 
 func (c *Config) GetIPWhiteList() *map[string]struct{} {
 	return &c.ipWhiteList
-}
-
-func (c *Config) GetApiKey() map[string]struct{} {
-	return c.apiKeyMap
 }
 
 func (c *Config) Run() {

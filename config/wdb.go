@@ -52,7 +52,6 @@ func NewSqliteDb(dbDir string) *Wdb {
 func (w *Wdb) Migrate() error {
 	return w.Db.AutoMigrate(&schema.FeeConfig{},
 		&schema.IpRateWhitelist{},
-		&schema.ApiKey{},
 		&schema.Param{})
 }
 
@@ -78,12 +77,6 @@ func (w *Wdb) GetFee() (fee schema.FeeConfig, err error) {
 func (w *Wdb) GetAllAvailableIpRateWhitelist() ([]schema.IpRateWhitelist, error) {
 	res := make([]schema.IpRateWhitelist, 0, 10)
 	err := w.Db.Where("available = ?", true).Find(&res).Error
-	return res, err
-}
-
-func (w *Wdb) GetAllApiKey() ([]schema.ApiKey, error) {
-	res := make([]schema.ApiKey, 0, 10)
-	err := w.Db.Model(&schema.ApiKey{}).Find(&res).Error
 	return res, err
 }
 
