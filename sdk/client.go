@@ -260,6 +260,21 @@ func (a *ArSeedCli) GetItemMeta(itemId string) (types.BundleItem, error) {
 	return item, err
 }
 
+func (a *ArSeedCli) GetItemData(itemId string) ([]byte, error) {
+	req := a.SCli.Get()
+	req.Path(fmt.Sprintf("/%s", itemId))
+
+	resp, err := req.Send()
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Close()
+	if !resp.Ok {
+		return nil, errors.New(fmt.Sprintf("resp failed: %s", resp.String()))
+	}
+	return resp.Bytes(), err
+}
+
 func (a *ArSeedCli) GetItemIds(arId string) ([]string, error) {
 	req := a.SCli.Get()
 	req.Path(fmt.Sprintf("/bundle/itemIds/%s", arId))
