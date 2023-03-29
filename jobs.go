@@ -102,7 +102,7 @@ func (s *Arseeding) updatePeerMap() {
 	peerMap := updatePeerMap(s.cache.GetPeerMap(), availablePeers)
 
 	s.cache.UpdatePeers(peerMap)
-	if err = s.store.SavePeers(peerMap); err != nil {
+	if err = s.store.SavePeers(s.cache.GetPeerMap()); err != nil {
 		log.Warn("save new peer list fail")
 	}
 }
@@ -138,6 +138,10 @@ func (s *Arseeding) updateTokenPrice() {
 		price, err := config.GetTokenPriceByRedstone(tp.Symbol, "USDC")
 		if err != nil {
 			log.Error("config.GetTokenPriceByRedstone(tp.Symbol,\"USDC\")", "err", err, "symbol", tp.Symbol)
+			continue
+		}
+		if price <= 0.0 {
+			log.Error("GetTokenPriceByRedstone return price less than 0.0", "token", tp.Symbol)
 			continue
 		}
 		// update tokenPrice
