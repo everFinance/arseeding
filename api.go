@@ -20,6 +20,7 @@ import (
 	"net/http/httputil"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (s *Arseeding) runAPI(port string) {
@@ -95,8 +96,8 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/bundle/orders", s.getOrdersByApiKey) // http header need X-API-KEY
 
 		// apikey
-		v1.GET("/apikey_info/:address", s.getUsersApiKey)
-		v1.GET("/apikey/:address/:signature", s.getApiKey)
+		v1.GET("/apikey_info/:address", s.getApiKeyInfo)
+		v1.GET("/apikey/:timestamp/:signature", s.getApiKey)
 	}
 
 	if err := r.Run(port); err != nil {
@@ -941,7 +942,7 @@ func internalErrorResponse(c *gin.Context, err string) {
 	})
 }
 
-func (s *Arseeding) getUsersApiKey(c *gin.Context) {
+func (s *Arseeding) getApiKeyInfo(c *gin.Context) {
 	address := c.Param("address")
 	_, addr, err := account.IDCheck(address)
 	if err != nil {
@@ -980,18 +981,25 @@ func (s *Arseeding) getUsersApiKey(c *gin.Context) {
 }
 
 func (s *Arseeding) getApiKey(c *gin.Context) {
-	address := c.Param("address")
+	timestamp := c.Param("timestamp")
 	signature := c.Param("signature")
+	timestampNum, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		internalErrorResponse(c, "timestamp incorrect")
+		return
+	}
+	now := time.Now().Unix()
+	if now-timestampNum > 60 { // can not lose 60s
+		internalErrorResponse(c, "timestamp expired")
+		return
+	}
 
-	addr, err := goether.Ecrecover(accounts.TextHash([]byte(address)), common.FromHex(signature))
+	addr, err := goether.Ecrecover(accounts.TextHash([]byte(timestamp)), common.FromHex(signature))
 	if err != nil {
 		internalErrorResponse(c, err.Error())
 		return
 	}
-	if strings.ToLower(addr.String()) != strings.ToLower(address) {
-		internalErrorResponse(c, "signature failed")
-		return
-	}
+
 	detail, err := s.wdb.GetApiKeyDetailByAddress(addr.String())
 	if err != nil {
 		internalErrorResponse(c, err.Error())
