@@ -45,11 +45,11 @@ type ResBundler struct {
 
 type RespApiKey struct {
 	EstimateCap string            `json:"estimateCap"`
-	Tokens      map[string]TokBal `json:"tokens"`
+	Tokens      map[string]TokBal `json:"tokens"` // tokenTag
 }
 
 type TokBal struct {
-	TokenTag string `json:"tokenTag"`
+	Symbol   string `json:"symbol"`
 	Decimals int    `json:"decimals"`
 	Balance  string `json:"balance"`
 }

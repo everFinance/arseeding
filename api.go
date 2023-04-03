@@ -1179,7 +1179,7 @@ func (s *Arseeding) getApiKeyInfo(c *gin.Context) {
 			log.Error("s.GetPerFee(symbol) not found", "symbol", symbol)
 			continue
 		}
-		tokens[symbol] = schema.TokBal{TokenTag: s.everpaySdk.GetSymbolToTag()[strings.ToLower(symbol)], Decimals: perFee.Decimals, Balance: bal.(string)}
+		tokens[s.everpaySdk.GetSymbolToTag()[strings.ToLower(symbol)]] = schema.TokBal{Symbol: symbol, Decimals: perFee.Decimals, Balance: bal.(string)}
 	}
 
 	c.JSON(http.StatusOK, schema.RespApiKey{
