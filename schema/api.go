@@ -44,9 +44,13 @@ type ResBundler struct {
 }
 
 type RespApiKey struct {
-	// EncryptedKey string                 `json:"encryptedKey"`
-	EstimateCap  string                 `json:"estimateCap"`
-	TokenBalance map[string]interface{} `json:"tokenBalance"`
+	EstimateCap string            `json:"estimateCap"`
+	Tokens      map[string]TokBal `json:"tokens"`
+}
+
+type TokBal struct {
+	Decimals int    `json:"decimals"`
+	Balance  string `json:"balance"`
 }
 
 type RespErr struct {

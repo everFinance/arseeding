@@ -24,8 +24,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 	"sync"
+	"time"
 )
 
 var (
@@ -1172,10 +1172,19 @@ func (s *Arseeding) getApiKeyInfo(c *gin.Context) {
 		estimateCapDe = decimal.NewFromInt(0)
 	}
 
+	tokens := make(map[string]schema.TokBal)
+	for symbol, bal := range detail.TokenBalance {
+		dcls, ok := s.bundlePerFeeMap[symbol]
+		if !ok {
+			log.Error("s.bundlePerFeeMap[symbol] not found", "symbol", symbol)
+			continue
+		}
+		tokens[symbol] = schema.TokBal{Decimals: dcls.Decimals, Balance: bal.(string)}
+	}
+
 	c.JSON(http.StatusOK, schema.RespApiKey{
-		// EncryptedKey: detail.EncryptedKey,
-		EstimateCap:  estimateCapDe.String(),
-		TokenBalance: detail.TokenBalance,
+		EstimateCap: estimateCapDe.String(),
+		Tokens:      tokens,
 	})
 }
 
