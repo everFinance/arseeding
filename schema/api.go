@@ -49,6 +49,7 @@ type RespApiKey struct {
 }
 
 type TokBal struct {
+	TokenTag string `json:"tokenTag"`
 	Decimals int    `json:"decimals"`
 	Balance  string `json:"balance"`
 }

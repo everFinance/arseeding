@@ -1179,7 +1179,7 @@ func (s *Arseeding) getApiKeyInfo(c *gin.Context) {
 			log.Error("s.bundlePerFeeMap[symbol] not found", "symbol", symbol)
 			continue
 		}
-		tokens[symbol] = schema.TokBal{Decimals: dcls.Decimals, Balance: bal.(string)}
+		tokens[symbol] = schema.TokBal{TokenTag: s.everpaySdk.GetSymbolToTag()[symbol], Decimals: dcls.Decimals, Balance: bal.(string)}
 	}
 
 	c.JSON(http.StatusOK, schema.RespApiKey{
