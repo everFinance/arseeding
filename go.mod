@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go v1.27.0
 	github.com/ethereum/go-ethereum v1.10.20
 	github.com/everFinance/everpay-go v0.0.2
-	github.com/everFinance/goar v1.5.3
+	github.com/everFinance/goar v1.5.5
 	github.com/everFinance/goether v1.1.8
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-co-op/gocron v1.11.0
