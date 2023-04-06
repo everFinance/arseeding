@@ -10,7 +10,9 @@ import (
 	paySdk "github.com/everFinance/everpay-go/sdk"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
+	"github.com/everFinance/goar/utils"
 	"math/big"
+	"os"
 )
 
 type SDK struct {
@@ -46,6 +48,16 @@ func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.Option
 	return
 }
 
+func (s *SDK) SendDataStreamAndPay(data *os.File, currency string, option *schema.OptionItem, needSequence bool) (everTx *paySchema.Transaction, itemId string, err error) {
+	order, err := s.SendDataStream(data, currency, "", option, needSequence)
+	if err != nil {
+		return
+	}
+	itemId = order.ItemId
+	everTx, err = s.PayOrders([]*arseedSchema.RespOrder{order})
+	return
+}
+
 func (s *SDK) SendData(data []byte, currency string, apikey string, option *schema.OptionItem, needSequence bool) (order *arseedSchema.RespOrder, err error) {
 	bundleItem := types.BundleItem{}
 	if option != nil {
@@ -57,6 +69,24 @@ func (s *SDK) SendData(data []byte, currency string, apikey string, option *sche
 		return
 	}
 	order, err = s.Cli.SubmitItem(bundleItem.ItemBinary, currency, apikey, needSequence)
+	return
+}
+
+func (s *SDK) SendDataStream(data *os.File, currency string, apikey string, option *schema.OptionItem, needSequence bool) (order *arseedSchema.RespOrder, err error) {
+	bundleItem := types.BundleItem{}
+	if option != nil {
+		bundleItem, err = s.ItemSigner.CreateAndSignItemStream(data, option.Target, option.Anchor, option.Tags)
+	} else {
+		bundleItem, err = s.ItemSigner.CreateAndSignItemStream(data, "", "", nil)
+	}
+	if err != nil {
+		return
+	}
+	binaryReader, err := utils.GenerateItemBinaryStream(&bundleItem)
+	if err != nil {
+		return
+	}
+	order, err = s.Cli.SubmitItemStream(binaryReader, currency, apikey, needSequence)
 	return
 }
 

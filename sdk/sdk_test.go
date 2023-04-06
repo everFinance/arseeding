@@ -9,7 +9,9 @@ import (
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goether"
 	"github.com/stretchr/testify/assert"
+	"io/ioutil"
 	"math/big"
+	"os"
 	"testing"
 )
 
@@ -50,7 +52,7 @@ func TestSDK_SendDataAndPay_RsaSigner(t *testing.T) {
 }
 
 func TestSDK_SendData_EccSigner(t *testing.T) {
-	priKey := ""
+	priKey := "2b8258cde747e3820e56a40aec5cd473150c6078819b45afe61baaf1fa1c75e6" // for test
 	eccSigner, err := goether.NewSigner(priKey)
 	if err != nil {
 		panic(err)
@@ -62,14 +64,17 @@ func TestSDK_SendData_EccSigner(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	data := []byte("aabbcc")
 	tags := []types.Tag{
-		{"Content-Type", "text"},
+		{"Content-Type", "video/mpeg4"},
 	}
-	tx, itemId, err := sdk.SendDataAndPay(data, "usdt", &schema.OptionItem{Tags: tags}, false) // your account must have enough balance in everpay
+	data, err := ioutil.ReadFile("")
+	// data,err := ioutil.ReadFile("/Users/sandyzhou/Downloads/在北海道的大雪里露营.mp4")
 	assert.NoError(t, err)
-	t.Log("itemId:", itemId)
-	t.Log(tx.HexHash())
+	apikey := "7268f534-c866-11ed-b467-cedcf45dbf05" // for test
+	t.Log("aaaa")
+	ord, err := sdk.SendData(data, "usdc", apikey, &schema.OptionItem{Tags: tags}, false) // your account must have enough balance in everpay
+	assert.NoError(t, err)
+	t.Log("itemId:", ord.ItemId)
 }
 
 func TestArSeedCli_SubmitNativeData(t *testing.T) {
@@ -114,4 +119,41 @@ func TestDecryptoApikey(t *testing.T) {
 	apikey, err := eccSigner.Decrypt(common.Hex2Bytes(encKey))
 	assert.NoError(t, err)
 	assert.Equal(t, "8cedb476-c7c9-11ed-a52b-22b1cc528926", string(apikey))
+}
+
+func TestArSeedCli_SubmitNativeDataStream(t *testing.T) {
+	apiKey := "aabbccddeee"
+	data, err := os.Open("fileName")
+	assert.NoError(t, err)
+	cli := New("http://127.0.0.1:8080")
+
+	res, err := cli.SubmitNativeDataStream(apiKey, "usdc", data, "image/jpeg", map[string]string{
+		"key1": "arseeding test",
+		"key2": "sandy test bundle native data",
+	})
+	assert.NoError(t, err)
+	t.Log(res)
+}
+
+func TestSDK_SendDataStreamAndPay(t *testing.T) {
+	payUrl := "https://api-dev.everpay.io"
+	seedUrl := "https://seed-dev.everpay.io"
+
+	rsaSigner, err := goar.NewSignerFromPath("./rsakey.json")
+	if err != nil {
+		panic(err)
+	}
+	sdk, err := NewSDK(seedUrl, payUrl, rsaSigner)
+	if err != nil {
+		panic(err)
+	}
+	data, err := os.Open("fileName")
+	assert.NoError(t, err)
+	tags := []types.Tag{
+		{"Content-Type", "text"},
+	}
+	tx, itemId, err := sdk.SendDataStreamAndPay(data, "usdt", &schema.OptionItem{Tags: tags}, false) // your account must have enough balance in everpay
+	assert.NoError(t, err)
+	t.Log("itemId:", itemId)
+	t.Log(tx.HexHash())
 }

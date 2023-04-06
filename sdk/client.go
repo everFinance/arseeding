@@ -9,6 +9,7 @@ import (
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"gopkg.in/h2non/gentleman.v2"
+	"io"
 	"strconv"
 )
 
@@ -169,6 +170,32 @@ func (a *ArSeedCli) SubmitItem(itemBinary []byte, currency string, apikey string
 	return br, err
 }
 
+func (a *ArSeedCli) SubmitItemStream(itemBinary io.Reader, currency string, apikey string, needSequence bool) (*schema.RespOrder, error) {
+	req := a.SCli.Post()
+	req.Path(fmt.Sprintf("/bundle/tx/%s", currency))
+	req.SetHeader("Content-Type", "application/octet-stream")
+	if len(apikey) > 0 {
+		req.SetHeader("X-API-KEY", apikey)
+	}
+	if needSequence {
+		req.SetHeader("Sort", "true")
+	}
+
+	req.Body(itemBinary)
+
+	resp, err := req.Send()
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Close()
+	if !resp.Ok {
+		return nil, fmt.Errorf("send to bundler request failed; http code: %d, errMsg:%s", resp.StatusCode, resp.String())
+	}
+	br := &schema.RespOrder{}
+	err = resp.JSON(br)
+	return br, err
+}
+
 func (a *ArSeedCli) SubmitNativeData(apiKey string, currency string, data []byte, contentType string, tags map[string]string) (*schema.RespItemId, error) {
 	req := a.SCli.Post()
 	req.Path(fmt.Sprintf("/bundle/data/%s", currency))
@@ -178,6 +205,29 @@ func (a *ArSeedCli) SubmitNativeData(apiKey string, currency string, data []byte
 		req.AddQuery(k, v)
 	}
 	req.Body(bytes.NewReader(data))
+
+	resp, err := req.Send()
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Close()
+	if !resp.Ok {
+		return nil, fmt.Errorf("resp failed.http code: %d, errMsg:%s", resp.StatusCode, resp.String())
+	}
+	br := &schema.RespItemId{}
+	err = resp.JSON(br)
+	return br, err
+}
+
+func (a *ArSeedCli) SubmitNativeDataStream(apiKey string, currency string, data io.Reader, contentType string, tags map[string]string) (*schema.RespItemId, error) {
+	req := a.SCli.Post()
+	req.Path(fmt.Sprintf("/bundle/data/%s", currency))
+	req.SetHeader("X-API-KEY", apiKey)
+	req.AddQuery("Content-Type", contentType)
+	for k, v := range tags {
+		req.AddQuery(k, v)
+	}
+	req.Body(data)
 
 	resp, err := req.Send()
 	if err != nil {
@@ -208,6 +258,21 @@ func (a *ArSeedCli) GetItemMeta(itemId string) (types.BundleItem, error) {
 	item := types.BundleItem{}
 	err = resp.JSON(&item)
 	return item, err
+}
+
+func (a *ArSeedCli) GetItemData(itemId string) ([]byte, error) {
+	req := a.SCli.Get()
+	req.Path(fmt.Sprintf("/%s", itemId))
+
+	resp, err := req.Send()
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Close()
+	if !resp.Ok {
+		return nil, errors.New(fmt.Sprintf("resp failed: %s", resp.String()))
+	}
+	return resp.Bytes(), err
 }
 
 func (a *ArSeedCli) GetItemIds(arId string) ([]string, error) {

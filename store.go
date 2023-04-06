@@ -8,6 +8,7 @@ import (
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
+	"os"
 )
 
 type Store struct {
@@ -252,12 +253,12 @@ func (s *Store) LoadTask(taskId string) (tk *schema.Task, err error) {
 }
 
 // about bundle
-func (s *Store) AtomicSaveItem(item types.BundleItem, itemId string, itemBinary []byte) (err error) {
-	if err = s.SaveItemBinary(itemId, itemBinary); err != nil {
+func (s *Store) AtomicSaveItem(item types.BundleItem) (err error) {
+	if err = s.SaveItemBinary(item); err != nil {
 		return
 	}
 	if err = s.SaveItemMeta(item); err != nil {
-		_ = s.DelItemBinary(itemId)
+		_ = s.DelItemBinary(item.Id)
 	}
 	return
 }
@@ -270,22 +271,31 @@ func (s *Store) AtomicDelItem(itemId string) (err error) {
 	return s.DelItemBinary(itemId)
 }
 
-func (s *Store) SaveItemBinary(itemId string, itemBinary []byte) (err error) {
-	return s.KVDb.Put(schema.BundleItemBinary, itemId, itemBinary)
+func (s *Store) SaveItemBinary(item types.BundleItem) (err error) {
+	if item.DataReader != nil {
+		binaryReader, err := utils.GenerateItemBinaryStream(&item)
+		if err != nil {
+			return err
+		}
+		return s.KVDb.Put(schema.BundleItemBinary, item.Id, binaryReader)
+	} else {
+		return s.KVDb.Put(schema.BundleItemBinary, item.Id, item.ItemBinary)
+	}
+}
+
+func (s *Store) LoadItemBinary(itemId string) (binaryReader *os.File, itemBinary []byte, err error) {
+	itemBinary = make([]byte, 0)
+	// if store implement with s3, then get binary stream
+	if s.KVDb.Type() == rawdb.S3Type {
+		binaryReader, err = s.KVDb.GetStream(schema.BundleItemBinary, itemId)
+	} else {
+		itemBinary, err = s.KVDb.Get(schema.BundleItemBinary, itemId)
+	}
+	return
 }
 
 func (s *Store) IsExistItemBinary(itemId string) bool {
-	_, err := s.LoadItemBinary(itemId)
-	if err == schema.ErrNotExist {
-		return false
-	}
-	return true
-}
-
-func (s *Store) LoadItemBinary(itemId string) (itemBinary []byte, err error) {
-	itemBinary = make([]byte, 0)
-	itemBinary, err = s.KVDb.Get(schema.BundleItemBinary, itemId)
-	return
+	return s.KVDb.Exist(schema.BundleItemBinary, itemId)
 }
 
 func (s *Store) DelItemBinary(itemId string) (err error) {

@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-co-op/gocron"
 	"strings"
+	"os"
 	"sync"
 	"time"
 )
@@ -130,6 +131,9 @@ func New(
 		peerMap = make(map[string]int64)
 	}
 	a.cache = NewCache(a.arCli, peerMap)
+	if err := os.MkdirAll(schema.TmpFileDir, os.ModePerm); err != nil {
+		panic(err)
+	}
 	return a
 }
 

@@ -5,9 +5,9 @@ import (
 )
 
 const (
-	AllowMaxItemSize       = 500 * 1024 * 1024 // 500 MB
-	AllowMaxNativeDataSize = 500 * 1024 * 1024 // 500 MB
-	AllowMaxRespDataSize   = 500 * 1024 * 1024 // 500 MB
+	AllowStreamMinItemSize = 5 * 1024 * 1024    // 5 MB
+	AllowMaxRespDataSize   = 50 * 1024 * 1024   // 50 MB
+	SubmitMaxSize          = 1024 * 1024 * 1024 // 1 GB
 )
 
 type RespOrder struct {
@@ -44,9 +44,14 @@ type ResBundler struct {
 }
 
 type RespApiKey struct {
-	// EncryptedKey string                 `json:"encryptedKey"`
-	EstimateCap  string                 `json:"estimateCap"`
-	TokenBalance map[string]interface{} `json:"tokenBalance"`
+	EstimateCap string            `json:"estimateCap"`
+	Tokens      map[string]TokBal `json:"tokens"` // tokenTag
+}
+
+type TokBal struct {
+	Symbol   string `json:"symbol"`
+	Decimals int    `json:"decimals"`
+	Balance  string `json:"balance"`
 }
 
 type RespErr struct {

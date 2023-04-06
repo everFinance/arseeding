@@ -1,6 +1,7 @@
 package arseeding
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,15 +13,24 @@ import (
 	"github.com/everFinance/goar/utils"
 	"github.com/everFinance/goether"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/handlers"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 	"io"
 	"io/ioutil"
+	gLog "log"
 	"net/http"
 	"net/http/httputil"
+	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+)
+
+var (
+	tmpFileMap     = make(map[string]int64) // key->v : fileName -> fileUsedCnt
+	tmpFileMapLock sync.Mutex
 )
 
 func (s *Arseeding) runAPI(port string) {
@@ -74,7 +84,6 @@ func (s *Arseeding) runAPI(port string) {
 		// ANS-104 bundle Data api
 		v1.GET("/bundle/bundler", s.getBundler)
 		v1.POST("/bundle/tx/:currency", s.submitItem)
-		v1.POST("/bundle/tx", s.submitItem)
 
 		v1.GET("/bundle/tx/:itemId", s.getItemMeta) // get item meta, without data
 		v1.GET("/bundle/tx/:itemId/:field", s.getItemField)
@@ -82,10 +91,8 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/bundle/fees", s.bundleFees)
 		v1.GET("/bundle/fee/:size/:currency", s.bundleFee)
 		v1.GET("/bundle/orders/:signer", s.getOrders)
-		v1.GET("/:id", s.dataRoute)                // get arTx data or bundleItem data
-		v1.HEAD("/:id", s.dataRoute)               // get arTx data or bundleItem data
-		v1.GET("/bridge/:id", s.dataBridgeToArio)  // bridge to ario
-		v1.HEAD("/bridge/:id", s.dataBridgeToArio) // bridge to ario
+		v1.GET("/:id", s.dataRoute)  // get arTx data or bundleItem data
+		v1.HEAD("/:id", s.dataRoute) // get arTx data or bundleItem data
 
 		if s.EnableManifest {
 			v1.POST("/manifest_url/:id", s.setManifestUrl)
@@ -99,6 +106,11 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/apikey_info/:address", s.getApiKeyInfo)
 		v1.GET("/apikey/:timestamp/:signature", s.getApiKey)
 	}
+
+	go func() {
+		gLog.Fatal(http.ListenAndServe(":8081", handlers.CompressHandler(http.DefaultServeMux)))
+	}()
+	gLog.Printf("you can now open http://localhost:8080/debug/charts/ in your browser")
 
 	if err := r.Run(port); err != nil {
 		panic(err)
@@ -337,6 +349,7 @@ func txDataByMeta(txMeta *types.Transaction, db *Store) ([]byte, error) {
 	return data, nil
 }
 
+// todo need stream
 func getArTxData(dataRoot, dataSize string, db *Store) ([]byte, error) {
 	size, err := strconv.ParseUint(dataSize, 10, 64)
 	if err != nil {
@@ -534,47 +547,56 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 		errorResponse(c, "can not submit null bundle item")
 		return
 	}
-	needSort := isSortItems(c)
+	itemBinaryFile, err := os.CreateTemp(schema.TmpFileDir, "arseedsubmit-")
+	if err != nil {
+		c.Request.Body.Close()
+		errorResponse(c, err.Error())
+		return
+	}
+	defer func() {
+		c.Request.Body.Close()
+		itemBinaryFile.Close()
+		os.Remove(itemBinaryFile.Name())
+	}()
 
-	defer c.Request.Body.Close()
-
-	itemBinary := make([]byte, 0, 256*1024)
-	buf := make([]byte, 256*1024) // todo add to temp file
-	for {
-		if len(itemBinary) > schema.AllowMaxItemSize {
-			err := fmt.Errorf("allow max item size is 100 MB")
-			errorResponse(c, err.Error())
-			return
-		}
-
-		n, err := c.Request.Body.Read(buf)
-		if err != nil && err != io.EOF {
-			errorResponse(c, "read req failed")
-			log.Error("read req failed", "err", err)
-			return
-		}
-
-		if n == 0 {
-			break
-		}
-		itemBinary = append(itemBinary, buf[:n]...)
+	var itemBuf bytes.Buffer
+	var item *types.BundleItem
+	// write up to schema.AllowStreamMinItemSize to memory
+	size, err := setItemData(c, itemBinaryFile, &itemBuf)
+	if err != nil && err != io.EOF {
+		errorResponse(c, err.Error())
+		return
 	}
 
-	// decode
-	item, err := utils.DecodeBundleItem(itemBinary)
+	if size > schema.SubmitMaxSize {
+		errorResponse(c, schema.ErrDataTooBig.Error())
+		return
+	}
+	if size > schema.AllowStreamMinItemSize { // the body size > schema.AllowStreamMinItemSize, need write to tmp file
+		item, err = utils.DecodeBundleItemStream(itemBinaryFile)
+	} else {
+		item, err = utils.DecodeBundleItem(itemBuf.Bytes())
+	}
+	defer func() {
+		if item.DataReader != nil {
+			item.DataReader.Close()
+			os.Remove(item.DataReader.Name())
+		}
+	}()
+
 	if err != nil {
 		errorResponse(c, "decode item binary failed")
 		return
 	}
-	currency := c.Param("currency")
 
+	currency := c.Param("currency")
 	// check whether noFee mode
 	noFee := false
 	// if has apikey
 	apikey := c.GetHeader("X-API-KEY")
 	hasApikey := false
 	if len(apikey) > 0 {
-		if err := s.processApikeySpendBal(currency, apikey, int64(len(item.ItemBinary))); err != nil {
+		if err := s.processApikeySpendBal(currency, apikey, size); err != nil {
 			errorResponse(c, err.Error())
 			return
 		}
@@ -587,7 +609,8 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 	}
 
 	// process bundleItem
-	ord, err := s.ProcessSubmitItem(*item, currency, noFee, apikey, needSort)
+	needSort := isSortItems(c)
+	ord, err := s.ProcessSubmitItem(*item, currency, noFee, apikey, needSort, size)
 	if err != nil {
 		errorResponse(c, err.Error())
 		return
@@ -640,32 +663,36 @@ func (s *Arseeding) submitNativeData(c *gin.Context) {
 		return
 	}
 
-	defer c.Request.Body.Close()
-
-	nativeData := make([]byte, 0, 256*1024)
-	buf := make([]byte, 256*1024) // todo add to temp file
-	for {
-		if len(nativeData) > schema.AllowMaxNativeDataSize {
-			err := fmt.Errorf("allow max item size is 500 MB")
-			errorResponse(c, err.Error())
-			return
-		}
-
-		n, err := c.Request.Body.Read(buf)
-		if err != nil && err != io.EOF {
-			errorResponse(c, "read req failed")
-			log.Error("read req failed", "err", err)
-			return
-		}
-
-		if n == 0 {
-			break
-		}
-		nativeData = append(nativeData, buf[:n]...)
+	dataFile, err := os.CreateTemp(schema.TmpFileDir, "arseed-")
+	if err != nil {
+		c.Request.Body.Close()
+		errorResponse(c, err.Error())
+		return
+	}
+	defer func() {
+		c.Request.Body.Close()
+		dataFile.Close()
+		os.Remove(dataFile.Name())
+	}()
+	var dataBuf bytes.Buffer
+	var item types.BundleItem
+	// write up to schema.AllowMaxNativeDataSize to memory
+	size, err := setItemData(c, dataFile, &dataBuf)
+	if err != nil && err != io.EOF {
+		errorResponse(c, err.Error())
+		return
+	}
+	if size > schema.SubmitMaxSize {
+		errorResponse(c, schema.ErrDataTooBig.Error())
+		return
 	}
 
-	// use bundler private assemble bundle item
-	item, err := s.bundlerItemSigner.CreateAndSignItem(nativeData, "", "", tags)
+	if size > schema.AllowStreamMinItemSize { // the body size > schema.AllowStreamMinItemSize, need write to tmp file
+		item, err = s.bundlerItemSigner.CreateAndSignItemStream(dataFile, "", "", tags)
+	} else {
+		item, err = s.bundlerItemSigner.CreateAndSignItem(dataBuf.Bytes(), "", "", tags)
+	}
+
 	if err != nil {
 		errorResponse(c, "assemble bundle item failed")
 		log.Error("s.bundlerItemSigner.CreateAndSignItem", "err", err)
@@ -673,13 +700,13 @@ func (s *Arseeding) submitNativeData(c *gin.Context) {
 	}
 	currency := c.Param("currency")
 	// cal apikey balance
-	if err := s.processApikeySpendBal(currency, apiKey, int64(len(item.ItemBinary))); err != nil {
+	if err := s.processApikeySpendBal(currency, apiKey, size); err != nil {
 		errorResponse(c, err.Error())
 		return
 	}
 
 	// process submit item
-	order, err := s.ProcessSubmitItem(item, currency, true, apiKey, needSort)
+	order, err := s.ProcessSubmitItem(item, currency, true, apiKey, needSort, size)
 	if err != nil {
 		errorResponse(c, err.Error())
 		return
@@ -756,12 +783,13 @@ func (s *Arseeding) getItemField(c *gin.Context) {
 	case "signatureType":
 		c.Data(200, "text/html; charset=utf-8", []byte(strconv.Itoa(txMeta.SignatureType)))
 	case "data", "data.json", "data.txt", "data.pdf", "data.png", "data.jpeg", "data.gif", "data.mp4":
-		tags, data, err := getBundleItemData(id, s.store)
+		tags, dataReader, data, err := getBundleItemData(id, s.store)
 		if err != nil {
 			internalErrorResponse(c, err.Error())
 			return
 		}
-		c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
+
+		dataResponse(c, dataReader, data, tags, id)
 	default:
 		errorResponse(c, "invalid_field")
 	}
@@ -824,21 +852,24 @@ func (s *Arseeding) bundleFees(c *gin.Context) {
 	c.JSON(http.StatusOK, s.bundlePerFeeMap)
 }
 
-func (s *Arseeding) dataBridgeToArio(c *gin.Context) {
-	txId := c.Param("id")
-	tags, data, err := getArTxOrItemData(txId, s.store)
-	if err != nil {
-		c.JSON(http.StatusNotFound, "Not Found")
-		return
-	}
-	contentLength := len(data)
-	c.Header("x-content-length", strconv.Itoa(contentLength))
-	c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
-}
-
 func (s *Arseeding) dataRoute(c *gin.Context) {
 	txId := c.Param("id")
-	tags, data, err := getArTxOrItemData(txId, s.store)
+	tmpFileName := genTmpFileName(c.ClientIP(), txId)
+	if existTmpFile(tmpFileName) {
+		dataReader, err := os.Open(tmpFileName)
+		if err != nil {
+			internalErrorResponse(c, err.Error())
+			return
+		}
+		item, err := s.store.LoadItemMeta(txId)
+		if err != nil {
+			internalErrorResponse(c, err.Error())
+			return
+		}
+		dataResponse(c, dataReader, nil, item.Tags, txId)
+		return
+	}
+	tags, dataReader, data, err := getArTxOrItemData(txId, s.store)
 	switch err {
 	case nil:
 		// process manifest
@@ -863,7 +894,7 @@ func (s *Arseeding) dataRoute(c *gin.Context) {
 
 			c.Redirect(302, redirectUrl)
 		} else {
-			c.Data(200, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
+			dataResponse(c, dataReader, data, tags, txId)
 		}
 
 	case schema.ErrLocalNotExist:
@@ -906,6 +937,26 @@ func (s *Arseeding) setManifestUrl(c *gin.Context) {
 	})
 }
 
+func setItemData(c *gin.Context, tmpFile *os.File, itemBuf *bytes.Buffer) (size int64, err error) {
+	size, err = io.CopyN(itemBuf, c.Request.Body, schema.AllowStreamMinItemSize+1)
+	if err != nil && err != io.EOF {
+		return
+	}
+	if size > schema.AllowStreamMinItemSize { // the body size > schema.AllowStreamMinItemSize, need write to tmp file
+
+		size, err = io.Copy(tmpFile, io.MultiReader(itemBuf, c.Request.Body))
+		if err != nil {
+			return
+		}
+		// reset io stream to origin of the file
+		_, err = tmpFile.Seek(0, 0)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
 func getTagValue(tags []types.Tag, name string) string {
 	for _, tg := range tags {
 		if tg.Name == name {
@@ -942,6 +993,154 @@ func internalErrorResponse(c *gin.Context, err string) {
 	})
 }
 
+func dataResponse(c *gin.Context, dataReader *os.File, data []byte, tags []types.Tag, id string) {
+	defer func() {
+		if dataReader != nil {
+			decFileCnt(dataReader.Name())
+			dataReader.Close()
+		}
+	}()
+
+	contentType := getTagValue(tags, schema.ContentType)
+	if dataReader != nil {
+		tmpFileName := genTmpFileName(c.ClientIP(), id)
+		if dataReader.Name() != tmpFileName {
+			err := os.Rename(dataReader.Name(), tmpFileName)
+			if err != nil {
+				internalErrorResponse(c, "data is replied")
+				return
+			}
+			dataReader.Close()
+			dataReader, err = os.Open(tmpFileName)
+			if err != nil {
+				internalErrorResponse(c, "data is replied")
+				return
+			}
+		}
+
+		incFileCnt(tmpFileName)
+		err := dataRangeResponse(c, dataReader, contentType)
+		if err != nil {
+			internalErrorResponse(c, err.Error())
+		}
+	} else {
+		c.Data(200, fmt.Sprintf("%s; charset=utf-8", contentType), data)
+	}
+}
+
+func dataRangeResponse(c *gin.Context, dataReader *os.File, contentType string) (err error) {
+
+	// get fileInfo
+	fileInfo, err := dataReader.Stat()
+	if err != nil {
+		return fmt.Errorf("Error getting file info")
+	}
+
+	// fetch Range header
+	rangeHeader := c.Request.Header.Get("Range")
+	if rangeHeader == "" {
+		c.Header("Accept-Ranges", "bytes")
+		c.Header("Content-Type", contentType)
+		c.Header("Content-Length", strconv.FormatInt(fileInfo.Size(), 10))
+		c.File(dataReader.Name())
+		return
+	}
+
+	// parse Range header
+	parts := strings.Split(rangeHeader, "=")
+	if len(parts) != 2 || parts[0] != "bytes" {
+		return fmt.Errorf("Invalid Range header")
+	}
+
+	ranges := strings.Split(parts[1], "-")
+	if len(ranges) != 2 {
+		return fmt.Errorf("Invalid Range header")
+	}
+
+	// parse Range start-end
+	var start, end int64
+
+	if ranges[0] == "" {
+		end, err = strconv.ParseInt(ranges[1], 10, 64)
+		if err != nil {
+			end = fileInfo.Size() - 1
+		}
+		start = fileInfo.Size() - end
+		end = fileInfo.Size() - 1
+	} else if ranges[1] == "" {
+		start, err = strconv.ParseInt(ranges[0], 10, 64)
+		if err != nil {
+			start = 0
+		}
+		end = fileInfo.Size() - 1
+	} else {
+		start, err = strconv.ParseInt(ranges[0], 10, 64)
+		if err != nil {
+			start = 0
+		}
+		end, err = strconv.ParseInt(ranges[1], 10, 64)
+		if err != nil {
+			end = fileInfo.Size() - 1
+		}
+	}
+
+	// calculate Range size
+	contentLength := end - start + 1
+
+	// set header
+	c.Header("Content-Type", contentType)
+	c.Header("Accept-Ranges", "bytes")
+	c.Header("Content-Length", strconv.FormatInt(contentLength, 10))
+	c.Header("Content-Range", "bytes "+strconv.FormatInt(start, 10)+"-"+strconv.FormatInt(end, 10)+"/"+strconv.FormatInt(fileInfo.Size(), 10))
+	c.Status(http.StatusPartialContent)
+
+	// send Range data
+	_, err = dataReader.Seek(start, 0)
+	if err != nil {
+		return fmt.Errorf("error seeking file, err: %v", err)
+	}
+
+	buffer := make([]byte, 1024*1024)
+	for contentLength > 0 {
+		size := int64(len(buffer))
+		if size > contentLength {
+			size = contentLength
+		}
+
+		n, err := dataReader.Read(buffer[:size])
+		if err != nil {
+			return fmt.Errorf("Error reading file")
+		}
+
+		c.Writer.Write(buffer[:n])
+		contentLength -= int64(n)
+	}
+	return nil
+}
+
+func genTmpFileName(ip, itemId string) string {
+	return fmt.Sprintf("%s/%s-read-%s", schema.TmpFileDir, ip, itemId)
+}
+
+func existTmpFile(tmpFileName string) bool {
+	tmpFileMapLock.Lock()
+	defer tmpFileMapLock.Unlock()
+	_, ok := tmpFileMap[tmpFileName]
+	return ok
+}
+
+func incFileCnt(tmpFileName string) {
+	tmpFileMapLock.Lock()
+	defer tmpFileMapLock.Unlock()
+	tmpFileMap[tmpFileName] += 1
+}
+
+func decFileCnt(tmpFileName string) {
+	tmpFileMapLock.Lock()
+	defer tmpFileMapLock.Unlock()
+	tmpFileMap[tmpFileName] -= 1
+}
+
 func (s *Arseeding) getApiKeyInfo(c *gin.Context) {
 	address := c.Param("address")
 	_, addr, err := account.IDCheck(address)
@@ -973,10 +1172,19 @@ func (s *Arseeding) getApiKeyInfo(c *gin.Context) {
 		estimateCapDe = decimal.NewFromInt(0)
 	}
 
+	tokens := make(map[string]schema.TokBal)
+	for symbol, bal := range detail.TokenBalance {
+		perFee := s.GetPerFee(symbol)
+		if perFee == nil {
+			log.Error("s.GetPerFee(symbol) not found", "symbol", symbol)
+			continue
+		}
+		tokens[s.everpaySdk.GetSymbolToTag()[strings.ToLower(symbol)]] = schema.TokBal{Symbol: symbol, Decimals: perFee.Decimals, Balance: bal.(string)}
+	}
+
 	c.JSON(http.StatusOK, schema.RespApiKey{
-		// EncryptedKey: detail.EncryptedKey,
-		EstimateCap:  estimateCapDe.String(),
-		TokenBalance: detail.TokenBalance,
+		EstimateCap: estimateCapDe.String(),
+		Tokens:      tokens,
 	})
 }
 

@@ -2,6 +2,8 @@ package arseeding
 
 import (
 	"encoding/json"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/everFinance/arseeding/schema"
@@ -32,22 +34,20 @@ func handleManifest(maniData []byte, path string, db *Store) ([]types.Tag, []byt
 		return nil, nil, schema.ErrPageNotFound
 	}
 
-	tags, data, err := getArTxOrItemData(txId.TxId, db)
+	tags, dataReader, data, err := getArTxOrItemData(txId.TxId, db)
+	if dataReader != nil {
+		data, err = io.ReadAll(dataReader)
+		dataReader.Close()
+		os.Remove(dataReader.Name())
+	}
 	return tags, data, err
 }
 
-func getArTxOrItemData(id string, db *Store) (decodeTags []types.Tag, data []byte, err error) {
+func getArTxOrItemData(id string, db *Store) (decodeTags []types.Tag, binaryReader *os.File, data []byte, err error) {
 	// find bundle item
-	itemBinary, err := db.LoadItemBinary(id)
+	_, err = db.LoadItemMeta(id)
 	if err == nil {
-		var item *types.BundleItem
-		item, err = utils.DecodeBundleItem(itemBinary)
-		if err != nil {
-			return
-		}
-		decodeTags = item.Tags
-		data, err = utils.Base64Decode(item.Data)
-		return
+		return getBundleItemData(id, db)
 	}
 
 	// not bundle item
@@ -62,7 +62,7 @@ func getArTxOrItemData(id string, db *Store) (decodeTags []types.Tag, data []byt
 		return
 	}
 	// txId not found in local, need proxy to gateway
-	return nil, nil, schema.ErrLocalNotExist
+	return nil, nil, nil, schema.ErrLocalNotExist
 }
 
 func getArTxOrItemTags(id string, db *Store) (decodeTags []types.Tag, err error) {
@@ -81,17 +81,32 @@ func getArTxOrItemTags(id string, db *Store) (decodeTags []types.Tag, err error)
 	return nil, schema.ErrLocalNotExist
 }
 
-func getBundleItemData(id string, db *Store) (decodeTags []types.Tag, data []byte, err error) {
-	itemBinary, err := db.LoadItemBinary(id)
+func getBundleItemData(id string, db *Store) (decodeTags []types.Tag, dataReader *os.File, data []byte, err error) {
+	binaryReader, itemBinary, err := db.LoadItemBinary(id)
+	item := &types.BundleItem{}
 	if err == nil {
-		var item *types.BundleItem
-		item, err = utils.DecodeBundleItem(itemBinary)
+		item, err = parseBundleItem(binaryReader, itemBinary)
 		if err != nil {
-			return
+			return nil, nil, nil, err
 		}
 		decodeTags = item.Tags
-		data, err = utils.Base64Decode(item.Data)
+		if binaryReader != nil {
+			binaryReader.Close()
+			os.Remove(binaryReader.Name())
+			dataReader = item.DataReader
+		} else {
+			data, err = utils.Base64Decode(item.Data)
+		}
 		return
+	}
+	return
+}
+
+func parseBundleItem(binaryReader *os.File, itemBinary []byte) (item *types.BundleItem, err error) {
+	if binaryReader != nil {
+		item, err = utils.DecodeBundleItemStream(binaryReader)
+	} else {
+		item, err = utils.DecodeBundleItem(itemBinary)
 	}
 	return
 }

@@ -2,16 +2,19 @@ package rawdb
 
 import (
 	"errors"
+	"fmt"
 	"github.com/everFinance/arseeding/schema"
 	bolt "go.etcd.io/bbolt"
 	"os"
 	"path"
+	"reflect"
 	"time"
 )
 
 const (
 	boltAllocSize = 8 * 1024 * 1024
 	boltName      = "seed.db"
+	BoltType      = "boltdb"
 )
 
 type BoltDB struct {
@@ -56,10 +59,16 @@ func NewBoltDB(boltDirPath string) (*BoltDB, error) {
 	return boltDB, nil
 }
 
-func (s *BoltDB) Put(bucket, key string, value []byte) (err error) {
+func (s *BoltDB) Type() string {
+	return BoltType
+}
+func (s *BoltDB) Put(bucket, key string, value interface{}) (err error) {
+	if _, ok := value.([]byte); !ok {
+		return fmt.Errorf("unknown data type: %s, db: bolt db", reflect.TypeOf(value))
+	}
 	err = s.Db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket([]byte(bucket))
-		return bkt.Put([]byte(key), value)
+		return bkt.Put([]byte(key), value.([]byte))
 	})
 	return
 }
@@ -74,6 +83,10 @@ func (s *BoltDB) Get(bucket, key string) (data []byte, err error) {
 		return nil
 	})
 	return
+}
+
+func (s *BoltDB) GetStream(bucket, key string) (data *os.File, err error) {
+	return nil, schema.ErrNotImplement
 }
 
 func (s *BoltDB) GetAllKey(bucket string) (keys []string, err error) {
@@ -92,6 +105,11 @@ func (s *BoltDB) Delete(bucket, key string) (err error) {
 		return tx.Bucket([]byte(bucket)).Delete([]byte(key))
 	})
 	return
+}
+
+func (s *BoltDB) Exist(bucket, key string) bool {
+	_, err := s.Get(bucket, key)
+	return err == nil
 }
 
 func (s *BoltDB) Close() (err error) {

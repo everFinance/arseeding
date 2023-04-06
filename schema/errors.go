@@ -17,4 +17,5 @@ var (
 	ErrNullData      = errors.New("null_data")
 	ErrLocalNotExist = errors.New("not_exist_local") // need to get data from gateway
 	ErrPageNotFound  = errors.New("page_not_found")  // e.g manifest data not contain index path
+	ErrNotImplement  = errors.New("method not implement")
 )

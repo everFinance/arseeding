@@ -2,14 +2,18 @@ package rawdb
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/everFinance/arseeding/schema"
 	"io"
+	"os"
+	"reflect"
 )
 
 // refer https://help.aliyun.com/document_detail/32157.html?spm=a2c4g.11186623.0.0.1a4b32bcxaC4kR
 const (
 	ossErrorNoSuchKey = "NoSuchKey"
+	AliyunType        = "aliyun"
 )
 
 type AliyunDB struct {
@@ -36,13 +40,22 @@ func NewAliyunDB(endpoint, accKey, accessKeySecret, bktPrefix string) (*AliyunDB
 	}, nil
 }
 
-func (a *AliyunDB) Put(bucket, key string, value []byte) (err error) {
+func (a *AliyunDB) Type() string {
+	return AliyunType
+}
+
+func (a *AliyunDB) Put(bucket, key string, value interface{}) (err error) {
 	bkt, err := a.client.Bucket(getS3Bucket(a.bucketPrefix, bucket))
 	if err != nil {
 		return err
 	}
-
-	return bkt.PutObject(key, bytes.NewReader(value))
+	if _, ok := value.([]byte); ok {
+		return bkt.PutObject(key, bytes.NewReader(value.([]byte)))
+	} else if _, ok := value.(io.Reader); ok {
+		return bkt.PutObject(key, value.(io.Reader))
+	} else {
+		return fmt.Errorf("unknown data type: %s, db: aliyun db", reflect.TypeOf(value))
+	}
 }
 
 func (a *AliyunDB) Get(bucket, key string) (data []byte, err error) {
@@ -63,6 +76,10 @@ func (a *AliyunDB) Get(bucket, key string) (data []byte, err error) {
 
 	data, err = io.ReadAll(body)
 	return
+}
+
+func (a *AliyunDB) GetStream(bucket, key string) (data *os.File, err error) {
+	return nil, schema.ErrNotImplement
 }
 
 func (a *AliyunDB) GetAllKey(bucket string) (keys []string, err error) {
@@ -107,6 +124,15 @@ func (a *AliyunDB) Delete(bucket, key string) (err error) {
 	}
 
 	return bkt.DeleteObject(key)
+}
+
+func (a *AliyunDB) Exist(bucket, key string) bool {
+	bkt, err := a.client.Bucket(getS3Bucket(a.bucketPrefix, bucket))
+	if err != nil {
+		return false
+	}
+	exist, _ := bkt.IsObjectExist(key)
+	return exist
 }
 
 func (a *AliyunDB) Close() (err error) {

@@ -104,7 +104,7 @@ func (s *Arseeding) broadcastTxTask(arId string) (err error) {
 		err = nil
 	}
 	// generate tx chunks
-	utils.PrepareChunks(txMeta, txData)
+	utils.PrepareChunks(txMeta, txData, len(txData))
 	txMeta.Data = utils.Base64Encode(txData)
 
 	s.taskMg.BroadcastData(arId, schema.TaskTypeBroadcast, txMeta, s.cache.GetPeers(), txMetaPosted)

@@ -230,7 +230,7 @@ func generateChunks(arTxMeta types.Transaction, data []byte) ([]*types.GetChunk,
 	if len(data) == 0 {
 		return nil, schema.ErrNullData
 	}
-	utils.PrepareChunks(&arTxMeta, data)
+	utils.PrepareChunks(&arTxMeta, data, len(data))
 
 	chunks := make([]*types.GetChunk, 0, len(arTxMeta.Chunks.Chunks))
 	for i := 0; i < len(arTxMeta.Chunks.Chunks); i++ {

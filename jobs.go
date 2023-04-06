@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
+	"github.com/everFinance/arseeding/rawdb"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/everpay-go/account"
 	"github.com/everFinance/everpay-go/config"
@@ -23,6 +24,7 @@ import (
 	"github.com/tidwall/gjson"
 	"gorm.io/gorm"
 	"math/big"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -56,13 +58,15 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 	s.scheduler.Every(3).Minute().SingletonMode().Do(s.watchArTx)
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.retryOnChainArTx)
 
-	s.scheduler.Every(10).Seconds().SingletonMode().Do(s.parseAndSaveBundleTx)
+	// s.scheduler.Every(10).Seconds().SingletonMode().Do(s.parseAndSaveBundleTx) // todo stream
 
 	// manager taskStatus
 	s.scheduler.Every(5).Seconds().SingletonMode().Do(s.watcherAndCloseTasks)
 
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundler)
 
+	// delete tmp file, one may be repeat request same data,tmp file can be reserve with short time
+	s.scheduler.Every(2).Minute().SingletonMode().Do(s.deleteTmpFile)
 	s.scheduler.StartAsync()
 }
 
@@ -474,22 +478,6 @@ func parseTxData(txData string) (action string, itemIds []string, err error) {
 	}
 }
 
-func parseItemIds(txData string) ([]string, error) {
-	itemIds := make([]string, 0)
-	res := gjson.Parse(txData)
-	// appName must be arseeding
-	if res.Get("appName").String() != "arseeding" {
-		return nil, errors.New("txData.appName not be arseeding")
-	}
-	for _, it := range res.Get("itemIds").Array() {
-		itemIds = append(itemIds, it.String())
-	}
-	if len(itemIds) == 0 {
-		return nil, errors.New("itemIds is empty")
-	}
-	return itemIds, nil
-}
-
 func getUnPaidOrdersByItemIds(wdb *Wdb, itemIds []string) ([]schema.Order, error) {
 	ordArr := make([]schema.Order, 0, len(itemIds))
 	for _, itemId := range itemIds {
@@ -548,9 +536,13 @@ func (s *Arseeding) onChainBundleItems() {
 		log.Error("s.wdb.GetNeedOnChainOrders()", "err", err)
 		return
 	}
+	if len(ords) == 0 {
+		return
+	}
 	// send arTx to arweave
 	arTx, onChainItemIds, err := s.onChainOrds(ords)
 	if err != nil {
+		log.Error("s.onChainOrds()", "err", err)
 		return
 	}
 
@@ -565,6 +557,9 @@ func (s *Arseeding) onChainItemsBySeq() {
 		return
 	}
 
+	if len(ords) == 0 {
+		return
+	}
 	arTx, onChainItemIds, err := s.onChainOrds(ords)
 	if err != nil {
 		return
@@ -581,12 +576,12 @@ func (s *Arseeding) onChainItemsBySeq() {
 }
 
 func (s *Arseeding) onChainOrds(ords []schema.Order) (arTx types.Transaction, onChainItemIds []string, err error) {
-	// once total size limit 500 MB
+	// once total size limit 2 GB
 	itemIds := make([]string, 0, len(ords))
 	totalSize := int64(0)
 	for _, ord := range ords {
-		if totalSize >= schema.MaxPerOnChainSize {
-			break
+		if totalSize+ord.Size > schema.MaxPerOnChainSize {
+			continue
 		}
 		od, exist := s.wdb.ExistProcessedOrderItem(ord.ItemId)
 		if exist {
@@ -596,7 +591,7 @@ func (s *Arseeding) onChainOrds(ords []schema.Order) (arTx types.Transaction, on
 			continue
 		}
 		itemIds = append(itemIds, ord.ItemId)
-		totalSize += ord.Size
+		totalSize += od.Size
 	}
 
 	// send arTx to arweave
@@ -686,6 +681,9 @@ func (s *Arseeding) retryOnChainArTx() {
 		log.Error("s.wdb.GetArTxByStatus(schema.PendingOnChain)", "err", err)
 		return
 	}
+	if len(txs) == 0 {
+		return
+	}
 	for _, tx := range txs {
 		itemIds := make([]string, 0)
 		if err = json.Unmarshal(tx.ItemIds, &itemIds); err != nil {
@@ -703,9 +701,129 @@ func (s *Arseeding) retryOnChainArTx() {
 }
 
 func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, onChainItemIds []string, err error) {
-	onChainItems := make([]types.BundleItem, 0, len(itemIds))
+	onChainItems := make([]types.BundleItem, 0)
+	bundle := &types.Bundle{}
+	verifyBundle := &types.Bundle{}
+	if s.store.KVDb.Type() != rawdb.S3Type {
+		onChainItems, err = s.getOnChainBundle(itemIds)
+		// assemble and send to arweave
+		bundle, err = utils.NewBundle(onChainItems...)
+		if err != nil {
+			log.Error("utils.NewBundle(onChainItems...)", "err", err)
+			return
+		}
+
+		// verify bundle, ensure that the bundle is exactly right before sending
+		if _, err = utils.DecodeBundle(bundle.BundleBinary); err != nil {
+			err = errors.New(fmt.Sprintf("Verify bundle failed; err:%v", err))
+			return
+		}
+	} else { // only s3 support stream
+		defer func() {
+			for _, item := range onChainItems {
+				if item.DataReader != nil {
+					item.DataReader.Close()
+					os.Remove(item.DataReader.Name())
+				}
+			}
+			for _, item := range verifyBundle.Items {
+				if item.DataReader != nil {
+					item.DataReader.Close()
+					os.Remove(item.DataReader.Name())
+				}
+			}
+			if bundle.BundleDataReader != nil {
+				bundle.BundleDataReader.Close()
+				os.Remove(bundle.BundleDataReader.Name())
+			}
+		}()
+
+		onChainItems, err = s.getOnChainBundleStream(itemIds)
+		if err != nil {
+			log.Error("s.getOnChainBundleStream(itemIds)", "err", err)
+			return
+		}
+		// assemble and send to arweave
+		bundle, err = utils.NewBundleStream(onChainItems...)
+		if err != nil {
+			log.Error("utils.NewBundle(onChainItems...)", "err", err)
+			return
+		}
+
+		// verify bundle, ensure that the bundle is exactly right before sending
+		if verifyBundle, err = utils.DecodeBundleStream(bundle.BundleDataReader); err != nil {
+			err = errors.New(fmt.Sprintf("Verify bundle failed; err:%v", err))
+			return
+		}
+		for _, item := range verifyBundle.Items {
+			if err = utils.VerifyBundleItem(item); err != nil {
+				log.Error("utils.VerifyBundleItem(item)", "err", err, "itemId", item.Id)
+				err = errors.New("utils.VerifyBundleItem(item) failed")
+				return
+			}
+		}
+	}
+
+	// get onChainItemIds
+	for _, item := range onChainItems {
+		onChainItemIds = append(onChainItemIds, item.Id)
+	}
+
+	arTxtags := []types.Tag{
+		{Name: "App-Name", Value: "arseeding"},
+		{Name: "App-Version", Value: "1.0.0"},
+		{Name: "Action", Value: "Bundle"},
+		{Name: "Protocol-Name", Value: "BAR"},
+		{Name: "Action", Value: "Burn"},
+		{Name: "App-Name", Value: "SmartWeaveAction"},
+		{Name: "App-Version", Value: "0.3.0"},
+		{Name: "Input", Value: `{"function":"mint"}`},
+		{Name: "Contract", Value: "VFr3Bk-uM-motpNNkkFg4lNW1BMmSfzqsVO551Ho4hA"},
+	}
+
+	if len(s.customTags) > 0 {
+		arTxtags = append(s.customTags, arTxtags...)
+	}
+
+	// speed arTx Fee
+
+	concurrentNum := s.config.Param.ChunkConcurrentNum
+	if len(bundle.BundleBinary) > 0 {
+		log.Debug("use binary submit bundle arTx", "binary length:", len(bundle.BundleBinary))
+		price := calculatePrice(s.cache.GetFee(), int64(len(bundle.BundleBinary)))
+		speedFactor := calculateFactor(price, s.config.GetSpeedFee())
+		arTx, err = s.bundler.SendBundleTxSpeedUp(context.TODO(), concurrentNum, bundle.BundleBinary, arTxtags, speedFactor)
+	} else {
+		fileInfo, err1 := bundle.BundleDataReader.Stat()
+		if err1 != nil {
+			err = err1
+			return
+		}
+		if fileInfo.Size() == 0 {
+			err = errors.New("bundle.BundleDataReader is null")
+			return
+		}
+		price := calculatePrice(s.cache.GetFee(), fileInfo.Size())
+		speedFactor := calculateFactor(price, s.config.GetSpeedFee())
+		arTx, err = s.bundler.SendBundleTxSpeedUp(context.TODO(), concurrentNum, bundle.BundleDataReader, arTxtags, speedFactor)
+	}
+	if err != nil {
+		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags)", "err", err)
+		return
+	}
+	log.Info("Send bundle arTx", "arTx", arTx.ID)
+
+	// arseeding broadcast tx data
+	if err := s.arseedCli.SubmitTxConcurrent(context.TODO(), concurrentNum, arTx); err != nil {
+		log.Error("s.arseedCli.SubmitTxConcurrent(arTx)", "err", err, "arId", arTx.ID)
+	}
+	return
+}
+
+func (s *Arseeding) getOnChainBundle(itemIds []string) (onChainItems []types.BundleItem, err error) {
+	onChainItems = make([]types.BundleItem, 0, len(itemIds))
 	for _, itemId := range itemIds {
-		itemBinary, err := s.store.LoadItemBinary(itemId)
+		_, itemBinary, err := s.store.LoadItemBinary(itemId)
 		if err != nil {
 			log.Error("s.store.LoadItemBinary(itemId)", "err", err, "itemId", itemId)
 			continue
@@ -741,57 +859,34 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 		onChainItems = append(onChainItems[:idx], onChainItems[idx+1:]...)
 		onChainItems = append(onChainItems, newEndItem)
 	}
+	return
+}
 
-	// get onChainItemIds
-	for _, item := range onChainItems {
-		onChainItemIds = append(onChainItemIds, item.Id)
+func (s *Arseeding) getOnChainBundleStream(itemIds []string) (onChainItems []types.BundleItem, err error) {
+	onChainItems = make([]types.BundleItem, 0, len(itemIds))
+	for _, itemId := range itemIds {
+		binaryReader, _, err := s.store.LoadItemBinary(itemId)
+		if err != nil {
+			log.Error("s.store.LoadItemBinary(itemId)", "err", err, "itemId", itemId)
+			continue
+		}
+
+		item, err2 := utils.DecodeBundleItemStream(binaryReader)
+		if err2 != nil {
+			log.Error("utils.DecodeBundleItem(itemBinary)", "err", err2, "itemId", itemId)
+			continue
+		}
+		binaryReader.Close()
+		os.Remove(binaryReader.Name())
+		onChainItems = append(onChainItems, *item)
 	}
-
-	// assemble and send to arweave
-	bundle, err := utils.NewBundle(onChainItems...)
-	if err != nil {
-		log.Error("utils.NewBundle(onChainItems...)", "err", err)
+	if len(onChainItems) == 0 {
+		err = errors.New("onChainItems is null")
 		return
-	}
-
-	// verify bundle, ensure that the bundle is exactly right before sending
-	if _, err = utils.DecodeBundle(bundle.BundleBinary); err != nil {
-		err = errors.New(fmt.Sprintf("Verify bundle failed; err:%v", err))
-		return
-	}
-
-	arTxtags := []types.Tag{
-		{Name: "App-Name", Value: "arseeding"},
-		{Name: "App-Version", Value: "1.0.0"},
-		{Name: "Action", Value: "Bundle"},
-		{Name: "Protocol-Name", Value: "BAR"},
-		{Name: "Action", Value: "Burn"},
-		{Name: "App-Name", Value: "SmartWeaveAction"},
-		{Name: "App-Version", Value: "0.3.0"},
-		{Name: "Input", Value: `{"function":"mint"}`},
-		{Name: "Contract", Value: "VFr3Bk-uM-motpNNkkFg4lNW1BMmSfzqsVO551Ho4hA"},
-	}
-
-	if len(s.customTags) > 0 {
-		arTxtags = append(s.customTags, arTxtags...)
-	}
-
-	// speed arTx Fee
-	price := calculatePrice(s.cache.GetFee(), int64(len(bundle.BundleBinary)))
-	speedFactor := calculateFactor(price, s.config.GetSpeedFee())
-	concurrentNum := s.config.Param.ChunkConcurrentNum
-	arTx, err = s.bundler.SendBundleTxSpeedUp(context.TODO(), concurrentNum, bundle.BundleBinary, arTxtags, speedFactor)
-	if err != nil {
-		log.Error("s.bundler.SendBundleTxSpeedUp(bundle.BundleBinary,arTxtags)", "err", err)
-		return
-	}
-	log.Info("send bundle arTx", "arTx", arTx.ID)
-
-	// arseeding broadcast tx data
-	if err := s.arseedCli.SubmitTxConcurrent(context.TODO(), concurrentNum, arTx); err != nil {
-		log.Error("s.arseedCli.SubmitTxConcurrent(arTx)", "err", err, "arId", arTx.ID)
 	}
 	return
+	// the end off item.Data not be "", because when the case viewblock decode failed. // todo viewblock used stream function decode item, so this is a bug for them
+	// todo
 }
 
 func (s *Arseeding) processExpiredOrd() {
@@ -866,6 +961,17 @@ func (s *Arseeding) updateBundler() {
 		return
 	}
 	metricBundlerBalance(bal, addr)
+}
+
+func (s *Arseeding) deleteTmpFile() {
+	tmpFileMapLock.Lock()
+	defer tmpFileMapLock.Unlock()
+	for tmpFileName, cnt := range tmpFileMap {
+		if cnt <= 0 {
+			delete(tmpFileMap, tmpFileName)
+			os.Remove(tmpFileName)
+		}
+	}
 }
 
 func filterPeers(peers []string, constTx *types.Transaction) map[string]bool {
