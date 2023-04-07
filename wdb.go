@@ -301,6 +301,6 @@ func (w *Wdb) GetApiKeyDepositRecords(addr string, cursorId int64, num int) ([]s
 		cursorId = math.MaxInt64
 	}
 	records := make([]schema.ReceiptEverTx, 0, num)
-	err := w.Db.Model(&schema.ReceiptEverTx{}).Where("raw_id < ? and `from` = ? and JSON_VALID(rt. `data`) = 1 and JSON_CONTAINS(rt. `data`, JSON_OBJECT('action', 'apikeyPayment')) = 1", cursorId, addr).Order("raw_id DESC").Limit(num).Find(&records).Error
+	err := w.Db.Model(&schema.ReceiptEverTx{}).Where("raw_id < ? and `from` = ? and JSON_VALID(`data`) = 1 and JSON_CONTAINS(`data`, JSON_OBJECT('action', 'apikeyPayment')) = 1", cursorId, addr).Order("raw_id DESC").Limit(num).Find(&records).Error
 	return records, err
 }
