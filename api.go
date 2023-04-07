@@ -105,6 +105,7 @@ func (s *Arseeding) runAPI(port string) {
 		// apikey
 		v1.GET("/apikey_info/:address", s.getApiKeyInfo)
 		v1.GET("/apikey/:timestamp/:signature", s.getApiKey)
+		v1.GET("/apikey_records/deposit/:address", s.getApikeyDepositRecords)
 	}
 
 	go func() {
@@ -1214,4 +1215,47 @@ func (s *Arseeding) getApiKey(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, detail.ApiKey)
+}
+
+func (s *Arseeding) getApikeyDepositRecords(c *gin.Context) {
+	address := c.Param("address")
+	_, addr, err := account.IDCheck(address)
+	if err != nil {
+		internalErrorResponse(c, err.Error())
+		return
+	}
+
+	rawId, err := strconv.ParseInt(c.DefaultQuery("rawId", "0"), 10, 64)
+	if err != nil {
+		errorResponse(c, err.Error())
+		return
+	}
+	num, err := strconv.ParseInt(c.DefaultQuery("num", "20"), 10, 64)
+	if err != nil {
+		errorResponse(c, err.Error())
+		return
+	}
+
+	receiptTxs, err := s.wdb.GetApiKeyDepositRecords(addr, rawId, int(num))
+	if err != nil {
+		internalErrorResponse(c, err.Error())
+		return
+	}
+	respRecords := make([]schema.RespReceiptEverTx, 0, len(receiptTxs))
+	for _, tx := range receiptTxs {
+		perFee := s.GetPerFee(tx.Symbol)
+		if perFee == nil {
+			continue
+		}
+		respRecords = append(respRecords, schema.RespReceiptEverTx{
+			RawId:     tx.RawId,
+			EverHash:  tx.EverHash,
+			Timestamp: tx.Nonce,
+			Symbol:    tx.Symbol,
+			Amount:    tx.Amount,
+			Decimals:  perFee.Decimals,
+		})
+	}
+
+	c.JSON(http.StatusOK, respRecords)
 }

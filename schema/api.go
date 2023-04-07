@@ -10,6 +10,15 @@ const (
 	SubmitMaxSize          = 1024 * 1024 * 1024 // 1 GB
 )
 
+type RespReceiptEverTx struct {
+	RawId     uint64 `json:"rawId"` // everTx rawId
+	EverHash  string `json:"everHash"`
+	Timestamp int64  `json:"timestamp"` // ms
+	Symbol    string `json:"symbol"`
+	Amount    string `json:"amount"`
+	Decimals  int    `json:"decimals"`
+}
+
 type RespOrder struct {
 	ItemId             string `json:"itemId"` // bundleItem id
 	Size               int64  `json:"size"`
