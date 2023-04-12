@@ -29,7 +29,10 @@ require (
 	gorm.io/gorm v1.22.4
 )
 
-require github.com/gabriel-vasile/mimetype v1.4.2
+require (
+	github.com/gabriel-vasile/mimetype v1.4.2
+	go.mongodb.org/mongo-driver v1.11.4
+)
 
 require (
 	github.com/StackExchange/wmi v1.2.1 // indirect
