@@ -7,34 +7,41 @@ import (
 	"testing"
 )
 
-type Test struct {
-	Name string
-	Exp  string
-}
-
 func TestNewMongoDB(t *testing.T) {
-	db, err := NewMongoDB(context.TODO(), "mongodb://root:password@localhost:27017", "arseeding")
+	db, err := NewMongoDB(context.TODO(), "mongodb://root:pwd@localhost:27017", "arseeding")
+	if err != nil {
+		fmt.Println("Error TestNewMongoDB")
+		fmt.Println(err.Error())
+		return
+	}
+	t1 := uuid.New().String()
+	err = db.Put("arseeding", "testKey", []byte("test msg"))
+	err = db.Put("arseeding", t1, []byte("old"))
+	get1, err := db.Get("arseeding", t1)
+	fmt.Println(string(get1))
+
+	err = db.Put("arseeding", t1, []byte("new"))
+	get1, err = db.Get("arseeding", t1)
+	fmt.Println(string(get1))
+
 	if err != nil {
 		fmt.Println("Error")
 		fmt.Println(err.Error())
 		return
 	}
-	t1 := uuid.New().String()
-	t2 := uuid.New().String()
-	t3 := uuid.New().String()
-	t4 := uuid.New().String()
-	err = db.Put("arseeding", t2, []byte("string"))
-	get1, err := db.Get("arseeding", t1)
-	get4, err := db.Get("arseeding", t4)
-	get2, err := db.Get("arseeding", t2)
-	get3, err := db.Get("arseeding", t3)
-	fmt.Println(string(get1))
-	fmt.Println(string(get2))
-	fmt.Println(string(get3))
-	fmt.Println(string(get4))
+}
+
+func TestGet(t *testing.T) {
+	db, _ := NewMongoDB(context.TODO(), "mongodb://root:pwd@localhost:27017", "arseeding")
+	allKey, _ := db.GetAllKey("arseeding")
+	fmt.Println(len(allKey))
+	fmt.Println(allKey)
+}
+
+func TestDel(t *testing.T) {
+	db, _ := NewMongoDB(context.TODO(), "mongodb://root:pwd@localhost:27017", "arseeding")
+	err := db.Delete("arseeding", "testKey")
 	if err != nil {
-		fmt.Println("Error")
 		fmt.Println(err.Error())
-		return
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"os"
@@ -68,7 +69,7 @@ func (m *MongoDB) Get(bucket, key string) (data []byte, err error) {
 	doc := document{}
 	filter := bson.D{{K, key}}
 	err = m.database.Collection(bucket).FindOne(m.ctx, filter).Decode(&doc)
-	return doc.Value.([]byte), err
+	return doc.Value.(primitive.Binary).Data, err
 }
 
 func (m *MongoDB) GetAllKey(bucket string) (keys []string, err error) {
