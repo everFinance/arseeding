@@ -23,7 +23,7 @@ func TestDataSizeByStream(t *testing.T) {
 	assert.NoError(t, err)
 	item0, err := utils.DecodeBundleItem(itembinary)
 	assert.NoError(t, err)
-	assert.Equal(t, item0.BinaryReader, nil)
+	assert.Equal(t, item0.DataReader, nil)
 	binaryStream, err := os.Open("test.item")
 	defer binaryStream.Close()
 	assert.NoError(t, err)
