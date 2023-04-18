@@ -45,8 +45,8 @@ func NewAliyunStore(endpoint, accKey, secretKey, bucketPrefix string) (*Store, e
 	}, nil
 }
 
-func NewMongoDBStore(ctx context.Context, uri, dbName string) (*Store, error) {
-	Db, err := rawdb.NewMongoDB(ctx, uri, dbName)
+func NewMongoDBStore(ctx context.Context, uri string) (*Store, error) {
+	Db, err := rawdb.NewMongoDB(ctx, uri)
 	if err != nil {
 		return nil, err
 	}

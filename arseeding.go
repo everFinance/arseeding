@@ -1,6 +1,7 @@
 package arseeding
 
 import (
+	"context"
 	"github.com/everFinance/arseeding/config"
 	"github.com/everFinance/arseeding/rawdb"
 	"github.com/everFinance/arseeding/schema"
@@ -11,8 +12,8 @@ import (
 	"github.com/everFinance/goar/types"
 	"github.com/gin-gonic/gin"
 	"github.com/go-co-op/gocron"
-	"strings"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -52,6 +53,7 @@ func New(
 	arWalletKeyPath string, arNode, payUrl string, noFee bool, enableManifest bool,
 	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region, s3Endpoint string,
 	use4EVER bool, useAliyun bool, aliyunEndpoint, aliyunAccKey, aliyunSecretKey, aliyunPrefix string,
+	useMongoDb bool, mongodbUri string,
 	port string, customTags []types.Tag,
 ) *Arseeding {
 	var err error
@@ -67,6 +69,8 @@ func New(
 		KVDb, err = NewS3Store(s3AccKey, s3SecretKey, s3Region, s3BucketPrefix, s3Endpoint)
 	case useAliyun:
 		KVDb, err = NewAliyunStore(aliyunEndpoint, aliyunAccKey, aliyunSecretKey, aliyunPrefix)
+	case useMongoDb:
+		KVDb, err = NewMongoDBStore(context.Background(), mongodbUri)
 	default:
 		KVDb, err = NewBoltStore(boltDirPath)
 	}

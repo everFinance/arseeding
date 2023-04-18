@@ -8,7 +8,7 @@ import (
 )
 
 func TestNewMongoDB(t *testing.T) {
-	db, err := NewMongoDB(context.TODO(), "mongodb://root:pwd@localhost:27017", "arseeding")
+	db, err := NewMongoDB(context.TODO(), "mongodb://root:pwd@localhost:27017")
 	if err != nil {
 		fmt.Println("Error TestNewMongoDB")
 		fmt.Println(err.Error())
@@ -32,14 +32,14 @@ func TestNewMongoDB(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	db, _ := NewMongoDB(context.TODO(), "mongodb://root:pwd@localhost:27017", "arseeding")
+	db, _ := NewMongoDB(context.TODO(), "mongodb://root:pwd@localhost:27017")
 	allKey, _ := db.GetAllKey("arseeding")
 	fmt.Println(len(allKey))
 	fmt.Println(allKey)
 }
 
 func TestDel(t *testing.T) {
-	db, _ := NewMongoDB(context.TODO(), "mongodb://root:pwd@localhost:27017", "arseeding")
+	db, _ := NewMongoDB(context.TODO(), "mongodb://root:pwd@localhost:27017")
 	err := db.Delete("arseeding", "testKey")
 	if err != nil {
 		fmt.Println(err.Error())

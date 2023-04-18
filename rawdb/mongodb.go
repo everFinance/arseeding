@@ -27,10 +27,11 @@ const (
 	K           = "_id"
 	V           = "_value"
 	MongoDBType = "MongoDB"
+	dbName      = "arseeding"
 )
 
 // NewMongoDB uri be like mongodb://user:password@localhost:27017
-func NewMongoDB(ctx context.Context, uri, dbName string) (*MongoDB, error) {
+func NewMongoDB(ctx context.Context, uri string) (*MongoDB, error) {
 	clientOptions := options.Client().ApplyURI(uri)
 	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
