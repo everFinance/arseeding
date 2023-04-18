@@ -211,7 +211,8 @@ func (w *Wdb) GetLastEverRawId() (uint64, error) {
 
 func (w *Wdb) GetReceiptsByStatus(status string) ([]schema.ReceiptEverTx, error) {
 	res := make([]schema.ReceiptEverTx, 0)
-	err := w.Db.Model(&schema.ReceiptEverTx{}).Where("status = ?", status).Find(&res).Error
+	timestamp := time.Now().UnixMilli() - 24*60*60*1000 // latest 1 day
+	err := w.Db.Model(&schema.ReceiptEverTx{}).Where("status = ? and nonce > ?", status, timestamp).Find(&res).Error
 	return res, err
 }
 
