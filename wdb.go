@@ -55,7 +55,7 @@ func NewSqliteDb(dbDir string) *Wdb {
 // when use sqlite,same index name in different table will lead to migrate failed,
 
 func (w *Wdb) Migrate(noFee, enableManifest bool) error {
-	err := w.Db.AutoMigrate(&schema.Order{}, &schema.OnChainTx{}, &schema.AutoApiKey{})
+	err := w.Db.AutoMigrate(&schema.Order{}, &schema.OnChainTx{}, &schema.AutoApiKey{}, &schema.OrderStatistic{})
 	if err != nil {
 		return err
 	}
@@ -341,4 +341,17 @@ func (w *Wdb) GetOrderStatisticByDate(r schema.Range) ([]*schema.DailyStatistic,
 		})
 	}
 	return res, nil
+}
+
+func (w *Wdb) GetDailyStatisticByDate(r schema.TimeRange) ([]schema.Result, error) {
+	var results []schema.Result
+	return results, w.Db.Table("(?) as a", w.Db.Model(&schema.Order{}).Select("on_chain_status", "size").Where(w.Db.Where("created_at >= ? and created_at < ?", r.Start, r.End).Where(w.Db.Where("on_chain_status = ?", "pending").Or("on_chain_status = ?", "success")))).Select("on_chain_status as status ,count(1) as totals,sum(size) as total_data_size").Group("on_chain_status").Find(&results).Error
+}
+
+func (w *Wdb) WhetherExec(r schema.TimeRange) bool {
+	var o schema.Order
+	var osc schema.OrderStatistic
+	err := w.Db.Model(&schema.Order{}).Where("created_at >= ? and created_at < ?", r.Start, r.End).First(&o).Error
+	err2 := w.Db.Model(&schema.OrderStatistic{}).Where("date >= ? and date < ?", r.Start, r.End).First(&osc).Error
+	return err == nil && err2 != nil
 }

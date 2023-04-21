@@ -1278,7 +1278,7 @@ func (s *Arseeding) getRealTimeOrderStatistic(c *gin.Context) {
 func (s *Arseeding) getOrderStatisticByDate(c *gin.Context) {
 	var r schema.Range
 	if c.Request.Body == nil {
-		errorResponse(c, "chunk data can not be null")
+		errorResponse(c, "date range can not be null")
 		return
 	}
 	by, err := ioutil.ReadAll(c.Request.Body)

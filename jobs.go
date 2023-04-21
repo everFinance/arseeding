@@ -1079,9 +1079,29 @@ func arTxWatcher(arCli *goar.Client, arTxHash string) bool {
 }
 
 func (s *Arseeding) UpdateRealTime() {
-
+	data, err := s.wdb.GetOrderRealTimeStatistic()
+	if err != nil {
+		log.Error("s.wdb.GetOrderRealTimeStatistic()", "err", err)
+		return
+	}
+	if err := s.store.KVDb.Put(schema.StatisticBucket, "RealTimeOrderStatistic", data); err != nil {
+		log.Error("s.store.KVDb.Put()", "err", err)
+	}
 }
 
 func (s *Arseeding) ProduceDailyStatistic() {
-
+	now := time.Now()
+	end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	start := end.Add(-24 * time.Hour)
+	for s.wdb.WhetherExec(schema.TimeRange{Start: start, End: end}) {
+		results, err := s.wdb.GetDailyStatisticByDate(schema.TimeRange{Start: start, End: end})
+		if err != nil {
+			log.Error("s.ProduceDailyStatistic()", "err", err)
+			continue
+		}
+		for i := range results {
+			s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&schema.OrderStatistic{Date: start, Status: results[i].Status, Totals: results[i].Totals, TotalDataSize: results[i].TotalDataSize})
+		}
+		end, start = start, start.Add(-24*time.Hour)
+	}
 }
