@@ -106,6 +106,10 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/apikey_info/:address", s.getApiKeyInfo)
 		v1.GET("/apikey/:timestamp/:signature", s.getApiKey)
 		v1.GET("/apikey_records/deposit/:address", s.getApikeyDepositRecords)
+
+		//statistic
+		v1.GET("/statistic/realtime", s.getRealTimeOrderStatistic)
+		v1.POST("/statistic", s.getOrderStatisticByDate)
 	}
 
 	go func() {
@@ -1258,4 +1262,40 @@ func (s *Arseeding) getApikeyDepositRecords(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, respRecords)
+}
+
+func (s *Arseeding) getRealTimeOrderStatistic(c *gin.Context) {
+	result := make([]schema.Result, 0)
+	data, err := s.store.KVDb.Get(schema.StatisticBucket, "RealTimeOrderStatistic")
+	if err != nil {
+		internalErrorResponse(c, err.Error())
+		return
+	}
+	err = json.Unmarshal(data, &result)
+	c.JSON(http.StatusOK, result)
+}
+
+func (s *Arseeding) getOrderStatisticByDate(c *gin.Context) {
+	var r schema.Range
+	if c.Request.Body == nil {
+		errorResponse(c, "chunk data can not be null")
+		return
+	}
+	by, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		errorResponse(c, err.Error())
+		return
+	}
+	defer c.Request.Body.Close()
+
+	if err := json.Unmarshal(by, &r); err != nil {
+		errorResponse(c, err.Error())
+		return
+	}
+	results, err := s.wdb.GetOrderStatisticByDate(r)
+	if err != nil {
+		errorResponse(c, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, results)
 }

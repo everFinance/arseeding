@@ -1,6 +1,7 @@
 package arseeding
 
 import (
+	"encoding/json"
 	"github.com/everFinance/arseeding/schema"
 	"gorm.io/datatypes"
 	"gorm.io/driver/mysql"
@@ -304,4 +305,40 @@ func (w *Wdb) GetApiKeyDepositRecords(addr string, cursorId int64, num int) ([]s
 	records := make([]schema.ReceiptEverTx, 0, num)
 	err := w.Db.Model(&schema.ReceiptEverTx{}).Where("raw_id < ? and `from` = ? and JSON_VALID(`data`) = 1 and JSON_CONTAINS(`data`, JSON_OBJECT('action', 'apikeyPayment')) = 1", cursorId, addr).Order("raw_id DESC").Limit(num).Find(&records).Error
 	return records, err
+}
+
+func (w *Wdb) GetOrderRealTimeStatistic() ([]byte, error) {
+	var results []schema.Result
+	w.Db.Model(&schema.Order{}).Select("on_chain_status as status ,count(1) as totals,sum(size) as total_data_size").Group("on_chain_status").Find(&results)
+	return json.Marshal(results)
+}
+
+func (w *Wdb) GetOrderStatisticByDate(r schema.Range) ([]*schema.DailyStatistic, error) {
+	var orderstatistics []schema.OrderStatistic
+	start, err := time.Parse("20060102", r.Start)
+	if err != nil {
+		return nil, err
+	}
+	end, err := time.Parse("20060102", r.End)
+	if err != nil {
+		return nil, err
+	}
+	w.Db.Model(&schema.OrderStatistic{}).Where("date >= ? and date <= ?", start, end).Find(&orderstatistics)
+	res := make([]*schema.DailyStatistic, 0)
+	m := map[string][]*schema.Result{}
+	for i := range orderstatistics {
+		date := orderstatistics[i].Date.Format("20060102")
+		m[date] = append(m[date], &schema.Result{
+			Status:        orderstatistics[i].Status,
+			Totals:        orderstatistics[i].Totals,
+			TotalDataSize: orderstatistics[i].TotalDataSize,
+		})
+	}
+	for k, v := range m {
+		res = append(res, &schema.DailyStatistic{
+			Date:    k,
+			Results: v,
+		})
+	}
+	return res, nil
 }

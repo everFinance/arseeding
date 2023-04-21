@@ -67,6 +67,10 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 
 	// delete tmp file, one may be repeat request same data,tmp file can be reserve with short time
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.deleteTmpFile)
+
+	//statistic
+	s.scheduler.Cron("*/1 * * * *").SingletonMode().Do(s.UpdateRealTime)
+	s.scheduler.Every(1).Day().SingletonMode().Do(s.ProduceDailyStatistic)
 	s.scheduler.StartAsync()
 }
 
@@ -1072,4 +1076,12 @@ func arTxWatcher(arCli *goar.Client, arTxHash string) bool {
 		}
 	}
 	return false
+}
+
+func (s *Arseeding) UpdateRealTime() {
+
+}
+
+func (s *Arseeding) ProduceDailyStatistic() {
+
 }
