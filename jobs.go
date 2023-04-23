@@ -1091,17 +1091,44 @@ func (s *Arseeding) UpdateRealTime() {
 
 func (s *Arseeding) ProduceDailyStatistic() {
 	now := time.Now()
+	var firstOrder schema.Order
+	err := s.wdb.Db.Model(&schema.Order{}).First(&firstOrder).Error
+	//Not found
+	if err != nil {
+		return
+	}
+	start := time.Date(firstOrder.CreatedAt.Year(), firstOrder.CreatedAt.Month(), firstOrder.CreatedAt.Day(), 0, 0, 0, 0, now.Location())
 	end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	start := end.Add(-24 * time.Hour)
-	for s.wdb.WhetherExec(schema.TimeRange{Start: start, End: end}) {
-		results, err := s.wdb.GetDailyStatisticByDate(schema.TimeRange{Start: start, End: end})
-		if err != nil {
-			log.Error("s.ProduceDailyStatistic()", "err", err)
-			continue
+
+	//If yesterday's record already exists, return
+	if !s.wdb.WhetherExec(schema.TimeRange{Start: end.Add(-24 * time.Hour), End: end}) {
+		return
+	}
+	for start.Before(end) {
+		if s.wdb.WhetherExec(schema.TimeRange{Start: start, End: start.Add(24 * time.Hour)}) {
+			results, err := s.wdb.GetDailyStatisticByDate(schema.TimeRange{Start: start, End: start.Add(24 * time.Hour)})
+			if err != nil {
+				log.Error("s.ProduceDailyStatistic()", "err", err)
+				start = start.Add(24 * time.Hour)
+				continue
+			}
+			if len(results) == 0 {
+				nResults := []schema.OrderStatistic{
+					{Date: start, Status: "success"}, {Date: start, Status: "pending"},
+				}
+				s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&nResults)
+			} else if len(results) == 1 {
+				status := "success"
+				if results[0].Status == "success" {
+					status = "pending"
+				}
+				s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&schema.OrderStatistic{Date: start, Status: status})
+			}
+			for i := range results {
+				s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&schema.OrderStatistic{Date: start, Status: results[i].Status, Totals: results[i].Totals, TotalDataSize: results[i].TotalDataSize})
+			}
+
 		}
-		for i := range results {
-			s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&schema.OrderStatistic{Date: start, Status: results[i].Status, Totals: results[i].Totals, TotalDataSize: results[i].TotalDataSize})
-		}
-		end, start = start, start.Add(-24*time.Hour)
+		start = start.Add(24 * time.Hour)
 	}
 }

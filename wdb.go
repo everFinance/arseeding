@@ -309,7 +309,20 @@ func (w *Wdb) GetApiKeyDepositRecords(addr string, cursorId int64, num int) ([]s
 
 func (w *Wdb) GetOrderRealTimeStatistic() ([]byte, error) {
 	var results []schema.Result
+	status := []string{"waiting", "pending", "success", "failed"}
 	w.Db.Model(&schema.Order{}).Select("on_chain_status as status ,count(1) as totals,sum(size) as total_data_size").Group("on_chain_status").Find(&results)
+
+	for _, s := range status {
+		flag := true
+		for i := range results {
+			if s == results[i].Status {
+				flag = false
+			}
+		}
+		if flag {
+			results = append(results, schema.Result{Status: s})
+		}
+	}
 	return json.Marshal(results)
 }
 
@@ -349,9 +362,7 @@ func (w *Wdb) GetDailyStatisticByDate(r schema.TimeRange) ([]schema.Result, erro
 }
 
 func (w *Wdb) WhetherExec(r schema.TimeRange) bool {
-	var o schema.Order
 	var osc schema.OrderStatistic
-	err := w.Db.Model(&schema.Order{}).Where("created_at >= ? and created_at < ?", r.Start, r.End).First(&o).Error
 	err2 := w.Db.Model(&schema.OrderStatistic{}).Where("date >= ? and date < ?", r.Start, r.End).First(&osc).Error
-	return err == nil && err2 != nil
+	return err2 != nil
 }

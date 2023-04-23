@@ -59,10 +59,11 @@ func (m *MongoDB) Put(bucket, key string, value interface{}) (err error) {
 			{"$set", bson.D{{V, value}}},
 		}
 		_, err = m.database.Collection(bucket).UpdateOne(m.ctx, filter, update)
+		log.Info("Update Key >", K, key)
 		return
 	}
 	objID, err := m.database.Collection(bucket).InsertOne(m.ctx, doc)
-	log.Info("Put Key >", objID.InsertedID)
+	log.Info("Put Key >", K, objID.InsertedID)
 	return err
 }
 
@@ -70,7 +71,10 @@ func (m *MongoDB) Get(bucket, key string) (data []byte, err error) {
 	doc := document{}
 	filter := bson.D{{K, key}}
 	err = m.database.Collection(bucket).FindOne(m.ctx, filter).Decode(&doc)
-	return doc.Value.(primitive.Binary).Data, err
+	if err != nil {
+		return nil, err
+	}
+	return doc.Value.(primitive.Binary).Data, nil
 }
 
 func (m *MongoDB) GetAllKey(bucket string) (keys []string, err error) {
