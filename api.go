@@ -107,9 +107,9 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/apikey/:timestamp/:signature", s.getApiKey)
 		v1.GET("/apikey_records/deposit/:address", s.getApikeyDepositRecords)
 
-		//statistic
+		// statistic
 		v1.GET("/statistic/realtime", s.getRealTimeOrderStatistic)
-		v1.POST("/statistic", s.getOrderStatisticByDate)
+		v1.GET("/statistic/range", s.getOrderStatisticByDate)
 	}
 
 	go func() {
