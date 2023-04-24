@@ -1276,23 +1276,14 @@ func (s *Arseeding) getRealTimeOrderStatistic(c *gin.Context) {
 }
 
 func (s *Arseeding) getOrderStatisticByDate(c *gin.Context) {
-	var r schema.Range
-	if c.Request.Body == nil {
-		errorResponse(c, "date range can not be null")
-		return
-	}
-	by, err := ioutil.ReadAll(c.Request.Body)
+	start := c.Query("start")
+	end := c.Query("end")
+	_, err := time.Parse("20060102", start)
+	_, err = time.Parse("20060102", end)
 	if err != nil {
-		errorResponse(c, err.Error())
-		return
+		errorResponse(c, "Wrong time format, what is correct is yyyyMMdd")
 	}
-	defer c.Request.Body.Close()
-
-	if err := json.Unmarshal(by, &r); err != nil {
-		errorResponse(c, err.Error())
-		return
-	}
-	results, err := s.wdb.GetOrderStatisticByDate(r)
+	results, err := s.wdb.GetOrderStatisticByDate(schema.Range{Start: start, End: end})
 	if err != nil {
 		errorResponse(c, err.Error())
 		return

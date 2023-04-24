@@ -328,21 +328,15 @@ func (w *Wdb) GetOrderRealTimeStatistic() ([]byte, error) {
 
 func (w *Wdb) GetOrderStatisticByDate(r schema.Range) ([]*schema.DailyStatistic, error) {
 	var orderstatistics []schema.OrderStatistic
-	start, err := time.Parse("20060102", r.Start)
-	if err != nil {
-		return nil, err
-	}
-	end, err := time.Parse("20060102", r.End)
-	if err != nil {
-		return nil, err
-	}
+	start, _ := time.Parse("20060102", r.Start)
+	end, _ := time.Parse("20060102", r.End)
 	w.Db.Model(&schema.OrderStatistic{}).Where("date >= ? and date <= ?", start, end).Find(&orderstatistics)
 	res := make([]*schema.DailyStatistic, 0)
 	m := map[string][]*schema.Result{}
 	for i := range orderstatistics {
 		date := orderstatistics[i].Date.Format("20060102")
 		m[date] = append(m[date], &schema.Result{
-			Status:        orderstatistics[i].Status,
+			Status:        schema.SuccOnChain,
 			Totals:        orderstatistics[i].Totals,
 			TotalDataSize: orderstatistics[i].TotalDataSize,
 		})
@@ -358,7 +352,7 @@ func (w *Wdb) GetOrderStatisticByDate(r schema.Range) ([]*schema.DailyStatistic,
 
 func (w *Wdb) GetDailyStatisticByDate(r schema.TimeRange) ([]schema.Result, error) {
 	var results []schema.Result
-	return results, w.Db.Table("(?) as a", w.Db.Model(&schema.Order{}).Select("on_chain_status", "size").Where("updated_at >= ? and updated_at < ? and on_chain_status = ?", r.Start, r.End, "success")).Select("on_chain_status as status ,count(1) as totals,sum(size) as total_data_size").Group("on_chain_status").Find(&results).Error
+	return results, w.Db.Model(&schema.Order{}).Select("count(1) as totals,sum(size) as total_data_size").Where("updated_at >= ? and updated_at < ? and on_chain_status = ?", r.Start, r.End, "success").Group("on_chain_status").Find(&results).Error
 }
 
 func (w *Wdb) WhetherExec(r schema.TimeRange) bool {

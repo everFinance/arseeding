@@ -70,8 +70,9 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 
 	//statistic
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.UpdateRealTime)
-	s.scheduler.Every(1).Day().SingletonMode().Do(s.ProduceDailyStatistic)
+	s.scheduler.Every(1).Day().At("00:01").SingletonMode().Do(s.ProduceDailyStatistic)
 	s.scheduler.StartAsync()
+	s.ProduceDailyStatistic()
 }
 
 func (s *Arseeding) updateAnchor() {
@@ -1119,13 +1120,11 @@ func (s *Arseeding) ProduceDailyStatistic() {
 			continue
 		}
 		if len(results) == 0 {
-			nResults := []schema.OrderStatistic{
-				{Date: start, Status: "success"},
-			}
-			s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&nResults)
-		}
-		for i := range results {
-			s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&schema.OrderStatistic{Date: start, Status: results[i].Status, Totals: results[i].Totals, TotalDataSize: results[i].TotalDataSize})
+			s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&schema.OrderStatistic{
+				Date: start,
+			})
+		} else {
+			s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&schema.OrderStatistic{Date: start, Totals: results[0].Totals, TotalDataSize: results[0].TotalDataSize})
 		}
 		start = start.Add(24 * time.Hour)
 	}
