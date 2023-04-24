@@ -69,7 +69,7 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.deleteTmpFile)
 
 	//statistic
-	s.scheduler.Cron("*/1 * * * *").SingletonMode().Do(s.UpdateRealTime)
+	s.scheduler.Every(1).Minute().SingletonMode().Do(s.UpdateRealTime)
 	s.scheduler.Every(1).Day().SingletonMode().Do(s.ProduceDailyStatistic)
 	s.scheduler.StartAsync()
 }
@@ -1091,13 +1091,20 @@ func (s *Arseeding) UpdateRealTime() {
 
 func (s *Arseeding) ProduceDailyStatistic() {
 	now := time.Now()
+	var start time.Time
 	var firstOrder schema.Order
+	var osc schema.OrderStatistic
 	err := s.wdb.Db.Model(&schema.Order{}).First(&firstOrder).Error
 	//Not found
 	if err != nil {
 		return
 	}
-	start := time.Date(firstOrder.CreatedAt.Year(), firstOrder.CreatedAt.Month(), firstOrder.CreatedAt.Day(), 0, 0, 0, 0, now.Location())
+	err = s.wdb.Db.Model(&schema.OrderStatistic{}).Last(&osc).Error
+	if err == nil {
+		start = osc.Date.Add(24 * time.Hour)
+	} else {
+		start = time.Date(firstOrder.CreatedAt.Year(), firstOrder.CreatedAt.Month(), firstOrder.CreatedAt.Day(), 0, 0, 0, 0, now.Location())
+	}
 	end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
 	//If yesterday's record already exists, return
@@ -1105,29 +1112,20 @@ func (s *Arseeding) ProduceDailyStatistic() {
 		return
 	}
 	for start.Before(end) {
-		if s.wdb.WhetherExec(schema.TimeRange{Start: start, End: start.Add(24 * time.Hour)}) {
-			results, err := s.wdb.GetDailyStatisticByDate(schema.TimeRange{Start: start, End: start.Add(24 * time.Hour)})
-			if err != nil {
-				log.Error("s.ProduceDailyStatistic()", "err", err)
-				start = start.Add(24 * time.Hour)
-				continue
+		results, err := s.wdb.GetDailyStatisticByDate(schema.TimeRange{Start: start, End: start.Add(24 * time.Hour)})
+		if err != nil {
+			log.Error("s.ProduceDailyStatistic()", "err", err)
+			start = start.Add(24 * time.Hour)
+			continue
+		}
+		if len(results) == 0 {
+			nResults := []schema.OrderStatistic{
+				{Date: start, Status: "success"},
 			}
-			if len(results) == 0 {
-				nResults := []schema.OrderStatistic{
-					{Date: start, Status: "success"}, {Date: start, Status: "pending"},
-				}
-				s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&nResults)
-			} else if len(results) == 1 {
-				status := "success"
-				if results[0].Status == "success" {
-					status = "pending"
-				}
-				s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&schema.OrderStatistic{Date: start, Status: status})
-			}
-			for i := range results {
-				s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&schema.OrderStatistic{Date: start, Status: results[i].Status, Totals: results[i].Totals, TotalDataSize: results[i].TotalDataSize})
-			}
-
+			s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&nResults)
+		}
+		for i := range results {
+			s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&schema.OrderStatistic{Date: start, Status: results[i].Status, Totals: results[i].Totals, TotalDataSize: results[i].TotalDataSize})
 		}
 		start = start.Add(24 * time.Hour)
 	}

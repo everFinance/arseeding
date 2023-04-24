@@ -358,7 +358,7 @@ func (w *Wdb) GetOrderStatisticByDate(r schema.Range) ([]*schema.DailyStatistic,
 
 func (w *Wdb) GetDailyStatisticByDate(r schema.TimeRange) ([]schema.Result, error) {
 	var results []schema.Result
-	return results, w.Db.Table("(?) as a", w.Db.Model(&schema.Order{}).Select("on_chain_status", "size").Where(w.Db.Where("created_at >= ? and created_at < ?", r.Start, r.End).Where(w.Db.Where("on_chain_status = ?", "pending").Or("on_chain_status = ?", "success")))).Select("on_chain_status as status ,count(1) as totals,sum(size) as total_data_size").Group("on_chain_status").Find(&results).Error
+	return results, w.Db.Table("(?) as a", w.Db.Model(&schema.Order{}).Select("on_chain_status", "size").Where("updated_at >= ? and updated_at < ? and on_chain_status = ?", r.Start, r.End, "success")).Select("on_chain_status as status ,count(1) as totals,sum(size) as total_data_size").Group("on_chain_status").Find(&results).Error
 }
 
 func (w *Wdb) WhetherExec(r schema.TimeRange) bool {

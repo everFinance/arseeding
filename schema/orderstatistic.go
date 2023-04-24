@@ -25,8 +25,9 @@ type DailyStatistic struct {
 }
 
 type OrderStatistic struct {
-	Date          time.Time `gorm:"primary_key"`
-	Status        string    `gorm:"primary_key"`
+	ID            uint `gorm:"primarykey"`
+	Date          time.Time
+	Status        string
 	Totals        int64
 	TotalDataSize int64
 }
