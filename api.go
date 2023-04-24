@@ -1266,7 +1266,7 @@ func (s *Arseeding) getApikeyDepositRecords(c *gin.Context) {
 
 func (s *Arseeding) getRealTimeOrderStatistic(c *gin.Context) {
 	result := make([]schema.Result, 0)
-	data, err := s.store.KVDb.Get(schema.StatisticBucket, "RealTimeOrderStatistic")
+	data, err := s.store.GetRealTimeStatistic()
 	if err != nil {
 		internalErrorResponse(c, err.Error())
 		return

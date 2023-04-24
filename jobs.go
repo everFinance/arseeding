@@ -1084,7 +1084,7 @@ func (s *Arseeding) UpdateRealTime() {
 		log.Error("s.wdb.GetOrderRealTimeStatistic()", "err", err)
 		return
 	}
-	if err := s.store.KVDb.Put(schema.StatisticBucket, "RealTimeOrderStatistic", data); err != nil {
+	if err := s.store.UpdateRealTimeStatistic(data); err != nil {
 		log.Error("s.store.KVDb.Put()", "err", err)
 	}
 }
