@@ -1279,9 +1279,14 @@ func (s *Arseeding) getOrderStatisticByDate(c *gin.Context) {
 	start := c.Query("start")
 	end := c.Query("end")
 	_, err := time.Parse("20060102", start)
+	if err != nil {
+		errorResponse(c, "Wrong time format, what is correct is yyyyMMdd")
+		return
+	}
 	_, err = time.Parse("20060102", end)
 	if err != nil {
 		errorResponse(c, "Wrong time format, what is correct is yyyyMMdd")
+		return
 	}
 	results, err := s.wdb.GetOrderStatisticByDate(schema.Range{Start: start, End: end})
 	if err != nil {

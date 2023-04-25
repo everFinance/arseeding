@@ -5,9 +5,9 @@ import (
 )
 
 type Result struct {
-	Status        string
-	Totals        int64
-	TotalDataSize int64
+	Status        string `json:"status"`
+	Totals        int64  `json:"totals"`
+	TotalDataSize int64  `json:"totalDataSize"`
 }
 
 type Range struct {
@@ -20,13 +20,13 @@ type TimeRange struct {
 	End   time.Time
 }
 type DailyStatistic struct {
-	Date    string
-	Results []*Result
+	Date    string    `json:"date"`
+	Results []*Result `json:"results"`
 }
 
 type OrderStatistic struct {
-	ID            uint `gorm:"primarykey"`
-	Date          time.Time
-	Totals        int64
-	TotalDataSize int64
+	ID            uint      `gorm:"primarykey"`
+	Date          time.Time `json:"date"`
+	Totals        int64     `json:"totals"`
+	TotalDataSize int64     `json:"totalDataSize"`
 }

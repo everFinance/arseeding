@@ -70,9 +70,9 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 
 	//statistic
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.UpdateRealTime)
+	go s.ProduceDailyStatistic()
 	s.scheduler.Every(1).Day().At("00:01").SingletonMode().Do(s.ProduceDailyStatistic)
 	s.scheduler.StartAsync()
-	s.ProduceDailyStatistic()
 }
 
 func (s *Arseeding) updateAnchor() {
