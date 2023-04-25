@@ -12,7 +12,6 @@ import (
 	"math"
 	"os"
 	"path"
-	"sort"
 	"strings"
 	"time"
 )
@@ -331,26 +330,22 @@ func (w *Wdb) GetOrderStatisticByDate(r schema.Range) ([]*schema.DailyStatistic,
 	var orderstatistics []schema.OrderStatistic
 	start, _ := time.Parse("20060102", r.Start)
 	end, _ := time.Parse("20060102", r.End)
-	w.Db.Model(&schema.OrderStatistic{}).Where("date >= ? and date <= ?", start, end).Find(&orderstatistics)
+	err := w.Db.Model(&schema.OrderStatistic{}).Where("date >= ? and date <= ?", start, end).Order("date").Find(&orderstatistics).Error
+	if err != nil {
+		return nil, err
+	}
 	res := make([]*schema.DailyStatistic, 0)
-	m := map[string][]*schema.Result{}
 	for i := range orderstatistics {
 		date := orderstatistics[i].Date.Format("20060102")
-		m[date] = append(m[date], &schema.Result{
-			Status:        schema.SuccOnChain,
-			Totals:        orderstatistics[i].Totals,
-			TotalDataSize: orderstatistics[i].TotalDataSize,
-		})
-	}
-	for k, v := range m {
 		res = append(res, &schema.DailyStatistic{
-			Date:    k,
-			Results: v,
+			Date: date,
+			Result: schema.Result{
+				Status:        schema.SuccOnChain,
+				Totals:        orderstatistics[i].Totals,
+				TotalDataSize: orderstatistics[i].TotalDataSize,
+			},
 		})
 	}
-	sort.Slice(res, func(i, j int) bool {
-		return res[i].Date < res[j].Date
-	})
 	return res, nil
 }
 

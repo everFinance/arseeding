@@ -20,8 +20,8 @@ type TimeRange struct {
 	End   time.Time
 }
 type DailyStatistic struct {
-	Date    string    `json:"date"`
-	Results []*Result `json:"results"`
+	Date   string `json:"date"`
+	Result Result `json:"result"`
 }
 
 type OrderStatistic struct {
