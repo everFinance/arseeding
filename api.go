@@ -106,6 +106,10 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/apikey_info/:address", s.getApiKeyInfo)
 		v1.GET("/apikey/:timestamp/:signature", s.getApiKey)
 		v1.GET("/apikey_records/deposit/:address", s.getApikeyDepositRecords)
+
+		// statistic
+		v1.GET("/statistic/realtime", s.getRealTimeOrderStatistic)
+		v1.GET("/statistic/range", s.getOrderStatisticByDate)
 	}
 
 	go func() {
@@ -1258,4 +1262,36 @@ func (s *Arseeding) getApikeyDepositRecords(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, respRecords)
+}
+
+func (s *Arseeding) getRealTimeOrderStatistic(c *gin.Context) {
+	result := make([]schema.Result, 0)
+	data, err := s.store.GetRealTimeStatistic()
+	if err != nil {
+		internalErrorResponse(c, err.Error())
+		return
+	}
+	err = json.Unmarshal(data, &result)
+	c.JSON(http.StatusOK, result)
+}
+
+func (s *Arseeding) getOrderStatisticByDate(c *gin.Context) {
+	start := c.Query("start")
+	end := c.Query("end")
+	_, err := time.Parse("20060102", start)
+	if err != nil {
+		errorResponse(c, "Wrong time format, what is correct is yyyyMMdd")
+		return
+	}
+	_, err = time.Parse("20060102", end)
+	if err != nil {
+		errorResponse(c, "Wrong time format, what is correct is yyyyMMdd")
+		return
+	}
+	results, err := s.wdb.GetOrderStatisticByDate(schema.Range{Start: start, End: end})
+	if err != nil {
+		errorResponse(c, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, results)
 }

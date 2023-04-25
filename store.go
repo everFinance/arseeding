@@ -1,6 +1,7 @@
 package arseeding
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
@@ -36,6 +37,16 @@ func NewBoltStore(boltDirPath string) (*Store, error) {
 
 func NewAliyunStore(endpoint, accKey, secretKey, bucketPrefix string) (*Store, error) {
 	Db, err := rawdb.NewAliyunDB(endpoint, accKey, secretKey, bucketPrefix)
+	if err != nil {
+		return nil, err
+	}
+	return &Store{
+		KVDb: Db,
+	}, nil
+}
+
+func NewMongoDBStore(ctx context.Context, uri string) (*Store, error) {
+	Db, err := rawdb.NewMongoDB(ctx, uri)
 	if err != nil {
 		return nil, err
 	}
@@ -366,4 +377,14 @@ func (s *Store) ExistArIdToItemIds(arId string) bool {
 		return false
 	}
 	return true
+}
+
+func (s *Store) UpdateRealTimeStatistic(data []byte) error {
+	key := "RealTimeOrderStatistic"
+	return s.KVDb.Put(schema.StatisticBucket, key, data)
+}
+
+func (s *Store) GetRealTimeStatistic() ([]byte, error) {
+	key := "RealTimeOrderStatistic"
+	return s.KVDb.Get(schema.StatisticBucket, key)
 }

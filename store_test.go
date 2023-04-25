@@ -1,7 +1,6 @@
 package arseeding
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/types"
@@ -219,11 +218,4 @@ func TestIntByte(t *testing.T) {
 	str := itob(v)
 	v2 := btoi(str)
 	assert.Equal(t, v, v2)
-}
-
-func TestNew(t *testing.T) {
-	b := make([]byte, 64)
-	v := uint64(233333)
-	binary.BigEndian.PutUint64(b, v)
-	t.Log(b)
 }

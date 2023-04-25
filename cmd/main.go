@@ -44,6 +44,9 @@ func main() {
 			&cli.StringFlag{Name: "aliyun_secret_key", Value: "your oss secret key", Usage: "aliyun oss secret key", EnvVars: []string{"ALIYUN_SECRET_KEY"}},
 			&cli.StringFlag{Name: "aliyun_prefix", Value: "arseed", Usage: "aliyun oss bucket name prefix", EnvVars: []string{"ALIYUN_PREFIX"}},
 
+			&cli.BoolFlag{Name: "use_mongodb", Value: false, Usage: "run with mongo db store", EnvVars: []string{"USE_MONGODB"}},
+			&cli.StringFlag{Name: "mongodb_uri", Value: "mongodb://user:password@localhost:27017", Usage: "mongo uri", EnvVars: []string{"MONGODB_URI"}},
+
 			&cli.StringFlag{Name: "port", Value: ":8080", EnvVars: []string{"PORT"}},
 			&cli.StringFlag{Name: "tags", Value: `{"Community":"PermaDAO","Website":"permadao.com"}`, EnvVars: []string{"TAGS"}},
 		},
@@ -77,8 +80,9 @@ func run(c *cli.Context) error {
 		c.String("db_dir"), c.String("mysql"), c.String("sqlite_dir"), c.Bool("use_sqlite"),
 		c.String("key_path"), c.String("ar_node"), c.String("pay"), c.Bool("no_fee"), c.Bool("manifest"),
 		c.Bool("use_s3"), c.String("s3_acc_key"), c.String("s3_secret_key"), c.String("s3_prefix"), c.String("s3_region"), c.String("s3_endpoint"),
-		c.Bool("use_4ever"), c.Bool("use_aliyun"), c.String("aliyun_endpoint"), c.String("aliyun_acc_key"), c.String("aliyun_secret_key"),
-		c.String("aliyun_prefix"), c.String("port"), customTags)
+		c.Bool("use_4ever"), c.Bool("use_aliyun"), c.String("aliyun_endpoint"), c.String("aliyun_acc_key"), c.String("aliyun_secret_key"), c.String("aliyun_prefix"),
+		c.Bool("use_mongodb"), c.String("mongodb_uri"),
+		c.String("port"), customTags)
 	s.Run(c.String("port"), c.Int("bundle_interval"))
 
 	common.NewMetricServer()

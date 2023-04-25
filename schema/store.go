@@ -19,4 +19,6 @@ var (
 	BundleWaitParseArIdBucket = "bundle-wait-parse-arId-bucket" // key: arId, val: "0x01"
 	BundleArIdToItemIdsBucket = "bundle-arId-to-itemIds-bucket" // key: arId, val: json.marshal(itemIds)
 
+	//statistic
+	StatisticBucket = "order-statistic-bucket"
 )

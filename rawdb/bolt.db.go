@@ -51,7 +51,9 @@ func NewBoltDB(boltDirPath string) (*BoltDB, error) {
 			schema.BundleItemBinary,
 			schema.BundleItemMeta,
 			schema.BundleWaitParseArIdBucket,
-			schema.BundleArIdToItemIdsBucket}
+			schema.BundleArIdToItemIdsBucket,
+			schema.StatisticBucket,
+		}
 		return createBuckets(tx, bucketNames)
 	}); err != nil {
 		return nil, err

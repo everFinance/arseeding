@@ -1,6 +1,7 @@
 package arseeding
 
 import (
+	"encoding/json"
 	"github.com/everFinance/arseeding/schema"
 	"gorm.io/datatypes"
 	"gorm.io/driver/mysql"
@@ -54,7 +55,7 @@ func NewSqliteDb(dbDir string) *Wdb {
 // when use sqlite,same index name in different table will lead to migrate failed,
 
 func (w *Wdb) Migrate(noFee, enableManifest bool) error {
-	err := w.Db.AutoMigrate(&schema.Order{}, &schema.OnChainTx{}, &schema.AutoApiKey{})
+	err := w.Db.AutoMigrate(&schema.Order{}, &schema.OnChainTx{}, &schema.AutoApiKey{}, &schema.OrderStatistic{})
 	if err != nil {
 		return err
 	}
@@ -211,7 +212,8 @@ func (w *Wdb) GetLastEverRawId() (uint64, error) {
 
 func (w *Wdb) GetReceiptsByStatus(status string) ([]schema.ReceiptEverTx, error) {
 	res := make([]schema.ReceiptEverTx, 0)
-	err := w.Db.Model(&schema.ReceiptEverTx{}).Where("status = ?", status).Find(&res).Error
+	timestamp := time.Now().UnixMilli() - 24*60*60*1000 // latest 1 day
+	err := w.Db.Model(&schema.ReceiptEverTx{}).Where("status = ? and nonce > ?", status, timestamp).Find(&res).Error
 	return res, err
 }
 
@@ -303,4 +305,57 @@ func (w *Wdb) GetApiKeyDepositRecords(addr string, cursorId int64, num int) ([]s
 	records := make([]schema.ReceiptEverTx, 0, num)
 	err := w.Db.Model(&schema.ReceiptEverTx{}).Where("raw_id < ? and `from` = ? and JSON_VALID(`data`) = 1 and JSON_CONTAINS(`data`, JSON_OBJECT('action', 'apikeyPayment')) = 1", cursorId, addr).Order("raw_id DESC").Limit(num).Find(&records).Error
 	return records, err
+}
+
+func (w *Wdb) GetOrderRealTimeStatistic() ([]byte, error) {
+	var results []schema.Result
+	status := []string{"waiting", "pending", "success", "failed"}
+	w.Db.Model(&schema.Order{}).Select("on_chain_status as status ,count(1) as totals,sum(size) as total_data_size").Group("on_chain_status").Find(&results)
+
+	for _, s := range status {
+		flag := true
+		for i := range results {
+			if s == results[i].Status {
+				flag = false
+			}
+		}
+		if flag {
+			results = append(results, schema.Result{Status: s})
+		}
+	}
+	return json.Marshal(results)
+}
+
+func (w *Wdb) GetOrderStatisticByDate(r schema.Range) ([]*schema.DailyStatistic, error) {
+	var orderstatistics []schema.OrderStatistic
+	start, _ := time.Parse("20060102", r.Start)
+	end, _ := time.Parse("20060102", r.End)
+	err := w.Db.Model(&schema.OrderStatistic{}).Where("date >= ? and date <= ?", start, end).Order("date").Find(&orderstatistics).Error
+	if err != nil {
+		return nil, err
+	}
+	res := make([]*schema.DailyStatistic, 0)
+	for i := range orderstatistics {
+		date := orderstatistics[i].Date.Format("20060102")
+		res = append(res, &schema.DailyStatistic{
+			Date: date,
+			Result: schema.Result{
+				Status:        schema.SuccOnChain,
+				Totals:        orderstatistics[i].Totals,
+				TotalDataSize: orderstatistics[i].TotalDataSize,
+			},
+		})
+	}
+	return res, nil
+}
+
+func (w *Wdb) GetDailyStatisticByDate(r schema.TimeRange) ([]schema.Result, error) {
+	var results []schema.Result
+	return results, w.Db.Model(&schema.Order{}).Select("count(1) as totals,sum(size) as total_data_size").Where("updated_at >= ? and updated_at < ? and on_chain_status = ?", r.Start, r.End, "success").Group("on_chain_status").Find(&results).Error
+}
+
+func (w *Wdb) WhetherExec(r schema.TimeRange) bool {
+	var osc schema.OrderStatistic
+	err2 := w.Db.Model(&schema.OrderStatistic{}).Where("date >= ? and date < ?", r.Start, r.End).First(&osc).Error
+	return err2 != nil
 }

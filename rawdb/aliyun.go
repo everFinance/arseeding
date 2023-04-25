@@ -151,6 +151,7 @@ func createAliyunBucket(svc *oss.Client, prefix string) error {
 		schema.BundleItemMeta,
 		schema.BundleWaitParseArIdBucket,
 		schema.BundleArIdToItemIdsBucket,
+		schema.StatisticBucket,
 	}
 
 	ownBuckets, err := getBucketWithPrefix(svc, prefix)

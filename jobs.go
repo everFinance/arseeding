@@ -67,6 +67,11 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 
 	// delete tmp file, one may be repeat request same data,tmp file can be reserve with short time
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.deleteTmpFile)
+
+	//statistic
+	s.scheduler.Every(1).Minute().SingletonMode().Do(s.UpdateRealTime)
+	go s.ProduceDailyStatistic()
+	s.scheduler.Every(1).Day().At("00:01").SingletonMode().Do(s.ProduceDailyStatistic)
 	s.scheduler.StartAsync()
 }
 
@@ -1072,4 +1077,55 @@ func arTxWatcher(arCli *goar.Client, arTxHash string) bool {
 		}
 	}
 	return false
+}
+
+func (s *Arseeding) UpdateRealTime() {
+	data, err := s.wdb.GetOrderRealTimeStatistic()
+	if err != nil {
+		log.Error("s.wdb.GetOrderRealTimeStatistic()", "err", err)
+		return
+	}
+	if err := s.store.UpdateRealTimeStatistic(data); err != nil {
+		log.Error("s.store.KVDb.Put()", "err", err)
+	}
+}
+
+func (s *Arseeding) ProduceDailyStatistic() {
+	now := time.Now()
+	var start time.Time
+	var firstOrder schema.Order
+	var osc schema.OrderStatistic
+	err := s.wdb.Db.Model(&schema.Order{}).First(&firstOrder).Error
+	//Not found
+	if err != nil {
+		return
+	}
+	err = s.wdb.Db.Model(&schema.OrderStatistic{}).Last(&osc).Error
+	if err == nil {
+		start = osc.Date.Add(24 * time.Hour)
+	} else {
+		start = time.Date(firstOrder.CreatedAt.Year(), firstOrder.CreatedAt.Month(), firstOrder.CreatedAt.Day(), 0, 0, 0, 0, now.Location())
+	}
+	end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+	//If yesterday's record already exists, return
+	if !s.wdb.WhetherExec(schema.TimeRange{Start: end.Add(-24 * time.Hour), End: end}) {
+		return
+	}
+	for start.Before(end) {
+		results, err := s.wdb.GetDailyStatisticByDate(schema.TimeRange{Start: start, End: start.Add(24 * time.Hour)})
+		if err != nil {
+			log.Error("s.ProduceDailyStatistic()", "err", err)
+			start = start.Add(24 * time.Hour)
+			continue
+		}
+		if len(results) == 0 {
+			s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&schema.OrderStatistic{
+				Date: start,
+			})
+		} else {
+			s.wdb.Db.Model(&schema.OrderStatistic{}).Create(&schema.OrderStatistic{Date: start, Totals: results[0].Totals, TotalDataSize: results[0].TotalDataSize})
+		}
+		start = start.Add(24 * time.Hour)
+	}
 }
