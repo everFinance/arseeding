@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"sort"
 	"strings"
 	"time"
 )
@@ -347,6 +348,9 @@ func (w *Wdb) GetOrderStatisticByDate(r schema.Range) ([]*schema.DailyStatistic,
 			Results: v,
 		})
 	}
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].Date < res[j].Date
+	})
 	return res, nil
 }
 
