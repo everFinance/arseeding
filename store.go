@@ -378,3 +378,13 @@ func (s *Store) ExistArIdToItemIds(arId string) bool {
 	}
 	return true
 }
+
+func (s *Store) UpdateRealTimeStatistic(data []byte) error {
+	key := "RealTimeOrderStatistic"
+	return s.KVDb.Put(schema.StatisticBucket, key, data)
+}
+
+func (s *Store) GetRealTimeStatistic() ([]byte, error) {
+	key := "RealTimeOrderStatistic"
+	return s.KVDb.Get(schema.StatisticBucket, key)
+}

@@ -166,6 +166,7 @@ func createS3Bucket(svc s3iface.S3API, prefix string) error {
 		schema.BundleItemMeta,
 		schema.BundleWaitParseArIdBucket,
 		schema.BundleArIdToItemIdsBucket,
+		schema.StatisticBucket,
 	}
 	for _, bucketName := range bucketNames {
 		s3Bkt := getS3Bucket(prefix, bucketName) // s3 bucket name only accept lower case
