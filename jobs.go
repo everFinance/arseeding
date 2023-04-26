@@ -504,6 +504,7 @@ func getUnPaidOrdersByItemIds(wdb *Wdb, itemIds []string) ([]schema.Order, error
 func (s *Arseeding) collectFee() {
 	collectAddr := s.config.FeeCollectAddress()
 	if collectAddr == "" {
+		log.Warn("s.config.FeeCollectAddress()", "collectAddr", "null")
 		return
 	}
 
