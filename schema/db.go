@@ -58,6 +58,7 @@ type ReceiptEverTx struct {
 	EverHash string `gorm:"unique"`
 	Nonce    int64  // ms
 	Symbol   string
+	TokenTag string
 	From     string
 	Amount   string
 	Data     string

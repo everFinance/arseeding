@@ -1,8 +1,9 @@
 package schema
 
 type FeeConfig struct {
-	SpeedTxFee     int64 `json:"speedTxFee"`
-	BundleServeFee int64 `json:"bundleServeFee"`
+	SpeedTxFee        int64  `json:"speedTxFee"`
+	BundleServeFee    int64  `json:"bundleServeFee"`
+	FeeCollectAddress string `json:"feeCollectAddress"` // fee collection address
 }
 
 type IpRateWhitelist struct {

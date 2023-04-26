@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/arseeding/sdk"
-	"github.com/everFinance/everpay-go/common"
+	"github.com/everFinance/go-everpay/common"
 	"github.com/panjf2000/ants/v2"
 	"gopkg.in/h2non/gentleman.v2"
 	"sync"

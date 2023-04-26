@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/everFinance/arseeding/schema"
-	"github.com/everFinance/everpay-go/account"
+	"github.com/everFinance/go-everpay/account"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
 	"github.com/everFinance/goether"
@@ -1184,7 +1184,11 @@ func (s *Arseeding) getApiKeyInfo(c *gin.Context) {
 			log.Error("s.GetPerFee(symbol) not found", "symbol", symbol)
 			continue
 		}
-		tokens[s.everpaySdk.GetSymbolToTag()[strings.ToLower(symbol)]] = schema.TokBal{Symbol: symbol, Decimals: perFee.Decimals, Balance: bal.(string)}
+		tokenTags := s.everpaySdk.SymbolToTagArr(symbol)
+		if len(tokenTags) == 0 {
+			continue
+		}
+		tokens[tokenTags[0]] = schema.TokBal{Symbol: symbol, Decimals: perFee.Decimals, Balance: bal.(string)}
 	}
 
 	c.JSON(http.StatusOK, schema.RespApiKey{

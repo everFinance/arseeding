@@ -1,7 +1,7 @@
 package common
 
 import (
-	"github.com/everFinance/everpay-go/common"
+	"github.com/everFinance/go-everpay/common"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net/http"
 )

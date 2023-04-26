@@ -104,7 +104,11 @@ func TestSDK_PayApikey(t *testing.T) {
 	}
 	tokenSymbol := "GLMR"
 	amount := big.NewInt(500000000000000000)
-	everHash, err := sdk.PayApikey(tokenSymbol, amount)
+	tokenTags := sdk.Pay.SymbolToTagArr(tokenSymbol)
+	if len(tokenTags) == 0 {
+		panic("symbol not exist")
+	}
+	everHash, err := sdk.PayApikey(tokenTags[0], amount)
 	assert.NoError(t, err)
 	t.Log(everHash)
 }

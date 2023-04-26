@@ -1,7 +1,7 @@
 package rawdb
 
 import (
-	"github.com/everFinance/everpay-go/common"
+	"github.com/everFinance/go-everpay/common"
 	"os"
 )
 

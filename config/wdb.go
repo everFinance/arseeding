@@ -2,7 +2,7 @@ package config
 
 import (
 	"github.com/everFinance/arseeding/config/schema"
-	"github.com/everFinance/everpay-go/common"
+	"github.com/everFinance/go-everpay/common"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

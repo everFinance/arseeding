@@ -11,10 +11,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/everFinance/arseeding/rawdb"
 	"github.com/everFinance/arseeding/schema"
-	"github.com/everFinance/everpay-go/account"
-	"github.com/everFinance/everpay-go/config"
-	sdkSchema "github.com/everFinance/everpay-go/sdk/schema"
-	paySchema "github.com/everFinance/everpay-go/token/schema"
+	"github.com/everFinance/go-everpay/account"
+	"github.com/everFinance/go-everpay/config"
+	sdkSchema "github.com/everFinance/go-everpay/sdk/schema"
+	paySchema "github.com/everFinance/go-everpay/token/schema"
+	tokUtils "github.com/everFinance/go-everpay/token/utils"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
@@ -50,6 +51,8 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 		s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptEverTxs)
 		s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)
 		s.scheduler.Every(1).Minute().SingletonMode().Do(s.processExpiredOrd)
+		// collection fee
+		s.scheduler.Every(1).Day().At("00:00").SingletonMode().Do(s.collectFee)
 	}
 
 	s.scheduler.Every(bundleInterval).Seconds().SingletonMode().Do(s.onChainBundleItems) // can set a longer time, if the items are less. such as 2m
@@ -144,7 +147,7 @@ func (s *Arseeding) updateTokenPrice() {
 		if tp.ManualSet {
 			continue
 		}
-		price, err := config.GetTokenPriceByRedstone(tp.Symbol, "USDC")
+		price, err := config.GetTokenPriceByRedstone(tp.Symbol, "USDC", "")
 		if err != nil {
 			log.Error("config.GetTokenPriceByRedstone(tp.Symbol,\"USDC\")", "err", err, "symbol", tp.Symbol)
 			continue
@@ -192,7 +195,7 @@ func (s *Arseeding) watchEverReceiptTxs() {
 		panic(err)
 	}
 	subTx := s.everpaySdk.Cli.SubscribeTxs(sdkSchema.FilterQuery{
-		StartCursor: startCursor,
+		StartCursor: int64(startCursor),
 		Address:     s.bundler.Signer.Address,
 		Action:      paySchema.TxActionTransfer,
 	})
@@ -209,11 +212,13 @@ func (s *Arseeding) watchEverReceiptTxs() {
 				log.Error("account.IDCheck(tt.From)", "err", err, "from", tt.From)
 				continue
 			}
+
 			res := schema.ReceiptEverTx{
-				RawId:    tt.RawId,
+				RawId:    uint64(tt.RawId),
 				EverHash: tt.EverHash,
 				Nonce:    tt.Nonce,
 				Symbol:   tt.TokenSymbol,
+				TokenTag: tokUtils.Tag(tt.ChainType, tt.TokenSymbol, tt.TokenID),
 				From:     from,
 				Amount:   tt.Amount,
 				Data:     tt.Data,
@@ -496,6 +501,41 @@ func getUnPaidOrdersByItemIds(wdb *Wdb, itemIds []string) ([]schema.Order, error
 	return ordArr, nil
 }
 
+func (s *Arseeding) collectFee() {
+	collectAddr := s.config.FeeCollectAddress()
+	if collectAddr == "" {
+		return
+	}
+
+	// check bundler address token balance
+	tokBals, err := s.everpaySdk.Cli.Balances(s.bundler.Signer.Address)
+	if err != nil {
+		log.Error("s.everpaySdk.Cli.Balances(s.bundler.Signer.Address)", "err", err, "bundler", s.bundler.Signer.Address)
+		return
+	}
+
+	for _, tokBal := range tokBals.Balances {
+		amt, ok := new(big.Int).SetString(tokBal.Amount, 10)
+		if !ok {
+			continue
+		}
+		if amt.Cmp(big.NewInt(0)) <= 0 {
+			continue
+		}
+		mmap := map[string]string{
+			"appName": "arseeding",
+			"action":  "feeCollection",
+			"bundler": s.bundler.Signer.Address,
+		}
+		data, _ := json.Marshal(mmap)
+		_, err = s.everpaySdk.Transfer(tokBal.Tag, amt, collectAddr, string(data))
+		if err != nil {
+			log.Error("s.everpaySdk.Transfer(tokBal.Tag,amt,collectAddr,\"\")", "err", err)
+		}
+		time.Sleep(5 * time.Second)
+	}
+}
+
 func (s *Arseeding) refundReceipt() {
 	recpts, err := s.wdb.GetReceiptsByStatus(schema.UnRefund)
 	if err != nil {
@@ -522,7 +562,7 @@ func (s *Arseeding) refundReceipt() {
 			"refundEverHash": rpt.EverHash,
 		}
 		data, _ := json.Marshal(mmap)
-		everTx, err := s.everpaySdk.Transfer(rpt.Symbol, amount, rpt.From, string(data))
+		everTx, err := s.everpaySdk.Transfer(rpt.TokenTag, amount, rpt.From, string(data))
 		if err != nil { // notice: if refund failed, then need manual check and refund
 			log.Error("s.everpaySdk.Transfer", "err", err)
 			// update receipt status is unrefund
