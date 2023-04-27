@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	seedSchema "github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/arseeding/sdk/schema"
-	paySchema "github.com/everFinance/everpay-go/pay/schema"
+	paySchema "github.com/everFinance/go-everpay/pay/schema"
 	"github.com/everFinance/goar/types"
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/panjf2000/ants/v2"

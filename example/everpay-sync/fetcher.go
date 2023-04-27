@@ -3,7 +3,7 @@ package everpay_sync
 import (
 	"errors"
 	"fmt"
-	"github.com/everFinance/everpay-go/common"
+	"github.com/everFinance/go-everpay/common"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"time"

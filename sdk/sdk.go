@@ -6,8 +6,8 @@ import (
 	"fmt"
 	arseedSchema "github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/arseeding/sdk/schema"
-	paySchema "github.com/everFinance/everpay-go/pay/schema"
-	paySdk "github.com/everFinance/everpay-go/sdk"
+	paySchema "github.com/everFinance/go-everpay/pay/schema"
+	paySdk "github.com/everFinance/go-everpay/sdk"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
@@ -169,11 +169,40 @@ func (s *SDK) PayOrders(orders []*arseedSchema.RespOrder) (everTx *paySchema.Tra
 	if err != nil {
 		return
 	}
-	everTx, err = s.Pay.Transfer(orders[0].Currency, totalFee, orders[0].Bundler, string(dataJs))
+	tokenTags := s.Pay.SymbolToTagArr(orders[0].Currency)
+	if len(tokenTags) == 0 {
+		err = errors.New("currency not exist token")
+		return
+	}
+	tokBals, err := s.Pay.Cli.Balances(s.Pay.AccId)
+	if err != nil {
+		return
+	}
+	tagToBal := make(map[string]*big.Int)
+	for _, bal := range tokBals.Balances {
+		amt, _ := new(big.Int).SetString(bal.Amount, 10)
+		tagToBal[bal.Tag] = amt
+	}
+	useTag := ""
+	for _, tag := range tokenTags {
+		amt, ok := tagToBal[tag]
+		if !ok {
+			continue
+		}
+		if amt.Cmp(totalFee) >= 0 {
+			useTag = tag
+		}
+	}
+	if useTag == "" {
+		err = errors.New("token balance insufficient")
+		return
+	}
+
+	everTx, err = s.Pay.Transfer(useTag, totalFee, orders[0].Bundler, string(dataJs))
 	return
 }
 
-func (s *SDK) PayApikey(tokenSymbol string, amount *big.Int) (everHash string, err error) {
+func (s *SDK) PayApikey(tokenTag string, amount *big.Int) (everHash string, err error) {
 	bundler, err := s.Cli.GetBundler()
 	if err != nil {
 		return
@@ -192,7 +221,7 @@ func (s *SDK) PayApikey(tokenSymbol string, amount *big.Int) (everHash string, e
 		return
 	}
 
-	everTx, err := s.Pay.Transfer(tokenSymbol, amount, bundler, string(dataJs))
+	everTx, err := s.Pay.Transfer(tokenTag, amount, bundler, string(dataJs))
 	if err != nil {
 		fmt.Println("2")
 		return

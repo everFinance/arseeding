@@ -3,7 +3,7 @@ package bundle_item
 import (
 	"encoding/json"
 	"github.com/everFinance/arseeding/sdk"
-	paySdk "github.com/everFinance/everpay-go/sdk"
+	paySdk "github.com/everFinance/go-everpay/sdk"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goether"
@@ -52,7 +52,8 @@ func TestItemUseCase(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	_, err = payCli.Transfer(order.Currency, amount, order.Bundler, string(dataJs))
+	tokenTags := payCli.SymbolToTagArr(order.Currency)
+	_, err = payCli.Transfer(tokenTags[0], amount, order.Bundler, string(dataJs))
 	if err != nil {
 		t.Log("send failed", "err", err)
 		return

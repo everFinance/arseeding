@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/everFinance/arseeding/config/schema"
+	"github.com/everFinance/go-everpay/account"
 	"github.com/go-co-op/gocron"
 	"time"
 )
@@ -62,4 +63,18 @@ func (c *Config) Run() {
 
 func (c *Config) Close() {
 	c.wdb.Close()
+}
+
+func (s *Config) FeeCollectAddress() string {
+	feeCfg, err := s.wdb.GetFee()
+	if err != nil {
+		return ""
+	}
+	collectAddr := feeCfg.FeeCollectAddress
+	_, accId, err := account.IDCheck(collectAddr)
+	if err != nil {
+		log.Error("fee collection address incorrect", "err", err, "addr", collectAddr)
+		return ""
+	}
+	return accId
 }
