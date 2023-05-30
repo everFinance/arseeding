@@ -30,8 +30,9 @@ type Arseeding struct {
 	taskMg    *TaskManager
 	scheduler *gocron.Scheduler
 
-	cache  *Cache
-	config *config.Config
+	cache    *Cache
+	config   *config.Config
+	KWriters map[string]*KWriter // key: topic
 
 	// ANS-104 bundle
 	arseedCli           *sdk.ArSeedCli
@@ -54,7 +55,7 @@ func New(
 	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region, s3Endpoint string,
 	use4EVER bool, useAliyun bool, aliyunEndpoint, aliyunAccKey, aliyunSecretKey, aliyunPrefix string,
 	useMongoDb bool, mongodbUri string,
-	port string, customTags []types.Tag,
+	port string, customTags []types.Tag, useKafka bool, kafkaUri string,
 ) *Arseeding {
 	var err error
 	KVDb := &Store{}
@@ -138,6 +139,16 @@ func New(
 	if err := os.MkdirAll(schema.TmpFileDir, os.ModePerm); err != nil {
 		panic(err)
 	}
+
+	if useKafka {
+		kwriters, err := NewKWriters(kafkaUri)
+		if err != nil {
+			log.Error("NewKWriters(kafkaUri)", "err", err)
+			panic(err)
+		}
+		a.KWriters = kwriters
+	}
+
 	return a
 }
 
@@ -146,6 +157,13 @@ func (s *Arseeding) Run(port string, bundleInterval int) {
 	go s.runAPI(port)
 	go s.runJobs(bundleInterval)
 	go s.runTask()
+}
+
+func (s *Arseeding) Close() {
+	s.store.Close()
+	for _, k := range s.KWriters {
+		k.Close()
+	}
 }
 
 func (s *Arseeding) GetPerFee(tokenSymbol string) *schema.Fee {

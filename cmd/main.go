@@ -49,6 +49,10 @@ func main() {
 
 			&cli.StringFlag{Name: "port", Value: ":8080", EnvVars: []string{"PORT"}},
 			&cli.StringFlag{Name: "tags", Value: `{"Community":"PermaDAO","Website":"permadao.com"}`, EnvVars: []string{"TAGS"}},
+
+			// kafka
+			&cli.BoolFlag{Name: "use_kafka", Value: true, Usage: "kafka used", EnvVars: []string{"USE_KAFKA"}},
+			&cli.StringFlag{Name: "kafka_uri", Value: "34.220.174.25:9092", Usage: "kafka uri", EnvVars: []string{"KAFKA_URI"}},
 		},
 		Action: run,
 	}
@@ -82,12 +86,14 @@ func run(c *cli.Context) error {
 		c.Bool("use_s3"), c.String("s3_acc_key"), c.String("s3_secret_key"), c.String("s3_prefix"), c.String("s3_region"), c.String("s3_endpoint"),
 		c.Bool("use_4ever"), c.Bool("use_aliyun"), c.String("aliyun_endpoint"), c.String("aliyun_acc_key"), c.String("aliyun_secret_key"), c.String("aliyun_prefix"),
 		c.Bool("use_mongodb"), c.String("mongodb_uri"),
-		c.String("port"), customTags)
+		c.String("port"), customTags,
+		c.Bool("use_kafka"), c.String("kafka_uri"))
 	s.Run(c.String("port"), c.Int("bundle_interval"))
 
 	common.NewMetricServer()
 
 	<-signals
 
+	s.Close()
 	return nil
 }

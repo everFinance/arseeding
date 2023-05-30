@@ -3,6 +3,7 @@ package arseeding
 import (
 	"encoding/json"
 	"github.com/everFinance/arseeding/schema"
+	"github.com/everFinance/goar/types"
 	"gorm.io/datatypes"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
@@ -242,12 +243,18 @@ func (w *Wdb) GetArTxByStatus(status string) ([]schema.OnChainTx, error) {
 	return res, err
 }
 
-func (w *Wdb) UpdateArTxStatus(arId, status string, tx *gorm.DB) error {
+func (w *Wdb) UpdateArTxStatus(arId, status string, arTxStatus *types.TxStatus, tx *gorm.DB) error {
 	db := w.Db
 	if tx != nil {
 		db = tx
 	}
-	return db.Model(&schema.OnChainTx{}).Where("ar_id = ?", arId).Update("status", status).Error
+	data := make(map[string]interface{})
+	data["status"] = status
+	if arTxStatus != nil {
+		data["block_id"] = arTxStatus.BlockIndepHash
+		data["block_height"] = arTxStatus.BlockHeight
+	}
+	return db.Model(&schema.OnChainTx{}).Where("ar_id = ?", arId).Updates(data).Error
 }
 
 func (w *Wdb) UpdateArTx(id uint, arId string, curHeight int64, dataSize, reward string, status string) error {
@@ -258,6 +265,16 @@ func (w *Wdb) UpdateArTx(id uint, arId string, curHeight int64, dataSize, reward
 	data["reward"] = reward
 	data["status"] = status
 	return w.Db.Model(&schema.OnChainTx{}).Where("id = ?", id).Updates(data).Error
+}
+
+func (w *Wdb) GetKafkaOnChains() ([]schema.OnChainTx, error) {
+	results := make([]schema.OnChainTx, 0)
+	err := w.Db.Model(&schema.OnChainTx{}).Where("block_height > ? and kafka = ? and status = ?", 1188855, false, schema.SuccOnChain).Limit(10).Find(&results).Error
+	return results, err
+}
+
+func (w *Wdb) KafkaOnChainDone(id uint) error {
+	return w.Db.Model(&schema.OnChainTx{}).Where("id = ?", id).Update("kafka", true).Error
 }
 
 func (w *Wdb) InsertManifest(mf schema.Manifest) error {
@@ -358,4 +375,14 @@ func (w *Wdb) WhetherExec(r schema.TimeRange) bool {
 	var osc schema.OrderStatistic
 	err2 := w.Db.Model(&schema.OrderStatistic{}).Where("date >= ? and date < ?", r.Start, r.End).First(&osc).Error
 	return err2 != nil
+}
+
+func (w *Wdb) GetKafkaOrderInfos() ([]schema.KafkaOrderInfo, error) {
+	results := make([]schema.KafkaOrderInfo, 0)
+	err := w.Db.Model(&schema.Order{}).Where("payment_expired_time > ? and payment_status = ? and kafka = ?", 1685356795, schema.SuccPayment, false).Limit(50).Find(&results).Error
+	return results, err
+}
+
+func (w *Wdb) KafkaDone(id uint) error {
+	return w.Db.Model(&schema.Order{}).Where("id = ?", id).Update("kafka", true).Error
 }
