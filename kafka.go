@@ -6,35 +6,38 @@ import (
 )
 
 const (
-	partition  = 0
 	ItemTopic  = "arseeding_transaction"
 	BlockTopic = "arseeding_block"
 )
 
 type KWriter struct {
-	topic string
-	conn  *kafka.Conn
+	w *kafka.Writer
 }
 
 func NewKWriter(topic string, uri string) (*KWriter, error) {
-	conn, err := kafka.DialLeader(context.Background(), "tcp", uri, topic, partition)
-	if err != nil {
-		return nil, err
+	w := &kafka.Writer{
+		Addr:     kafka.TCP(uri),
+		Topic:    topic,
+		Balancer: &kafka.LeastBytes{},
 	}
 
 	return &KWriter{
-		topic: topic,
-		conn:  conn,
+		w: w,
 	}, nil
 }
 
 func (kw *KWriter) Write(body []byte) error {
-	_, err := kw.conn.Write(body)
+	err := kw.w.WriteMessages(
+		context.Background(),
+		kafka.Message{
+			Value: body,
+		},
+	)
 	return err
 }
 
 func (kw *KWriter) Close() {
-	kw.conn.Close()
+	kw.w.Close()
 }
 
 func NewKWriters(uri string) (map[string]*KWriter, error) {
