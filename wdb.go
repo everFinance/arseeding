@@ -379,7 +379,7 @@ func (w *Wdb) WhetherExec(r schema.TimeRange) bool {
 
 func (w *Wdb) GetKafkaOrderInfos() ([]schema.KafkaOrderInfo, error) {
 	results := make([]schema.KafkaOrderInfo, 0)
-	err := w.Db.Model(&schema.Order{}).Where("payment_expired_time > ? and payment_status = ? and kafka = ?", 1685356795, schema.SuccPayment, false).Limit(50).Find(&results).Error
+	err := w.Db.Model(&schema.Order{}).Where("expected_block > ? and payment_status = ? and kafka = ?", 1189450, schema.SuccPayment, false).Limit(50).Find(&results).Error
 	return results, err
 }
 
