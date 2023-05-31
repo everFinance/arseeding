@@ -43,7 +43,7 @@ type Arseeding struct {
 	NoFee               bool // if true, means no bundle fee; default false
 	EnableManifest      bool
 	bundlePerFeeMap     map[string]schema.Fee // key: tokenSymbol, val: fee per chunk_size(256KB)
-	paymentExpiredRange int64                 // default 1 hour
+	paymentExpiredRange int64                 // default
 	expectedRange       int64                 // default 50 block
 	customTags          []types.Tag
 	locker              sync.RWMutex
