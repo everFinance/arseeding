@@ -19,9 +19,9 @@ type KafkaBundleItem struct {
 	Tags          []types.Tag `json:"tags"`
 	Id            string      `json:"id"`
 
-	Size    int64 `json:"size"`
-	Address string
-	Type    string // data type
+	Size    int64  `json:"size"`
+	Address string `json:"address"`
+	Type    string `json:"type"` // data type
 }
 
 type KafkaOnChainInfo struct {
