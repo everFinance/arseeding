@@ -50,8 +50,8 @@ type Order struct {
 
 	OnChainStatus string `gorm:"index:idx5" json:"onChainStatus"` // "waiting","pending","success","failed"
 	ApiKey        string `gorm:"index:idx2" json:"-"`
-	Sort          bool   `json:"sort"`       // upload items to arweave by sequence
-	Kafka         bool   `gorm:"index:idx0"` // send to kafka
+	Sort          bool   `json:"sort"`                     // upload items to arweave by sequence
+	Kafka         bool   `gorm:"index:idx0"  json:"kafka"` // send to kafka
 }
 
 type ReceiptEverTx struct {
