@@ -3,11 +3,11 @@ package arseeding
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/everFinance/arseeding/rawdb"
@@ -1202,22 +1202,15 @@ func (s *Arseeding) broadcastItemToKafka() {
 			continue
 		}
 		// 0x hex to base64
-		addr, err := HexToBase64(ord.Signer)
-		if err != nil {
-			log.Error("HexToBase64(ord.Signer)", "err", err, "addr", ord.Signer)
-			continue
-		}
-		target, err := HexToBase64(meta.Target)
-		if err != nil {
-			log.Error("HexToBase64(meta.Target)", "err", err, "target", meta.Target)
-			continue
+		addr := ord.Signer
+		if meta.SignatureType != types.ArweaveSignType {
+			addr, err = Base64Address(meta.Owner)
+			if err != nil {
+				log.Error("Base64Address(meta.Owner)", "err", err, "signer", ord.Signer, "owner", meta.Owner)
+				continue
+			}
 		}
 
-		anchor, err := HexToBase64(meta.Anchor)
-		if err != nil {
-			log.Error("HexToBase64(meta.Anchor)", "err", err, "anchor", meta.Anchor)
-			continue
-		}
 		// data content type
 		contentType := getTagValue(meta.Tags, schema.ContentType)
 
@@ -1225,8 +1218,8 @@ func (s *Arseeding) broadcastItemToKafka() {
 			SignatureType: meta.SignatureType,
 			Signature:     meta.Signature,
 			Owner:         meta.Owner,
-			Target:        target,
-			Anchor:        anchor,
+			Target:        meta.Target,
+			Anchor:        meta.Anchor,
 			Tags:          meta.Tags,
 			Id:            meta.Id,
 			Size:          ord.Size,
@@ -1238,6 +1231,7 @@ func (s *Arseeding) broadcastItemToKafka() {
 			log.Error("json.Marshal(kItem)", "err", err)
 			continue
 		}
+		log.Debug("produce item to kafka", "item", string(itemBy))
 		if err = itemTopicKw.Write(itemBy); err != nil {
 			log.Error("itemTopicKw.Write(itemBy)", "err", err)
 			continue
@@ -1301,16 +1295,11 @@ func (s *Arseeding) broadcastBlockToKafka() {
 	}
 }
 
-func HexToBase64(hexStr string) (string, error) {
-	if len(hexStr) == 0 {
-		return "", nil
-	}
-	if !strings.HasPrefix(hexStr, "0x") {
-		return hexStr, nil
-	}
-	ssBy, err := hexutil.Decode(hexStr)
+func Base64Address(pubkey string) (string, error) {
+	bby, err := utils.Base64Decode(pubkey)
 	if err != nil {
 		return "", err
 	}
-	return utils.Base64Encode(ssBy), nil
+	aa := sha256.Sum256(bby)
+	return utils.Base64Encode(aa[:]), nil
 }

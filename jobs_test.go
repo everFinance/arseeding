@@ -12,3 +12,10 @@ func TestEcrecoverPubkey(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "0481fc0c730b4ef129feb6994e79a30f604bed227bdaaeb2184a1f554c728c9b5987184f6b6ddba329b2652c3418518eb56075a3e249084d3943c7af0321967c67", pubkey)
 }
+
+func TestBase64Address(t *testing.T) {
+	pub := "BNGYKP0o-HlwclXUOzKSAXuSE1RPLfhLvo3_d9JuQNGrbg4z1UA_AAD8REXBAFjjN5GJt85vk2KvYdwwER812ro"
+	addr, err := Base64Address(pub)
+	assert.NoError(t, err)
+	assert.Equal(t, "NqG1FwGUVRcOzZeVHciV6pFLRgS1l4AkbxaYXY0kxvM", addr)
+}
