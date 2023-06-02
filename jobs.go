@@ -1231,7 +1231,6 @@ func (s *Arseeding) broadcastItemToKafka() {
 			log.Error("json.Marshal(kItem)", "err", err)
 			continue
 		}
-		log.Debug("produce item to kafka", "item", string(itemBy))
 		if err = itemTopicKw.Write(itemBy); err != nil {
 			log.Error("itemTopicKw.Write(itemBy)", "err", err)
 			continue
