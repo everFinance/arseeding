@@ -52,7 +52,8 @@ func main() {
 
 			// kafka
 			&cli.BoolFlag{Name: "use_kafka", Value: true, Usage: "kafka used", EnvVars: []string{"USE_KAFKA"}},
-			&cli.StringFlag{Name: "kafka_uri", Value: "34.220.174.25:9092", Usage: "kafka uri", EnvVars: []string{"KAFKA_URI"}},
+			// &cli.StringFlag{Name: "kafka_uri", Value: "34.220.174.25:9092", Usage: "kafka uri", EnvVars: []string{"KAFKA_URI"}},
+			&cli.StringFlag{Name: "kafka_uri", Value: "kafka.corp.knn3.xyz:19092", Usage: "kafka uri", EnvVars: []string{"KAFKA_URI"}},
 		},
 		Action: run,
 	}
