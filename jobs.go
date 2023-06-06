@@ -3,6 +3,7 @@ package arseeding
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -75,6 +76,13 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.UpdateRealTime)
 	go s.ProduceDailyStatistic()
 	s.scheduler.Every(1).Day().At("00:01").SingletonMode().Do(s.ProduceDailyStatistic)
+
+	// kafka
+	if len(s.KWriters) > 0 {
+		s.scheduler.Every(10).Seconds().SingletonMode().Do(s.broadcastItemToKafka)
+		s.scheduler.Every(1).Minute().SingletonMode().Do(s.broadcastBlockToKafka)
+	}
+
 	s.scheduler.StartAsync()
 }
 
@@ -153,7 +161,7 @@ func (s *Arseeding) updateTokenPrice() {
 			continue
 		}
 		if price <= 0.0 {
-			log.Error("GetTokenPriceByRedstone return price less than 0.0", "token", tp.Symbol)
+			// log.Error("GetTokenPriceByRedstone return price less than 0.0", "token", tp.Symbol)
 			continue
 		}
 		// update tokenPrice
@@ -685,7 +693,7 @@ func (s *Arseeding) watchArTx() {
 		if err != nil {
 			if err != goar.ErrPendingTx && s.cache.GetInfo().Height-tx.CurHeight > 50 {
 				// arTx has expired
-				if err = s.wdb.UpdateArTxStatus(tx.ArId, schema.FailedOnChain, nil); err != nil {
+				if err = s.wdb.UpdateArTxStatus(tx.ArId, schema.FailedOnChain, nil, nil); err != nil {
 					log.Error("UpdateArTxStatus(tx.ArId,schema.FailedOnChain)", "err", err)
 				}
 			}
@@ -695,7 +703,7 @@ func (s *Arseeding) watchArTx() {
 		// update status success
 		if arTxStatus.NumberOfConfirmations > 3 {
 			dbTx := s.wdb.Db.Begin()
-			if err = s.wdb.UpdateArTxStatus(tx.ArId, schema.SuccOnChain, dbTx); err != nil {
+			if err = s.wdb.UpdateArTxStatus(tx.ArId, schema.SuccOnChain, arTxStatus, dbTx); err != nil {
 				log.Error("UpdateArTxStatus(tx.ArId,schema.SuccOnChain)", "err", err)
 				dbTx.Rollback()
 				continue
@@ -1169,4 +1177,128 @@ func (s *Arseeding) ProduceDailyStatistic() {
 		}
 		start = start.Add(24 * time.Hour)
 	}
+}
+
+func (s *Arseeding) broadcastItemToKafka() {
+	kafkaOrdInfos, err := s.wdb.GetKafkaOrderInfos()
+	if err != nil {
+		log.Error("s.wdb.GetKafkaOrderInfos()", "err", err)
+		return
+	}
+	if len(kafkaOrdInfos) == 0 {
+		return
+	}
+
+	itemTopicKw, ok := s.KWriters[ItemTopic]
+	if !ok {
+		log.Error("s.KWriters[ItemTopic]", "err", "not exist")
+		return
+	}
+	for _, ord := range kafkaOrdInfos {
+		// post to kafka
+		meta, err := s.store.LoadItemMeta(ord.ItemId)
+		if err != nil {
+			log.Error("s.store.LoadItemMeta(ord.ItemId)", "err", err, "itemId", ord.ItemId)
+			continue
+		}
+		// 0x hex to base64
+		addr := ord.Signer
+		if meta.SignatureType != types.ArweaveSignType {
+			addr, err = Base64Address(meta.Owner)
+			if err != nil {
+				log.Error("Base64Address(meta.Owner)", "err", err, "signer", ord.Signer, "owner", meta.Owner)
+				continue
+			}
+		}
+
+		// data content type
+		contentType := getTagValue(meta.Tags, schema.ContentType)
+
+		kItem := schema.KafkaBundleItem{
+			SignatureType: meta.SignatureType,
+			Signature:     meta.Signature,
+			Owner:         meta.Owner,
+			Target:        meta.Target,
+			Anchor:        meta.Anchor,
+			Tags:          meta.Tags,
+			Id:            meta.Id,
+			Size:          ord.Size,
+			Address:       addr,
+			Type:          contentType,
+		}
+		itemBy, err := json.Marshal(kItem)
+		if err != nil {
+			log.Error("json.Marshal(kItem)", "err", err)
+			continue
+		}
+		if err = itemTopicKw.Write(itemBy); err != nil {
+			log.Error("itemTopicKw.Write(itemBy)", "err", err)
+			continue
+		}
+
+		if err = s.wdb.KafkaDone(ord.ID); err != nil {
+			log.Error("s.wdb.KafkaDone(ord.ID)", "err", err, "id", ord.ID)
+			continue
+		}
+	}
+}
+
+func (s *Arseeding) broadcastBlockToKafka() {
+	kafkaOnchains, err := s.wdb.GetKafkaOnChains()
+	if err != nil {
+		log.Error("s.wdb.GetKafkaOnChains()", "err", err)
+		return
+	}
+
+	blockkw, ok := s.KWriters[BlockTopic]
+	if !ok {
+		log.Error("s.KWriters[BlockTopic]", "err", "not exist")
+		return
+	}
+	for _, onchain := range kafkaOnchains {
+		// get block timestamp and previous id
+		block, err := s.arCli.GetBlockByID(onchain.BlockId)
+		if err != nil {
+			log.Error("s.arCli.GetBlockByID(onchain.BlockId)", "err", err, "onchain.BlockId", onchain.BlockId)
+			continue
+		}
+		// post to kafka
+		itemIds := make([]string, 0)
+		if err := json.Unmarshal(onchain.ItemIds, &itemIds); err != nil {
+			log.Error("json.Unmarshal(onchain.ItemIds,&itemIds)", "err", err)
+			continue
+		}
+		onchainInfo := schema.KafkaOnChainInfo{
+			BundleIn:  onchain.ArId,
+			ItemIds:   itemIds,
+			Id:        onchain.BlockId,
+			Height:    onchain.BlockHeight,
+			Timestamp: block.Timestamp,
+			Previous:  block.PreviousBlock,
+		}
+
+		body, err := json.Marshal(onchainInfo)
+		if err != nil {
+			log.Error("json.Marshal(onchainInfo)", "err", err)
+			continue
+		}
+		if err = blockkw.Write(body); err != nil {
+			log.Error("blockkw.Write(body)", "err", err)
+			continue
+		}
+
+		if err = s.wdb.KafkaOnChainDone(onchain.ID); err != nil {
+			log.Error("s.wdb.KafkaOnChainDone(onchain.ID)", "err", err, "id", onchain.ID)
+			continue
+		}
+	}
+}
+
+func Base64Address(pubkey string) (string, error) {
+	bby, err := utils.Base64Decode(pubkey)
+	if err != nil {
+		return "", err
+	}
+	aa := sha256.Sum256(bby)
+	return utils.Base64Encode(aa[:]), nil
 }
