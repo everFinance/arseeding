@@ -832,7 +832,7 @@ func (s *Arseeding) onChainBundleTx(itemIds []string) (arTx types.Transaction, o
 		{Name: "App-Name", Value: "SmartWeaveAction"},
 		{Name: "App-Version", Value: "0.3.0"},
 		{Name: "Input", Value: `{"function":"mint"}`},
-		{Name: "Contract", Value: "VFr3Bk-uM-motpNNkkFg4lNW1BMmSfzqsVO551Ho4hA"},
+		{Name: "Contract", Value: "rO8f4nTVarU6OtU2284C8-BIH6HscNd-srhWznUllTk"},
 	}
 
 	if len(s.customTags) > 0 {
