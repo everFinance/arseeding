@@ -30,6 +30,15 @@ type RespOrder struct {
 	ExpectedBlock      int64  `json:"expectedBlock"`
 }
 
+type RespGetOrder struct {
+	ID uint `json:"id"`
+	RespOrder
+	PaymentStatus string `json:"paymentStatus"` // "unpaid", "paid", "expired"
+	PaymentId     string `json:"paymentId"`
+	OnChainStatus string `json:"onChainStatus"` // "waiting","pending","success","failed"
+	Sort          bool   `json:"sort"`
+}
+
 type RespItemId struct {
 	ItemId string `json:"itemId"` // bundleItem id
 	Size   int64  `json:"size"`
