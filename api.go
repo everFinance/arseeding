@@ -750,7 +750,27 @@ func (s *Arseeding) getOrdersByApiKey(c *gin.Context) {
 		internalErrorResponse(c, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, orders)
+	results := make([]schema.RespGetOrder, 0, len(orders))
+	for _, od := range orders {
+		results = append(results, schema.RespGetOrder{
+			ID: od.ID,
+			RespOrder: schema.RespOrder{
+				ItemId:             od.ItemId,
+				Size:               od.Size,
+				Bundler:            s.bundler.Signer.Address,
+				Currency:           od.Currency,
+				Decimals:           od.Decimals,
+				Fee:                od.Fee,
+				PaymentExpiredTime: od.PaymentExpiredTime,
+				ExpectedBlock:      od.ExpectedBlock,
+			},
+			PaymentStatus: od.PaymentStatus,
+			PaymentId:     od.PaymentId,
+			OnChainStatus: od.OnChainStatus,
+			Sort:          od.Sort,
+		})
+	}
+	c.JSON(http.StatusOK, results)
 }
 
 func (s *Arseeding) getItemMeta(c *gin.Context) {
@@ -850,7 +870,27 @@ func (s *Arseeding) getOrders(c *gin.Context) {
 		internalErrorResponse(c, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, orders)
+	results := make([]schema.RespGetOrder, 0, len(orders))
+	for _, od := range orders {
+		results = append(results, schema.RespGetOrder{
+			ID: od.ID,
+			RespOrder: schema.RespOrder{
+				ItemId:             od.ItemId,
+				Size:               od.Size,
+				Bundler:            s.bundler.Signer.Address,
+				Currency:           od.Currency,
+				Decimals:           od.Decimals,
+				Fee:                od.Fee,
+				PaymentExpiredTime: od.PaymentExpiredTime,
+				ExpectedBlock:      od.ExpectedBlock,
+			},
+			PaymentStatus: od.PaymentStatus,
+			PaymentId:     od.PaymentId,
+			OnChainStatus: od.OnChainStatus,
+			Sort:          od.Sort,
+		})
+	}
+	c.JSON(http.StatusOK, results)
 }
 
 func (s *Arseeding) bundleFees(c *gin.Context) {
