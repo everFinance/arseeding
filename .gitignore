@@ -3,3 +3,4 @@ go.sum
 build
 data
 .idea
+/vendor
