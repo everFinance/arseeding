@@ -99,6 +99,7 @@ func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
 				c.Abort()
 				return
 			}
+
 			_, dataReader, mfData, err := getArTxOrItemData(mfId, store)
 			defer func() {
 				if dataReader != nil {
@@ -165,4 +166,8 @@ func replaceId(txId string) string {
 		}
 	}
 	return string(byteArr)
+}
+
+func getSubDomain(domain string) string {
+	return strings.Split(domain, ".")[0]
 }

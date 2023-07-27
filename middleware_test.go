@@ -8,3 +8,10 @@ func TestSandboxMiddleware(t *testing.T) {
 	res := getRequestSandbox(host)
 	t.Log(res)
 }
+
+func TestGetSubDomain(t *testing.T) {
+	host := "cookbook.arseed.web3infura.io"
+
+	res := getSubDomain(host)
+	t.Log(res)
+}
