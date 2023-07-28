@@ -138,8 +138,9 @@ func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
 		if len(domain) > 0 && c.Request.Method == "GET" {
 
 			//debug domain
+			c.Abort()
 			c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(domain))
-
+			return
 			// get txId by goarns
 
 			// todo config or variable
