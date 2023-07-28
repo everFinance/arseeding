@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/utils"
+	"github.com/everFinance/goarns"
 	"github.com/gin-gonic/gin"
 	"github.com/ulule/limiter/v3"
 	mgin "github.com/ulule/limiter/v3/drivers/middleware/gin"
@@ -15,6 +16,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var (
@@ -129,6 +131,58 @@ func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
 			c.Abort()
 			c.Data(http.StatusOK, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
 			return
+		}
+
+		// arns logic
+		domain := getSubDomain(c.Request.Host)
+		if len(domain) > 0 && c.Request.Method == "GET" {
+			// get txId by goarns
+
+			// todo config or variable
+			dreUrl := "https://dre-3.warp.cc"
+			arNSAddress := "bLAgYxAdX2Ry-nt6aH2ixgvJXbpsEYm28NgJgyqfs-U"
+			timeout := 10 * time.Second
+
+			// todo add cache
+			a := goarns.NewArNS(dreUrl, arNSAddress, timeout)
+
+			txId, err := a.QueryLatestRecord(domain)
+
+			if err != nil {
+				c.Abort()
+				internalErrorResponse(c, err.Error())
+				return
+			}
+			_, dataReader, mfData, err := getArTxOrItemData(txId, store)
+			defer func() {
+				if dataReader != nil {
+					dataReader.Close()
+					os.Remove(dataReader.Name())
+				}
+			}()
+			if err != nil {
+				c.Abort()
+				internalErrorResponse(c, err.Error())
+				return
+			}
+			if dataReader != nil {
+				mfData, err = io.ReadAll(dataReader)
+				if err != nil {
+					c.Abort()
+					internalErrorResponse(c, err.Error())
+					return
+				}
+			}
+			tags, data, err := handleManifest(mfData, c.Request.URL.Path, store)
+			if err != nil {
+				c.Abort()
+				internalErrorResponse(c, err.Error())
+				return
+			}
+			c.Abort()
+			c.Data(http.StatusOK, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
+			return
+
 		}
 		c.Next()
 	}
