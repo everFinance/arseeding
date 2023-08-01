@@ -31,7 +31,6 @@ require (
 require (
 	github.com/everFinance/go-everpay v0.0.7
 	github.com/everFinance/goarns v0.0.1
-	github.com/gabriel-vasile/mimetype v1.4.2
 	github.com/segmentio/kafka-go v0.4.40
 	go.mongodb.org/mongo-driver v1.11.4
 )
@@ -48,6 +47,7 @@ require (
 	github.com/everFinance/ethrpc v1.0.4 // indirect
 	github.com/everFinance/gojwk v1.0.0 // indirect
 	github.com/everFinance/ttcrsa v1.1.3 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/getsentry/sentry-go v0.11.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
