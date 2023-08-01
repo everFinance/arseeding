@@ -43,11 +43,10 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.updateArFee)
 	s.scheduler.Every(30).Seconds().SingletonMode().Do(s.updateInfo)
 	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updatePeerMap)
-
+	s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateTokenPrice)
+	s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundlePerFee)
 	// about bundle
 	if !s.NoFee {
-		s.scheduler.Every(5).Minute().SingletonMode().Do(s.updateTokenPrice)
-		s.scheduler.Every(1).Minute().SingletonMode().Do(s.updateBundlePerFee)
 		go s.watchEverReceiptTxs()
 		s.scheduler.Every(5).Seconds().SingletonMode().Do(s.mergeReceiptEverTxs)
 		s.scheduler.Every(2).Minute().SingletonMode().Do(s.refundReceipt)

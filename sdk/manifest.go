@@ -6,9 +6,9 @@ import (
 	"github.com/everFinance/arseeding/sdk/schema"
 	paySchema "github.com/everFinance/go-everpay/pay/schema"
 	"github.com/everFinance/goar/types"
-	"github.com/gabriel-vasile/mimetype"
 	"github.com/panjf2000/ants/v2"
 	"io/ioutil"
+	"mime"
 	"os"
 	"path"
 	"path/filepath"
@@ -76,9 +76,11 @@ func (s *SDK) uploadFolder(rootPath string, batchSize int, indexFile string, cur
 		if err != nil {
 			panic(err)
 		}
-		mime := mimetype.Detect(data)
+
+		filePath := path.Join(rootPath, fp)
+
 		tags := []types.Tag{
-			{"Content-Type", mime.String()},
+			{"Content-Type", mime.TypeByExtension(filepath.Ext(filePath))},
 		}
 		// bundle item and send to arseeding
 		order, err := s.SendData(data, currency, noFeeApikey, &schema.OptionItem{Tags: tags}, needSequence)
