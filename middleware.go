@@ -133,10 +133,31 @@ func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
 			return
 		}
 
-		// arns logic
+		//  Gateway  logic
+		currentHost := c.Request.Host
 		domain := getSubDomain(c.Request.Host)
-		if len(domain) > 0 && c.Request.Method == "GET" {
+		// default  true
+		notApiHost := true
+		apiHostList := []string{
+			"seed-dev.everpay.io",
+			"arseed.web3infra.dev",
+		}
 
+		for _, b := range apiHostList {
+			if strings.Contains(currentHost, b) {
+				// if current host in apiHostList, notApiHost is false
+				notApiHost = false
+				break
+			}
+		}
+
+		// if domain is not empty and method is get and not in apiHostList
+		if len(domain) > 0 && c.Request.Method == "GET" && notApiHost {
+
+			host := c.Request.Host
+
+			// debug info todo remove
+			fmt.Println("current_host", host)
 			// get txId by goarns
 
 			// todo config or variable
@@ -148,6 +169,9 @@ func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
 			a := goarns.NewArNS(dreUrl, arNSAddress, timeout)
 
 			txId, err := a.QueryLatestRecord(domain)
+
+			// debug info todo remove
+			fmt.Println("txId", txId)
 
 			if err != nil {
 				c.Abort()
