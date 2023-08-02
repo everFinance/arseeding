@@ -29,6 +29,7 @@ require (
 )
 
 require (
+	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/everFinance/go-everpay v0.0.7
 	github.com/everFinance/goarns v0.0.1
 	github.com/segmentio/kafka-go v0.4.40
