@@ -2,6 +2,7 @@ package arseeding
 
 import (
 	"context"
+	"github.com/everFinance/arseeding/cache"
 	"github.com/everFinance/arseeding/config"
 	"github.com/everFinance/arseeding/rawdb"
 	"github.com/everFinance/arseeding/schema"
@@ -47,6 +48,7 @@ type Arseeding struct {
 	expectedRange       int64                 // default 50 block
 	customTags          []types.Tag
 	locker              sync.RWMutex
+	localCache          *cache.Cache
 }
 
 func New(
@@ -149,6 +151,11 @@ func New(
 		a.KWriters = kwriters
 	}
 
+	localCache, err := cache.NewLocalCache(30 * time.Minute)
+	if err != nil {
+		log.Error("NewLocalCache", "err", err)
+	}
+	a.localCache = localCache
 	return a
 }
 

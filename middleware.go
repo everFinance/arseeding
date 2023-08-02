@@ -4,6 +4,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
+	"github.com/everFinance/arseeding/cache"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/utils"
 	"github.com/everFinance/goarns"
@@ -73,7 +74,7 @@ func CORSMiddleware() gin.HandlerFunc {
 	}
 }
 
-func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
+func ManifestMiddleware(wdb *Wdb, store *Store, localCache *cache.Cache) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		prefixUri := getRequestSandbox(c.Request.Host)
 		if len(prefixUri) > 0 && c.Request.Method == "GET" {
@@ -154,30 +155,44 @@ func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
 		// if domain is not empty and method is get and not in apiHostList
 		if len(domain) > 0 && c.Request.Method == "GET" && notApiHost {
 
-			host := c.Request.Host
+			txId := ""
+			keyPrefix := "txId_"
 
-			// debug info todo remove
-			fmt.Println("current_host", host)
-			// get txId by goarns
-
-			// todo config or variable
-			dreUrl := "https://dre-3.warp.cc"
-			arNSAddress := "bLAgYxAdX2Ry-nt6aH2ixgvJXbpsEYm28NgJgyqfs-U"
-			timeout := 10 * time.Second
-
-			// todo add cache
-			a := goarns.NewArNS(dreUrl, arNSAddress, timeout)
-
-			txId, err := a.QueryLatestRecord(domain)
-
-			// debug info todo remove
-			fmt.Println("txId", txId)
-
+			// get txId by localCache
+			value, err := localCache.Cache.Get(keyPrefix + domain)
 			if err != nil {
-				c.Abort()
-				internalErrorResponse(c, err.Error())
-				return
+				log.Info("get localCache error", err)
 			}
+
+			if value != nil {
+				txId = string(value)
+			}
+
+			// if txId is empty, get txId by sdk
+			if txId == "" {
+
+				// todo config or variable
+				dreUrl := "https://dre-3.warp.cc"
+				arNSAddress := "bLAgYxAdX2Ry-nt6aH2ixgvJXbpsEYm28NgJgyqfs-U"
+				timeout := 10 * time.Second
+
+				a := goarns.NewArNS(dreUrl, arNSAddress, timeout)
+
+				txId, err = a.QueryLatestRecord(domain)
+				if err != nil {
+					c.Abort()
+					internalErrorResponse(c, err.Error())
+					return
+				}
+
+				// set cache
+				err = localCache.Cache.Set(keyPrefix+domain, []byte(txId))
+
+				if err != nil {
+					log.Error("set localCache error", err)
+				}
+			}
+
 			_, dataReader, mfData, err := getArTxOrItemData(txId, store)
 			defer func() {
 				if dataReader != nil {
