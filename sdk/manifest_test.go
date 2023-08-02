@@ -10,7 +10,7 @@ func TestSDK_UploadFolderAndPay(t *testing.T) {
 	priKey := "1d8bdd0d2f1e73dffe1111111118325b7e195669541f76559760ef615a588be3"
 	eccSigner, err := goether.NewSigner(priKey)
 	assert.NoError(t, err)
-	seedUrl := "https://arseed-dev.web3infra.dev"
+	seedUrl := "https://seed-dev.everpay.io"
 	payUrl := "https://api.everpay.io"
 	sdk, err := NewSDK(seedUrl, payUrl, eccSigner)
 	assert.NoError(t, err)
