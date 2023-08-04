@@ -193,13 +193,23 @@ func ManifestMiddleware(wdb *Wdb, store *Store, localCache *cache.Cache) gin.Han
 				}
 			}
 
-			_, dataReader, mfData, err := getArTxOrItemData(txId, store)
+			_, dataReader, mfData, err := getArTxOrItemDataForManifest(txId, store)
 			defer func() {
 				if dataReader != nil {
 					dataReader.Close()
 					os.Remove(dataReader.Name())
 				}
 			}()
+
+			// if err equal to schema.ErrLocalNotExist, return 200 and "syncing data please wait some minutes and fresh the page"
+			if err == schema.ErrLocalNotExist {
+				c.Abort()
+				c.JSON(http.StatusOK, gin.H{
+					"msg": "syncing data please wait some minutes and fresh the page",
+				})
+				return
+			}
+
 			if err != nil {
 				c.Abort()
 				internalErrorResponse(c, err.Error())

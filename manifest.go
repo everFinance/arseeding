@@ -65,6 +65,18 @@ func getArTxOrItemData(id string, db *Store) (decodeTags []types.Tag, binaryRead
 	return nil, nil, nil, schema.ErrLocalNotExist
 }
 
+func getArTxOrItemDataForManifest(id string, db *Store) (decodeTags []types.Tag, binaryReader *os.File, data []byte, err error) {
+
+	//  find bundle item form local
+	decodeTags, binaryReader, data, err = getArTxOrItemData(id, db)
+
+	//  if err equal ErrLocalNotExist, put task to queue to sync data
+	if err == schema.ErrLocalNotExist {
+
+	}
+	return nil, nil, nil, schema.ErrLocalNotExist
+}
+
 func getArTxOrItemTags(id string, db *Store) (decodeTags []types.Tag, err error) {
 	itemMeta, err := db.LoadItemMeta(id)
 	if err == nil {

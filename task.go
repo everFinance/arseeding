@@ -28,6 +28,8 @@ func (s *Arseeding) processTask(taskId string) {
 	case schema.TaskTypeBroadcastMeta:
 		err = s.broadcastTxMetaTask(arId)
 	}
+
+	// todo add new  task type  syncdate
 	if err != nil {
 		log.Error("process task failed", "err", err, "taskId", taskId)
 	}
@@ -146,4 +148,19 @@ func (s *Arseeding) setProcessedTask(arId string, tktype string) error {
 
 	// remove pending pool
 	return s.store.DelPendingPoolTaskId(taskId)
+}
+
+func (s *Arseeding) syncManifestData(arId string) (err error) {
+
+	// 0. check arId where exist in local db
+
+	// 1. get manifest json data
+
+	// 3. pares manifest json data
+
+	// 4. for each arId in manifest, check whether exist in local db
+
+	// 5. if not exist, fetch and store item
+
+	return err
 }
