@@ -73,8 +73,11 @@ func getArTxOrItemDataForManifest(id string, db *Store) (decodeTags []types.Tag,
 	//  if err equal ErrLocalNotExist, put task to queue to sync data
 	if err == schema.ErrLocalNotExist {
 
+		return nil, nil, nil, schema.ErrLocalNotExist
+
 	}
-	return nil, nil, nil, schema.ErrLocalNotExist
+
+	return decodeTags, binaryReader, data, err
 }
 
 func getArTxOrItemTags(id string, db *Store) (decodeTags []types.Tag, err error) {
