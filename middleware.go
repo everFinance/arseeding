@@ -4,7 +4,6 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
-	"github.com/everFinance/arseeding/cache"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/utils"
 	"github.com/everFinance/goarns"
@@ -74,7 +73,12 @@ func CORSMiddleware() gin.HandlerFunc {
 	}
 }
 
-func ManifestMiddleware(wdb *Wdb, store *Store, localCache *cache.Cache) gin.HandlerFunc {
+func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
+
+	wdb := s.wdb
+	store := s.store
+	localCache := s.localCache
+
 	return func(c *gin.Context) {
 		prefixUri := getRequestSandbox(c.Request.Host)
 		if len(prefixUri) > 0 && c.Request.Method == "GET" {
@@ -193,7 +197,8 @@ func ManifestMiddleware(wdb *Wdb, store *Store, localCache *cache.Cache) gin.Han
 				}
 			}
 
-			_, dataReader, mfData, err := getArTxOrItemDataForManifest(txId, store)
+			log.Debug(fmt.Sprintf("permaweb domian: %s txId: %s", domain, txId))
+			_, dataReader, mfData, err := getArTxOrItemDataForManifest(txId, store, s)
 			defer func() {
 				if dataReader != nil {
 					dataReader.Close()

@@ -1,9 +1,15 @@
 package arseeding
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/everFinance/arseeding/argraphql"
+	"gopkg.in/h2non/gentleman.v2"
 	"io"
+	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/everFinance/arseeding/schema"
@@ -65,7 +71,7 @@ func getArTxOrItemData(id string, db *Store) (decodeTags []types.Tag, binaryRead
 	return nil, nil, nil, schema.ErrLocalNotExist
 }
 
-func getArTxOrItemDataForManifest(id string, db *Store) (decodeTags []types.Tag, binaryReader *os.File, data []byte, err error) {
+func getArTxOrItemDataForManifest(id string, db *Store, s *Arseeding) (decodeTags []types.Tag, binaryReader *os.File, data []byte, err error) {
 
 	//  find bundle item form local
 	decodeTags, binaryReader, data, err = getArTxOrItemData(id, db)
@@ -73,8 +79,11 @@ func getArTxOrItemDataForManifest(id string, db *Store) (decodeTags []types.Tag,
 	//  if err equal ErrLocalNotExist, put task to queue to sync data
 	if err == schema.ErrLocalNotExist {
 
+		// registerTask
+		if err = s.registerTask(id, schema.TaskTypeSyncManifest); err != nil {
+			log.Error("registerTask  sync_manifest error", "err", err)
+		}
 		return nil, nil, nil, schema.ErrLocalNotExist
-
 	}
 
 	return decodeTags, binaryReader, data, err
@@ -124,4 +133,131 @@ func parseBundleItem(binaryReader *os.File, itemBinary []byte) (item *types.Bund
 		item, err = utils.DecodeBundleItem(itemBinary)
 	}
 	return
+}
+
+func syncManifestData(id string, s *Arseeding) (err error) {
+
+	//  get manifest  data
+	data, contentType, err := getRawById(id)
+	if err != nil {
+		return err
+	}
+
+	// not manifest data
+	if contentType != "application/x.arweave-manifest+json" {
+		bundleItem, err := getBundleItem(id, data)
+		if err != nil {
+			return err
+		}
+
+		err = s.store.AtomicSaveItem(bundleItem)
+
+		return err
+	}
+
+	//is manifest data parse it
+	mani := schema.ManifestData{}
+	if err := json.Unmarshal(data, &mani); err != nil {
+		return err
+	}
+
+	log.Debug("total txId in manifest", "len", len(mani.Paths))
+	// for each path in manifest
+	for _, txId := range mani.Paths {
+		log.Debug("syncManifestData", "txId", txId)
+		// getBundleItem
+		bundleItem, err := getBundleItem(txId.TxId, nil)
+
+		if err != nil {
+			return err
+		}
+
+		err = s.store.AtomicSaveItem(bundleItem)
+
+	}
+
+	return err
+}
+
+func getRawById(id string) (data []byte, contentType string, err error) {
+
+	var arGateway = "https://arweave.net"
+	client := gentleman.New().URL(arGateway)
+
+	res, err := client.Get().AddPath(fmt.Sprintf("/raw/%s", id)).Send()
+
+	if err != nil {
+		return nil, "", err
+	}
+
+	if !res.Ok {
+		return nil, "", fmt.Errorf("get raw data statuscode: %d  id: %s", res.StatusCode, id)
+	}
+
+	contentType = res.Header.Get("Content-Type")
+	data = res.Bytes()
+
+	return
+
+}
+
+func getBundleItem(id string, data []byte) (item types.BundleItem, err error) {
+	// query  metadata from graphql
+	gq := argraphql.NewARGraphQL("https://arweave-search.goldsky.com/graphql", http.Client{})
+
+	txResp, err := gq.QueryTransaction(context.Background(), id)
+
+	if err != nil {
+		return item, err
+	}
+	tx := txResp.Transaction
+
+	// cover tx.Tags to bundle item tags
+	var tags []types.Tag
+	for _, tag := range tx.Tags {
+		tags = append(tags, types.Tag{
+			Name:  tag.Name,
+			Value: tag.Value,
+		})
+	}
+
+	// cover size to int
+	size, err := strconv.Atoi(tx.Data.Size)
+
+	if err != nil {
+		return item, err
+	}
+
+	// id data empty, get raw data
+	if data == nil && size > 0 {
+		// get raw data
+		data, _, err = getRawById(id)
+		if err != nil {
+			return item, err
+		}
+	}
+
+	// cover tags to tagsBy
+	tagsBy, err := utils.SerializeTags(tags)
+
+	if err != nil {
+		return item, err
+	}
+
+	item = types.BundleItem{
+		SignatureType: 1, // todo
+		Signature:     tx.Signature,
+		Owner:         tx.Owner.Key,
+		Target:        "", //
+		Anchor:        tx.Anchor,
+		Tags:          tags,
+		Data:          string(data), // raw api data
+		Id:            tx.Id,
+		TagsBy:        string(tagsBy), //
+		ItemBinary:    nil,
+		DataReader:    nil,
+	}
+
+	return item, nil
+
 }

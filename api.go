@@ -37,7 +37,7 @@ func (s *Arseeding) runAPI(port string) {
 	r := s.engine
 	r.Use(CORSMiddleware())
 	if s.EnableManifest {
-		r.Use(ManifestMiddleware(s.wdb, s.store, s.localCache))
+		r.Use(ManifestMiddleware(s))
 	}
 
 	if !s.NoFee {
