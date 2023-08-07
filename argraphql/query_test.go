@@ -180,4 +180,6 @@ func TestQueryTransaction(t *testing.T) {
 	assert.Equal(t, "0.000000000000", res.Transaction.Fee.Ar)
 
 	assert.LessOrEqualf(t, "application/javascript; charset=utf-8", res.Transaction.Tags[0].Value, "tag name should be less than or equal to application/javascript; charset=utf-8")
+
+	assert.Equal(t, "D0i_pTTxNo_e1csmGSI-rJvKz6xi61ksQVjLEig568E", res.Transaction.BundledIn.Id)
 }
