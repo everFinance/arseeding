@@ -8,6 +8,84 @@ import (
 	"github.com/Khan/genqlient/graphql"
 )
 
+// BatchGetItemsBundleInResponse is returned by BatchGetItemsBundleIn on success.
+type BatchGetItemsBundleInResponse struct {
+	Transactions BatchGetItemsBundleInTransactionsTransactionConnection `json:"transactions"`
+}
+
+// GetTransactions returns BatchGetItemsBundleInResponse.Transactions, and is useful for accessing the field via an interface.
+func (v *BatchGetItemsBundleInResponse) GetTransactions() BatchGetItemsBundleInTransactionsTransactionConnection {
+	return v.Transactions
+}
+
+// BatchGetItemsBundleInTransactionsTransactionConnection includes the requested fields of the GraphQL type TransactionConnection.
+type BatchGetItemsBundleInTransactionsTransactionConnection struct {
+	PageInfo BatchGetItemsBundleInTransactionsTransactionConnectionPageInfo               `json:"pageInfo"`
+	Edges    []BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdge `json:"edges"`
+}
+
+// GetPageInfo returns BatchGetItemsBundleInTransactionsTransactionConnection.PageInfo, and is useful for accessing the field via an interface.
+func (v *BatchGetItemsBundleInTransactionsTransactionConnection) GetPageInfo() BatchGetItemsBundleInTransactionsTransactionConnectionPageInfo {
+	return v.PageInfo
+}
+
+// GetEdges returns BatchGetItemsBundleInTransactionsTransactionConnection.Edges, and is useful for accessing the field via an interface.
+func (v *BatchGetItemsBundleInTransactionsTransactionConnection) GetEdges() []BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdge {
+	return v.Edges
+}
+
+// BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdge includes the requested fields of the GraphQL type TransactionEdge.
+type BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdge struct {
+	Cursor string                                                                                    `json:"cursor"`
+	Node   BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdgeNodeTransaction `json:"node"`
+}
+
+// GetCursor returns BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdge.Cursor, and is useful for accessing the field via an interface.
+func (v *BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdge) GetCursor() string {
+	return v.Cursor
+}
+
+// GetNode returns BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdge.Node, and is useful for accessing the field via an interface.
+func (v *BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdge) GetNode() BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdgeNodeTransaction {
+	return v.Node
+}
+
+// BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdgeNodeTransaction includes the requested fields of the GraphQL type Transaction.
+type BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdgeNodeTransaction struct {
+	Id        string                                                                                                   `json:"id"`
+	BundledIn BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdgeNodeTransactionBundledInBundle `json:"bundledIn"`
+}
+
+// GetId returns BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdgeNodeTransaction.Id, and is useful for accessing the field via an interface.
+func (v *BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdgeNodeTransaction) GetId() string {
+	return v.Id
+}
+
+// GetBundledIn returns BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdgeNodeTransaction.BundledIn, and is useful for accessing the field via an interface.
+func (v *BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdgeNodeTransaction) GetBundledIn() BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdgeNodeTransactionBundledInBundle {
+	return v.BundledIn
+}
+
+// BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdgeNodeTransactionBundledInBundle includes the requested fields of the GraphQL type Bundle.
+type BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdgeNodeTransactionBundledInBundle struct {
+	Id string `json:"id"`
+}
+
+// GetId returns BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdgeNodeTransactionBundledInBundle.Id, and is useful for accessing the field via an interface.
+func (v *BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdgeNodeTransactionBundledInBundle) GetId() string {
+	return v.Id
+}
+
+// BatchGetItemsBundleInTransactionsTransactionConnectionPageInfo includes the requested fields of the GraphQL type PageInfo.
+type BatchGetItemsBundleInTransactionsTransactionConnectionPageInfo struct {
+	HasNextPage bool `json:"hasNextPage"`
+}
+
+// GetHasNextPage returns BatchGetItemsBundleInTransactionsTransactionConnectionPageInfo.HasNextPage, and is useful for accessing the field via an interface.
+func (v *BatchGetItemsBundleInTransactionsTransactionConnectionPageInfo) GetHasNextPage() bool {
+	return v.HasNextPage
+}
+
 // GetTransactionResponse is returned by GetTransaction on success.
 type GetTransactionResponse struct {
 	Transaction GetTransactionTransaction `json:"transaction"`
@@ -156,6 +234,22 @@ func (v *GetTransactionTransactionTagsTag) GetName() string { return v.Name }
 // GetValue returns GetTransactionTransactionTagsTag.Value, and is useful for accessing the field via an interface.
 func (v *GetTransactionTransactionTagsTag) GetValue() string { return v.Value }
 
+// __BatchGetItemsBundleInInput is used internally by genqlient
+type __BatchGetItemsBundleInInput struct {
+	Ids   []string `json:"ids"`
+	First int      `json:"first"`
+	After string   `json:"after"`
+}
+
+// GetIds returns __BatchGetItemsBundleInInput.Ids, and is useful for accessing the field via an interface.
+func (v *__BatchGetItemsBundleInInput) GetIds() []string { return v.Ids }
+
+// GetFirst returns __BatchGetItemsBundleInInput.First, and is useful for accessing the field via an interface.
+func (v *__BatchGetItemsBundleInInput) GetFirst() int { return v.First }
+
+// GetAfter returns __BatchGetItemsBundleInInput.After, and is useful for accessing the field via an interface.
+func (v *__BatchGetItemsBundleInInput) GetAfter() string { return v.After }
+
 // __GetTransactionInput is used internally by genqlient
 type __GetTransactionInput struct {
 	Id string `json:"id"`
@@ -163,6 +257,56 @@ type __GetTransactionInput struct {
 
 // GetId returns __GetTransactionInput.Id, and is useful for accessing the field via an interface.
 func (v *__GetTransactionInput) GetId() string { return v.Id }
+
+// The query or mutation executed by BatchGetItemsBundleIn.
+const BatchGetItemsBundleIn_Operation = `
+query BatchGetItemsBundleIn ($ids: [ID!]!, $first: Int, $after: String) {
+	transactions(ids: $ids, first: $first, after: $after) {
+		pageInfo {
+			hasNextPage
+		}
+		edges {
+			cursor
+			node {
+				id
+				bundledIn {
+					id
+				}
+			}
+		}
+	}
+}
+`
+
+func BatchGetItemsBundleIn(
+	ctx context.Context,
+	client graphql.Client,
+	ids []string,
+	first int,
+	after string,
+) (*BatchGetItemsBundleInResponse, error) {
+	req := &graphql.Request{
+		OpName: "BatchGetItemsBundleIn",
+		Query:  BatchGetItemsBundleIn_Operation,
+		Variables: &__BatchGetItemsBundleInInput{
+			Ids:   ids,
+			First: first,
+			After: after,
+		},
+	}
+	var err error
+
+	var data BatchGetItemsBundleInResponse
+	resp := &graphql.Response{Data: &data}
+
+	err = client.MakeRequest(
+		ctx,
+		req,
+		resp,
+	)
+
+	return &data, err
+}
 
 // The query or mutation executed by GetTransaction.
 const GetTransaction_Operation = `

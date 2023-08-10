@@ -183,3 +183,32 @@ func TestQueryTransaction(t *testing.T) {
 
 	assert.Equal(t, "D0i_pTTxNo_e1csmGSI-rJvKz6xi61ksQVjLEig568E", res.Transaction.BundledIn.Id)
 }
+
+func TestBatchGetItemsBundleIn(t *testing.T) {
+
+	gq := NewARGraphQL("https://arweave.net/graphql", http.Client{})
+	ids := []string{"arDRw5qt51v4pOV9TrQXKJM2iLK-c39dvs2K-7b3oDk", "O0N7iKmdv7Tmc0fnvJSKSeKuibvDrHbpMlb4K8pHwXg", "oLQYpPmfv35ZGn5Vv0_H2GKLoyY5bnFAChngzjLiCEs"}
+
+	res, err := gq.BatchGetItemsBundleIn(context.Background(), ids, 100, "")
+
+	assert.NoError(t, err)
+	assert.False(t, res.Transactions.PageInfo.HasNextPage)
+	assert.Equal(t, 3, len(res.Transactions.Edges))
+
+	for _, edge := range res.Transactions.Edges {
+		if edge.Node.Id == "arDRw5qt51v4pOV9TrQXKJM2iLK-c39dvs2K-7b3oDk" {
+			assert.Equal(t, "FnzJJ_6TDcgapyvs_-8vL2ImIWwehvRp_aWdhwS57U0", edge.Node.BundledIn.Id)
+		}
+
+		if edge.Node.Id == "O0N7iKmdv7Tmc0fnvJSKSeKuibvDrHbpMlb4K8pHwXg" {
+			assert.Equal(t, "FnzJJ_6TDcgapyvs_-8vL2ImIWwehvRp_aWdhwS57U0", edge.Node.BundledIn.Id)
+		}
+
+		if edge.Node.Id == "oLQYpPmfv35ZGn5Vv0_H2GKLoyY5bnFAChngzjLiCEs" {
+			assert.Equal(t, "D0i_pTTxNo_e1csmGSI-rJvKz6xi61ksQVjLEig568E", edge.Node.BundledIn.Id)
+		}
+	}
+
+	t.Log(res)
+
+}

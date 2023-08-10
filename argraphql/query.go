@@ -29,3 +29,14 @@ func (g *ARGraphQL) QueryTransaction(ctx context.Context, id string) (res *GetTr
 
 	return txResp, err
 }
+
+func (g *ARGraphQL) BatchGetItemsBundleIn(ctx context.Context, ids []string, first int, after string) (res *BatchGetItemsBundleInResponse, err error) {
+
+	batchResp, err := BatchGetItemsBundleIn(ctx, g.Client, ids, first, after)
+
+	if err != nil {
+		logger.Error("ARGraphQL batch get items bundle in error", "err", err)
+	}
+
+	return batchResp, err
+}

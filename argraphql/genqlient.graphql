@@ -37,3 +37,21 @@ query GetTransaction ($id: ID!){
     }
   }
 }
+
+query BatchGetItemsBundleIn($ids : [ID!]!, $first: Int, $after: String){
+   transactions(ids: $ids, first: $first, after: $after){
+      pageInfo {
+        hasNextPage,
+      }
+      edges {
+        cursor
+        node {
+          id
+          bundledIn {
+            id
+          }
+        }
+      }
+    }
+}
+
