@@ -149,8 +149,10 @@ func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
 			"web3infura.io",
 		}
 
+		log.Debug("currentHost", currentHost)
 		for _, b := range apiHostList {
-			if strings.Contains(currentHost, b) {
+
+			if currentHost == b {
 				// if current host in apiHostList, notApiHost is false
 				notApiHost = false
 				break
