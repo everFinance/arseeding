@@ -1251,7 +1251,7 @@ func (s *Arseeding) getApiKey(c *gin.Context) {
 		return
 	}
 
-	addr, err := goether.Ecrecover(accounts.TextHash([]byte(timestamp)), common.FromHex(signature))
+	_, addr, err := goether.Ecrecover(accounts.TextHash([]byte(timestamp)), common.FromHex(signature))
 	if err != nil {
 		internalErrorResponse(c, err.Error())
 		return

@@ -3,13 +3,14 @@ package arseeding
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/everFinance/arseeding/argraphql"
+	"github.com/everFinance/goar"
 	"gopkg.in/h2non/gentleman.v2"
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/everFinance/arseeding/schema"
@@ -143,36 +144,77 @@ func syncManifestData(id string, s *Arseeding) (err error) {
 		return err
 	}
 
-	// not manifest data
-	if contentType != "application/x.arweave-manifest+json" {
-		bundleItem, err := getBundleItem(id, data)
-		if err != nil {
+	log.Debug("syncManifestData get raw end ", "id", id, "contentType", contentType, "data", string(data))
+	var bundleInItemsMap = make(map[string][]string)
+	var itemIds []string
+
+	itemIds = append(itemIds, id)
+
+	// if contentType == "application/x.arweave-manifest+json"  parse it
+	if contentType == "application/x.arweave-manifest+json" {
+
+		//is manifest data parse it
+		mani := schema.ManifestData{}
+		if err := json.Unmarshal(data, &mani); err != nil {
 			return err
 		}
 
-		err = s.store.AtomicSaveItem(bundleItem)
-
-		return err
+		log.Debug("total txId in manifest", "len", len(mani.Paths))
+		// for each path in manifest
+		for _, txId := range mani.Paths {
+			itemIds = append(itemIds, txId.TxId)
+		}
 	}
 
-	//is manifest data parse it
-	mani := schema.ManifestData{}
-	if err := json.Unmarshal(data, &mani); err != nil {
-		return err
+	log.Debug("total txId in manifest", "len", len(itemIds))
+
+	// query itemIds from graphql
+	gq := argraphql.NewARGraphQL("https://arweave.net/graphql", http.Client{})
+
+	total := len(itemIds)
+
+	var txs []argraphql.BatchGetItemsBundleInTransactionsTransactionConnectionEdgesTransactionEdge
+	// 90 items per query
+	for i := 0; i < total; i += 90 {
+		end := i + 90
+		if end > total {
+			end = total
+		}
+		log.Debug("BatchGetItemsBundleIn", "start", i, "end", end)
+		resp, err := gq.BatchGetItemsBundleIn(context.Background(), itemIds[i:end], 90, "")
+		if err != nil {
+			return errors.New("BatchGetItemsBundleIn error:" + err.Error())
+		}
+		txs = append(txs, resp.Transactions.Edges...)
 	}
 
-	log.Debug("total txId in manifest", "len", len(mani.Paths))
-	// for each path in manifest
-	for _, txId := range mani.Paths {
-		log.Debug("syncManifestData", "txId", txId)
-		// getBundleItem
-		bundleItem, err := getBundleItem(txId.TxId, nil)
+	//  for each txs to   bundleInItemsMap
+	for _, tx := range txs {
+		bundleInItemsMap[tx.Node.BundledIn.Id] = append(bundleInItemsMap[tx.Node.BundledIn.Id], tx.Node.Id)
+	}
+
+	// get bundle item  form goar
+	c := goar.NewClient("https://arweave.net")
+	for bundleId, itemIds := range bundleInItemsMap {
+
+		log.Debug("syncManifestData GetBundleItems ", "bundleId", bundleId, "itemIds", itemIds)
+		// GetBundleItems
+		items, err := c.GetBundleItems(bundleId, itemIds)
 
 		if err != nil {
-			return err
+			return errors.New("GetBundleItems error:" + err.Error())
 		}
 
-		err = s.store.AtomicSaveItem(bundleItem)
+		//  for each item
+		for _, item := range items {
+			log.Debug("syncManifestData save ", "item id", item.Id)
+			// save item to store
+			err = s.saveItem(*item)
+
+			if err != nil {
+				return errors.New("saveItem error:" + err.Error())
+			}
+		}
 
 	}
 
@@ -198,66 +240,4 @@ func getRawById(id string) (data []byte, contentType string, err error) {
 	data = res.Bytes()
 
 	return
-
-}
-
-func getBundleItem(id string, data []byte) (item types.BundleItem, err error) {
-	// query  metadata from graphql
-	gq := argraphql.NewARGraphQL("https://arweave-search.goldsky.com/graphql", http.Client{})
-
-	txResp, err := gq.QueryTransaction(context.Background(), id)
-
-	if err != nil {
-		return item, err
-	}
-	tx := txResp.Transaction
-
-	// cover tx.Tags to bundle item tags
-	var tags []types.Tag
-	for _, tag := range tx.Tags {
-		tags = append(tags, types.Tag{
-			Name:  tag.Name,
-			Value: tag.Value,
-		})
-	}
-
-	// cover size to int
-	size, err := strconv.Atoi(tx.Data.Size)
-
-	if err != nil {
-		return item, err
-	}
-
-	// id data empty, get raw data
-	if data == nil && size > 0 {
-		// get raw data
-		data, _, err = getRawById(id)
-		if err != nil {
-			return item, err
-		}
-	}
-
-	// cover tags to tagsBy
-	tagsBy, err := utils.SerializeTags(tags)
-
-	if err != nil {
-		return item, err
-	}
-
-	item = types.BundleItem{
-		SignatureType: 1, // todo
-		Signature:     tx.Signature,
-		Owner:         tx.Owner.Key,
-		Target:        "", //
-		Anchor:        tx.Anchor,
-		Tags:          tags,
-		Data:          string(data), // raw api data
-		Id:            tx.Id,
-		TagsBy:        string(tagsBy), //
-		ItemBinary:    nil,
-		DataReader:    nil,
-	}
-
-	return item, nil
-
 }
