@@ -146,6 +146,7 @@ func syncManifestData(id string, s *Arseeding) (err error) {
 
 	log.Debug("syncManifestData get raw end ", "id", id, "contentType", contentType, "data", string(data))
 	var bundleInItemsMap = make(map[string][]string)
+	var L1Artxs []string
 	var itemIds []string
 
 	itemIds = append(itemIds, id)
@@ -190,9 +191,14 @@ func syncManifestData(id string, s *Arseeding) (err error) {
 
 	//  for each txs to   bundleInItemsMap
 	for _, tx := range txs {
-		bundleInItemsMap[tx.Node.BundledIn.Id] = append(bundleInItemsMap[tx.Node.BundledIn.Id], tx.Node.Id)
+		if tx.Node.BundledIn.Id == "" {
+			L1Artxs = append(L1Artxs, tx.Node.Id)
+		} else {
+			bundleInItemsMap[tx.Node.BundledIn.Id] = append(bundleInItemsMap[tx.Node.BundledIn.Id], tx.Node.Id)
+		}
 	}
 
+	log.Debug("syncManifestData bundleInItemsMap", "bundleInItemsMap", bundleInItemsMap, "L1Artxs", L1Artxs)
 	// get bundle item  form goar
 	c := goar.NewClient("https://arweave.net")
 	for bundleId, itemIds := range bundleInItemsMap {
