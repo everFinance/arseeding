@@ -147,6 +147,8 @@ func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
 			"seed-dev.everpay.io",
 			"arseed.web3infra.dev",
 			"web3infura.io",
+			"arweave.world",
+			"arweave.asia",
 		}
 
 		log.Debug("currentHost", currentHost)
