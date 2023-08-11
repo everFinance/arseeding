@@ -5,3 +5,4 @@ data
 .idea
 vendor
 tmpFile
+deploy.sh

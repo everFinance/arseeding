@@ -151,7 +151,7 @@ func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
 			"arweave.asia",
 		}
 
-		log.Debug("currentHost", currentHost)
+		log.Debug("middleware", "currentHost", currentHost)
 		for _, b := range apiHostList {
 
 			if currentHost == b {
@@ -170,7 +170,7 @@ func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
 			// get txId by localCache
 			value, err := localCache.Cache.Get(keyPrefix + domain)
 			if err != nil {
-				log.Info("get localCache error", err)
+				log.Info("middleware get localCache ", "error:", err)
 			}
 
 			if value != nil {
@@ -198,7 +198,7 @@ func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
 				err = localCache.Cache.Set(keyPrefix+domain, []byte(txId))
 
 				if err != nil {
-					log.Error("set localCache error", err)
+					log.Error("middleware set localCache", "error", err)
 				}
 			}
 
