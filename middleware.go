@@ -4,6 +4,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/utils"
 	"github.com/everFinance/goarns"
@@ -203,7 +204,7 @@ func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
 			}
 
 			log.Debug(fmt.Sprintf("permaweb domian: %s txId: %s", domain, txId))
-			_, dataReader, mfData, err := getArTxOrItemDataForManifest(txId, store, s)
+			decodeTags, dataReader, mfData, err := getArTxOrItemDataForManifest(txId, store, s)
 			defer func() {
 				if dataReader != nil {
 					dataReader.Close()
@@ -233,6 +234,16 @@ func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
 					return
 				}
 			}
+
+			// if content type is text/html, return mfData
+			if getTagValue(decodeTags, schema.ContentType) == "text/html" {
+				c.Abort()
+				c.Data(http.StatusOK, fmt.Sprintf("%s; charset=utf-8", getTagValue(decodeTags, schema.ContentType)), mfData)
+				return
+			}
+
+			spew.Dump(mfData)
+
 			tags, data, err := handleManifest(mfData, c.Request.URL.Path, store)
 			if err != nil {
 				c.Abort()
