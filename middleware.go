@@ -4,7 +4,6 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/utils"
 	"github.com/everFinance/goarns"
@@ -241,8 +240,6 @@ func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
 				c.Data(http.StatusOK, fmt.Sprintf("%s; charset=utf-8", getTagValue(decodeTags, schema.ContentType)), mfData)
 				return
 			}
-
-			spew.Dump(mfData)
 
 			tags, data, err := handleManifest(mfData, c.Request.URL.Path, store)
 			if err != nil {
