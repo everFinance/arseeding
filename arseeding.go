@@ -151,7 +151,7 @@ func New(
 		a.KWriters = kwriters
 	}
 
-	localCache, err := cache.NewLocalCache(30 * time.Minute)
+	localCache, err := cache.NewLocalCache(60 * time.Minute)
 	if err != nil {
 		log.Error("NewLocalCache", "err", err)
 	}
