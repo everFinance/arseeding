@@ -37,7 +37,7 @@ func (s *Arseeding) runAPI(port string) {
 	r := s.engine
 	r.Use(CORSMiddleware())
 	if s.EnableManifest {
-		r.Use(ManifestMiddleware(s.wdb, s.store))
+		r.Use(ManifestMiddleware(s))
 	}
 
 	if !s.NoFee {
@@ -1251,7 +1251,7 @@ func (s *Arseeding) getApiKey(c *gin.Context) {
 		return
 	}
 
-	addr, err := goether.Ecrecover(accounts.TextHash([]byte(timestamp)), common.FromHex(signature))
+	_, addr, err := goether.Ecrecover(accounts.TextHash([]byte(timestamp)), common.FromHex(signature))
 	if err != nil {
 		internalErrorResponse(c, err.Error())
 		return

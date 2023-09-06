@@ -27,7 +27,10 @@ func (s *Arseeding) processTask(taskId string) {
 		err = s.broadcastTxTask(arId)
 	case schema.TaskTypeBroadcastMeta:
 		err = s.broadcastTxMetaTask(arId)
+	case schema.TaskTypeSyncManifest:
+		err = s.syncManifestTask(arId)
 	}
+
 	if err != nil {
 		log.Error("process task failed", "err", err, "taskId", taskId)
 	}
@@ -146,4 +149,24 @@ func (s *Arseeding) setProcessedTask(arId string, tktype string) error {
 
 	// remove pending pool
 	return s.store.DelPendingPoolTaskId(taskId)
+}
+
+func (s *Arseeding) syncManifestTask(arId string) (err error) {
+
+	if s.taskMg.IsClosed(arId, schema.TaskTypeSyncManifest) {
+		return
+	}
+
+	err = syncManifestData(arId, s)
+
+	if err == nil {
+		s.taskMg.IncSuccessed(arId, schema.TaskTypeSyncManifest)
+		closeErr := s.taskMg.CloseTask(arId, schema.TaskTypeSyncManifest)
+
+		if closeErr != nil {
+			log.Error("s.taskMg.CloseTask(arId, schema.TaskTypeSyncManifest)", "err", closeErr, "arId", arId)
+		}
+	}
+	return err
+
 }

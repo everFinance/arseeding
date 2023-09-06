@@ -4,6 +4,7 @@ const (
 	TaskTypeBroadcast     = "broadcast"      // include tx and tx data
 	TaskTypeBroadcastMeta = "broadcast_meta" //  not include tx data
 	TaskTypeSync          = "sync"
+	TaskTypeSyncManifest  = "sync_manifest" // sync manifest
 )
 
 type Task struct {

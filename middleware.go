@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/goar/utils"
+	"github.com/everFinance/goarns"
 	"github.com/gin-gonic/gin"
 	"github.com/ulule/limiter/v3"
 	mgin "github.com/ulule/limiter/v3/drivers/middleware/gin"
@@ -15,6 +16,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var (
@@ -71,7 +73,12 @@ func CORSMiddleware() gin.HandlerFunc {
 	}
 }
 
-func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
+func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
+
+	wdb := s.wdb
+	store := s.store
+	localCache := s.localCache
+
 	return func(c *gin.Context) {
 		prefixUri := getRequestSandbox(c.Request.Host)
 		if len(prefixUri) > 0 && c.Request.Method == "GET" {
@@ -99,6 +106,7 @@ func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
 				c.Abort()
 				return
 			}
+
 			_, dataReader, mfData, err := getArTxOrItemData(mfId, store)
 			defer func() {
 				if dataReader != nil {
@@ -128,6 +136,121 @@ func ManifestMiddleware(wdb *Wdb, store *Store) gin.HandlerFunc {
 			c.Abort()
 			c.Data(http.StatusOK, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
 			return
+		}
+
+		//  Gateway  logic
+		currentHost := c.Request.Host
+		domain := getSubDomain(c.Request.Host)
+		// default  true
+		notApiHost := true
+		apiHostList := []string{
+			"seed-dev.everpay.io",
+			"arseed.web3infra.dev",
+			"web3infura.io",
+			"arweave.world",
+			"arweave.asia",
+		}
+
+		log.Debug("middleware", "currentHost", currentHost)
+		for _, b := range apiHostList {
+
+			if currentHost == b {
+				// if current host in apiHostList, notApiHost is false
+				notApiHost = false
+				break
+			}
+		}
+
+		// if domain is not empty and method is get and not in apiHostList
+		if len(domain) > 0 && c.Request.Method == "GET" && notApiHost {
+
+			txId := ""
+			keyPrefix := "txId_"
+
+			// get txId by localCache
+			value, err := localCache.Cache.Get(keyPrefix + domain)
+			if err != nil {
+				log.Info("middleware get localCache ", "error:", err)
+			}
+
+			if value != nil {
+				txId = string(value)
+			}
+
+			// if txId is empty, get txId by sdk
+			if txId == "" {
+
+				// todo config or variable
+				dreUrl := "https://dre-3.warp.cc"
+				arNSAddress := "bLAgYxAdX2Ry-nt6aH2ixgvJXbpsEYm28NgJgyqfs-U"
+				timeout := 10 * time.Second
+
+				a := goarns.NewArNS(dreUrl, arNSAddress, timeout)
+
+				txId, err = a.QueryLatestRecord(domain)
+				if err != nil {
+					c.Abort()
+					internalErrorResponse(c, err.Error())
+					return
+				}
+
+				// set cache
+				err = localCache.Cache.Set(keyPrefix+domain, []byte(txId))
+
+				if err != nil {
+					log.Error("middleware set localCache", "error", err)
+				}
+			}
+
+			log.Debug(fmt.Sprintf("permaweb domian: %s txId: %s", domain, txId))
+			decodeTags, dataReader, mfData, err := getArTxOrItemDataForManifest(txId, store, s)
+			defer func() {
+				if dataReader != nil {
+					dataReader.Close()
+					os.Remove(dataReader.Name())
+				}
+			}()
+
+			// if err equal to schema.ErrLocalNotExist, return 200 and "syncing data please wait some minutes and fresh the page"
+			if err == schema.ErrLocalNotExist {
+				c.Abort()
+				c.JSON(http.StatusOK, gin.H{
+					"msg": "syncing data please wait some minutes and fresh the page",
+				})
+				return
+			}
+
+			if err != nil {
+				c.Abort()
+				internalErrorResponse(c, err.Error())
+				return
+			}
+			if dataReader != nil {
+				mfData, err = io.ReadAll(dataReader)
+				if err != nil {
+					c.Abort()
+					internalErrorResponse(c, err.Error())
+					return
+				}
+			}
+
+			// if content type is text/html, return mfData
+			if getTagValue(decodeTags, schema.ContentType) == "text/html" {
+				c.Abort()
+				c.Data(http.StatusOK, fmt.Sprintf("%s; charset=utf-8", getTagValue(decodeTags, schema.ContentType)), mfData)
+				return
+			}
+
+			tags, data, err := handleManifest(mfData, c.Request.URL.Path, store)
+			if err != nil {
+				c.Abort()
+				internalErrorResponse(c, err.Error())
+				return
+			}
+			c.Abort()
+			c.Data(http.StatusOK, fmt.Sprintf("%s; charset=utf-8", getTagValue(tags, schema.ContentType)), data)
+			return
+
 		}
 		c.Next()
 	}
@@ -165,4 +288,8 @@ func replaceId(txId string) string {
 		}
 	}
 	return string(byteArr)
+}
+
+func getSubDomain(domain string) string {
+	return strings.Split(domain, ".")[0]
 }
