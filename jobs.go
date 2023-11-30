@@ -71,7 +71,7 @@ func (s *Arseeding) runJobs(bundleInterval int) {
 	// delete tmp file, one may be repeat request same data,tmp file can be reserve with short time
 	s.scheduler.Every(2).Minute().SingletonMode().Do(s.deleteTmpFile)
 
-	//statistic
+	// statistic
 	s.scheduler.Every(1).Minute().SingletonMode().Do(s.UpdateRealTime)
 	go s.ProduceDailyStatistic()
 	s.scheduler.Every(1).Day().At("00:01").SingletonMode().Do(s.ProduceDailyStatistic)
@@ -1144,7 +1144,7 @@ func (s *Arseeding) ProduceDailyStatistic() {
 	var firstOrder schema.Order
 	var osc schema.OrderStatistic
 	err := s.wdb.Db.Model(&schema.Order{}).First(&firstOrder).Error
-	//Not found
+	// Not found
 	if err != nil {
 		return
 	}
@@ -1156,7 +1156,7 @@ func (s *Arseeding) ProduceDailyStatistic() {
 	}
 	end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
-	//If yesterday's record already exists, return
+	// If yesterday's record already exists, return
 	if !s.wdb.WhetherExec(schema.TimeRange{Start: end.Add(-24 * time.Hour), End: end}) {
 		return
 	}

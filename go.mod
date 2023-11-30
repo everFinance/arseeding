@@ -31,7 +31,7 @@ require (
 require (
 	github.com/Khan/genqlient v0.6.0
 	github.com/allegro/bigcache/v3 v3.1.0
-	github.com/everFinance/go-everpay v0.0.8
+	github.com/everFinance/go-everpay v0.2.0
 	github.com/everFinance/goarns v0.0.3
 	github.com/segmentio/kafka-go v0.4.40
 	go.mongodb.org/mongo-driver v1.11.4
