@@ -181,7 +181,7 @@ func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
 			if txId == "" {
 
 				// todo config or variable
-				dreUrl := "https://dre-3.warp.cc"
+				dreUrl := "https://dre-1.warp.cc"
 				arNSAddress := "bLAgYxAdX2Ry-nt6aH2ixgvJXbpsEYm28NgJgyqfs-U"
 				timeout := 10 * time.Second
 
