@@ -84,6 +84,7 @@ func (s *Arseeding) runAPI(port string) {
 		// ANS-104 bundle Data api
 		v1.GET("/bundle/bundler", s.getBundler)
 		v1.POST("/bundle/tx/:currency", s.submitItem)
+		v1.POST("/bundle/tx/signData", s.getSignData)
 
 		v1.GET("/bundle/tx/:itemId", s.getItemMeta) // get item meta, without data
 		v1.GET("/bundle/tx/:itemId/:field", s.getItemField)
@@ -543,6 +544,7 @@ func (s *Arseeding) processApikeySpendBal(currency, apikey string, dataSize int6
 	return nil
 }
 
+// @todo 增加 eid 签名类型支持
 func (s *Arseeding) submitItem(c *gin.Context) {
 	if c.GetHeader("Content-Type") != "application/octet-stream" {
 		errorResponse(c, "Wrong body type")
@@ -631,6 +633,78 @@ func (s *Arseeding) submitItem(c *gin.Context) {
 		PaymentExpiredTime: ord.PaymentExpiredTime,
 		ExpectedBlock:      ord.ExpectedBlock,
 	})
+}
+
+func (s *Arseeding) getSignData(c *gin.Context) {
+
+	// get all query and assemble tags
+	queryMap := c.Request.URL.Query()
+	// query key must include "Content-Type"
+	if _, ok := queryMap["Content-Type"]; !ok {
+		errorResponse(c, "Query params must include Content-Type")
+		return
+	}
+	tags := make([]types.Tag, 0, len(queryMap))
+	for k, values := range queryMap {
+		for _, val := range values {
+			tags = append(tags, types.Tag{
+				Name:  k,
+				Value: val,
+			})
+		}
+	}
+
+	if c.Request.Body == nil {
+		errorResponse(c, "can not submit null native data")
+		return
+	}
+
+	dataFile, err := os.CreateTemp(schema.TmpFileDir, "arseed-")
+	if err != nil {
+		c.Request.Body.Close()
+		errorResponse(c, err.Error())
+		return
+	}
+	defer func() {
+		c.Request.Body.Close()
+		dataFile.Close()
+		os.Remove(dataFile.Name())
+	}()
+	var dataBuf bytes.Buffer
+	var item types.BundleItem
+	// write up to schema.AllowMaxNativeDataSize to memory
+	size, err := setItemData(c, dataFile, &dataBuf)
+	if err != nil && err != io.EOF {
+		errorResponse(c, err.Error())
+		return
+	}
+	if size > schema.SubmitMaxSize {
+		errorResponse(c, schema.ErrDataTooBig.Error())
+		return
+	}
+
+	if size > schema.AllowStreamMinItemSize { // the body size > schema.AllowStreamMinItemSize, need write to tmp file
+		item, err = s.bundlerItemSigner.CreateItemStream(dataFile, "", "", tags)
+
+	} else {
+		item, err = s.bundlerItemSigner.CreateItem(dataBuf.Bytes(), "", "", tags)
+	}
+
+	if err != nil {
+		errorResponse(c, "assemble bundle item failed")
+		log.Error("s.bundlerItemSigner.CreateAndSignItem", "err", err)
+		return
+	}
+
+	signData, err := utils.BundleItemSignData(item)
+	if err != nil {
+		errorResponse(c, "BundleItemSignData failed")
+		log.Error("BundleItemSignData", "err", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, string(signData))
+
 }
 
 func (s *Arseeding) submitNativeData(c *gin.Context) {
@@ -846,6 +920,7 @@ func (s *Arseeding) bundleFee(c *gin.Context) {
 	c.JSON(http.StatusOK, respFee)
 }
 
+// @todo 支持用 eid 类型查询订单
 func (s *Arseeding) getOrders(c *gin.Context) {
 	signer := c.Param("signer")
 	_, signerAddr, err := account.IDCheck(signer)
