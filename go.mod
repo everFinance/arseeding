@@ -2,7 +2,6 @@ module github.com/everFinance/arseeding
 
 go 1.21
 
-toolchain go1.21.6
 
 require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.6+incompatible
