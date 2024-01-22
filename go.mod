@@ -2,12 +2,11 @@ module github.com/everFinance/arseeding
 
 go 1.21
 
-
 require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.6+incompatible
 	github.com/aws/aws-sdk-go v1.27.0
 	github.com/ethereum/go-ethereum v1.10.20
-	github.com/everFinance/goar v1.5.8-0.20240119103750-4bb69454cd14
+	github.com/everFinance/goar v1.5.8-0.20240122072959-fc10cad2b702
 	github.com/everFinance/goether v1.1.9
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-co-op/gocron v1.11.0
