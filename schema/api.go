@@ -72,6 +72,12 @@ type TokBal struct {
 	Balance  string `json:"balance"`
 }
 
+type PaymentData struct {
+	AppName string   `json:"appName"`
+	Action  string   `json:"action"`
+	ItemIds []string `json:"itemIds"`
+}
+
 type RespErr struct {
 	Err string `json:"error"`
 }
