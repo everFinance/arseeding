@@ -13,12 +13,24 @@ import (
 	"github.com/everFinance/goar/utils"
 	"math/big"
 	"os"
+	"time"
 )
 
 type SDK struct {
 	ItemSigner *goar.ItemSigner
 	Cli        *ArSeedCli
 	Pay        *paySdk.SDK
+}
+
+const platformAddress = "0x28840a3A565eF1fE7468d000Ff0B461058b9Ef5f"
+
+type Rewards struct {
+	items []reward
+}
+
+type reward struct {
+	amount *big.Int
+	to     string
 }
 
 func NewSDK(arseedUrl, payUrl string, signer interface{}) (*SDK, error) {
@@ -38,23 +50,23 @@ func NewSDK(arseedUrl, payUrl string, signer interface{}) (*SDK, error) {
 	}, nil
 }
 
-func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.OptionItem, needSequence bool) (everTx *paySchema.Transaction, itemId string, err error) {
+func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.OptionItem, needSequence bool, rewards Rewards) (everTx *paySchema.Transaction, itemId string, err error) {
 	order, err := s.SendData(data, currency, "", option, needSequence)
 	if err != nil {
 		return
 	}
 	itemId = order.ItemId
-	everTx, err = s.PayOrders([]*arseedSchema.RespOrder{order})
+	everTx, err = s.PayOrders([]*arseedSchema.RespOrder{order}, rewards)
 	return
 }
 
-func (s *SDK) SendDataStreamAndPay(data *os.File, currency string, option *schema.OptionItem, needSequence bool) (everTx *paySchema.Transaction, itemId string, err error) {
+func (s *SDK) SendDataStreamAndPay(data *os.File, currency string, option *schema.OptionItem, needSequence bool, rewards Rewards) (everTx *paySchema.Transaction, itemId string, err error) {
 	order, err := s.SendDataStream(data, currency, "", option, needSequence)
 	if err != nil {
 		return
 	}
 	itemId = order.ItemId
-	everTx, err = s.PayOrders([]*arseedSchema.RespOrder{order})
+	everTx, err = s.PayOrders([]*arseedSchema.RespOrder{order}, rewards)
 	return
 }
 
@@ -90,9 +102,9 @@ func (s *SDK) SendDataStream(data *os.File, currency string, apikey string, opti
 	return
 }
 
-func (s *SDK) BatchPayOrders(orders []*arseedSchema.RespOrder) (everTxs []*paySchema.Transaction, err error) {
+func (s *SDK) BatchPayOrders(orders []*arseedSchema.RespOrder, rewards Rewards) (everTxs []*paySchema.Transaction, err error) {
 	if len(orders) <= 500 {
-		everTx, err := s.PayOrders(orders)
+		everTx, err := s.PayOrders(orders, rewards)
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +116,7 @@ func (s *SDK) BatchPayOrders(orders []*arseedSchema.RespOrder) (everTxs []*paySc
 	end := 500
 	for {
 		subOrders := orders[start:end]
-		everTx, err := s.PayOrders(subOrders)
+		everTx, err := s.PayOrders(subOrders, rewards)
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +134,7 @@ func (s *SDK) BatchPayOrders(orders []*arseedSchema.RespOrder) (everTxs []*paySc
 	return
 }
 
-func (s *SDK) PayOrders(orders []*arseedSchema.RespOrder) (everTx *paySchema.Transaction, err error) {
+func (s *SDK) PayOrders(orders []*arseedSchema.RespOrder, rewards Rewards) (everTx *paySchema.Transaction, err error) {
 	if len(orders) == 0 {
 		return nil, errors.New("order is null")
 	}
@@ -157,15 +169,16 @@ func (s *SDK) PayOrders(orders []*arseedSchema.RespOrder) (everTx *paySchema.Tra
 	}
 
 	payTxData := struct {
-		AppName string   `json:"appName"`
-		Action  string   `json:"action"`
-		ItemIds []string `json:"itemIds"`
+		AppName string               `json:"appName"`
+		Action  string               `json:"action"`
+		ItemIds []string             `json:"itemIds"`
+		Bundle  paySchema.BundleData `json:"bundle"`
 	}{
 		AppName: "arseeding",
 		Action:  "payment",
 		ItemIds: itemIds,
 	}
-	dataJs, err := json.Marshal(&payTxData)
+
 	if err != nil {
 		return
 	}
@@ -197,6 +210,53 @@ func (s *SDK) PayOrders(orders []*arseedSchema.RespOrder) (everTx *paySchema.Tra
 		err = errors.New("token balance insufficient")
 		return
 	}
+
+	// proceed rewards
+	if len(rewards.items) > 0 {
+		var items []paySchema.BundleItem
+
+		// default pay to platform
+		amount := new(big.Int).Mul(totalFee, big.NewInt(10))
+		platform := paySchema.BundleItem{
+			Tag:     useTag,
+			ChainID: s.Pay.GetTokens()[useTag].ChainID,
+			From:    s.Pay.AccId,
+			To:      platformAddress,
+			Amount:  amount.String(),
+		}
+		items = append(items, platform)
+
+		// pay to rewards
+		for _, reward := range rewards.items {
+			amount := reward.amount
+			to := reward.to
+
+			item := paySchema.BundleItem{
+				Tag:     useTag,
+				ChainID: s.Pay.GetTokens()[useTag].ChainID,
+				From:    s.Pay.AccId,
+				To:      to,
+				Amount:  amount.String(),
+			}
+			items = append(items, item)
+		}
+
+		txNonce := time.Now().UnixNano() / 1e6
+		expiration := txNonce/1000 + 1000
+		bundle := paySdk.GenBundle(items, expiration)
+
+		data, err := s.Pay.SignBundleData(bundle)
+		if err != nil {
+			return nil, err
+		}
+
+		var bundleData paySchema.BundleData
+		bundleData.Bundle = data
+		payTxData.Bundle = bundleData
+
+	}
+
+	dataJs, err := json.Marshal(&payTxData)
 
 	everTx, err = s.Pay.Transfer(useTag, totalFee, orders[0].Bundler, string(dataJs))
 	return
