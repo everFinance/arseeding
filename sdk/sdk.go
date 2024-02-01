@@ -156,11 +156,17 @@ func (s *SDK) PayOrders(orders []*arseedSchema.RespOrder) (everTx *paySchema.Tra
 		itemIds = append(itemIds, ord.ItemId)
 	}
 
-	payTxData := struct {
-		AppName string   `json:"appName"`
-		Action  string   `json:"action"`
-		ItemIds []string `json:"itemIds"`
-	}{
+	// payTxData := struct {
+	// 	AppName string   `json:"appName"`
+	// 	Action  string   `json:"action"`
+	// 	ItemIds []string `json:"itemIds"`
+	// }{
+	// 	AppName: "arseeding",
+	// 	Action:  "payment",
+	// 	ItemIds: itemIds,
+	// }
+
+	payTxData := arseedSchema.PaymentMeta{
 		AppName: "arseeding",
 		Action:  "payment",
 		ItemIds: itemIds,
