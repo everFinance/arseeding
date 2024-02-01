@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	seedSchema "github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/arseeding/sdk/schema"
-	paySchema "github.com/everFinance/go-everpay/pay/schema"
 	"github.com/everFinance/goar/types"
+	paySchema "github.com/everVision/everpay-kits/schema"
 	"github.com/panjf2000/ants/v2"
 	"io/ioutil"
 	"mime"
@@ -26,7 +26,7 @@ func (s *SDK) UploadFolderAndPay(rootPath string, batchSize int, indexFile strin
 	if err != nil {
 		return
 	}
-	everTxs, err = s.BatchPayOrders(orders)
+	everTxs, err = s.BatchPayOrders(orders, nil)
 	return
 }
 

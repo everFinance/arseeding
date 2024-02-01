@@ -6,13 +6,14 @@ import (
 	"fmt"
 	arseedSchema "github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/arseeding/sdk/schema"
-	paySchema "github.com/everFinance/go-everpay/pay/schema"
-	paySdk "github.com/everFinance/go-everpay/sdk"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
+	paySchema "github.com/everVision/everpay-kits/schema"
+	paySdk "github.com/everVision/everpay-kits/sdk"
 	"math/big"
 	"os"
+	"time"
 )
 
 type SDK struct {
@@ -38,23 +39,23 @@ func NewSDK(arseedUrl, payUrl string, signer interface{}) (*SDK, error) {
 	}, nil
 }
 
-func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.OptionItem, needSequence bool) (everTx *paySchema.Transaction, itemId string, err error) {
+func (s *SDK) SendDataAndPay(data []byte, currency string, option *schema.OptionItem, needSequence bool, rewards []schema.Reward) (everTx *paySchema.Transaction, itemId string, err error) {
 	order, err := s.SendData(data, currency, "", option, needSequence)
 	if err != nil {
 		return
 	}
 	itemId = order.ItemId
-	everTx, err = s.PayOrders([]*arseedSchema.RespOrder{order})
+	everTx, err = s.PayOrders([]*arseedSchema.RespOrder{order}, rewards)
 	return
 }
 
-func (s *SDK) SendDataStreamAndPay(data *os.File, currency string, option *schema.OptionItem, needSequence bool) (everTx *paySchema.Transaction, itemId string, err error) {
+func (s *SDK) SendDataStreamAndPay(data *os.File, currency string, option *schema.OptionItem, needSequence bool, rewards []schema.Reward) (everTx *paySchema.Transaction, itemId string, err error) {
 	order, err := s.SendDataStream(data, currency, "", option, needSequence)
 	if err != nil {
 		return
 	}
 	itemId = order.ItemId
-	everTx, err = s.PayOrders([]*arseedSchema.RespOrder{order})
+	everTx, err = s.PayOrders([]*arseedSchema.RespOrder{order}, rewards)
 	return
 }
 
@@ -90,9 +91,9 @@ func (s *SDK) SendDataStream(data *os.File, currency string, apikey string, opti
 	return
 }
 
-func (s *SDK) BatchPayOrders(orders []*arseedSchema.RespOrder) (everTxs []*paySchema.Transaction, err error) {
+func (s *SDK) BatchPayOrders(orders []*arseedSchema.RespOrder, rewards []schema.Reward) (everTxs []*paySchema.Transaction, err error) {
 	if len(orders) <= 500 {
-		everTx, err := s.PayOrders(orders)
+		everTx, err := s.PayOrders(orders, rewards)
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +105,7 @@ func (s *SDK) BatchPayOrders(orders []*arseedSchema.RespOrder) (everTxs []*paySc
 	end := 500
 	for {
 		subOrders := orders[start:end]
-		everTx, err := s.PayOrders(subOrders)
+		everTx, err := s.PayOrders(subOrders, rewards)
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +123,7 @@ func (s *SDK) BatchPayOrders(orders []*arseedSchema.RespOrder) (everTxs []*paySc
 	return
 }
 
-func (s *SDK) PayOrders(orders []*arseedSchema.RespOrder) (everTx *paySchema.Transaction, err error) {
+func (s *SDK) PayOrders(orders []*arseedSchema.RespOrder, rewards []schema.Reward) (everTx *paySchema.Transaction, err error) {
 	if len(orders) == 0 {
 		return nil, errors.New("order is null")
 	}
@@ -155,16 +156,6 @@ func (s *SDK) PayOrders(orders []*arseedSchema.RespOrder) (everTx *paySchema.Tra
 		totalFee = new(big.Int).Add(totalFee, feeInt)
 		itemIds = append(itemIds, ord.ItemId)
 	}
-
-	// payTxData := struct {
-	// 	AppName string   `json:"appName"`
-	// 	Action  string   `json:"action"`
-	// 	ItemIds []string `json:"itemIds"`
-	// }{
-	// 	AppName: "arseeding",
-	// 	Action:  "payment",
-	// 	ItemIds: itemIds,
-	// }
 
 	payTxData := arseedSchema.PaymentMeta{
 		AppName: "arseeding",
@@ -204,7 +195,16 @@ func (s *SDK) PayOrders(orders []*arseedSchema.RespOrder) (everTx *paySchema.Tra
 		return
 	}
 
-	everTx, err = s.Pay.Transfer(useTag, totalFee, orders[0].Bundler, string(dataJs))
+	if len(rewards) > 0 {
+		var bundleSigs paySchema.BundleWithSigs
+		bundleSigs, err = s.assembleEverBundleItems(rewards)
+		if err != nil {
+			return
+		}
+		everTx, err = s.Pay.BundleWithData(useTag, orders[0].Bundler, totalFee, bundleSigs, string(dataJs))
+	} else {
+		everTx, err = s.Pay.Transfer(useTag, totalFee, orders[0].Bundler, string(dataJs))
+	}
 	return
 }
 
@@ -234,4 +234,24 @@ func (s *SDK) PayApikey(tokenTag string, amount *big.Int) (everHash string, err 
 	}
 	everHash = everTx.HexHash()
 	return
+}
+
+func (s *SDK) assembleEverBundleItems(rewards []schema.Reward) (paySchema.BundleWithSigs, error) {
+	items := make([]paySchema.BundleItem, 0, len(rewards))
+	tokens := s.Pay.GetTokens()
+	for _, rd := range rewards {
+		tok, ok := tokens[rd.Tag]
+		if !ok {
+			return paySchema.BundleWithSigs{}, errors.New("token tag not exist")
+		}
+		items = append(items, paySchema.BundleItem{
+			Tag:     rd.Tag,
+			ChainID: tok.ChainID,
+			From:    s.Pay.AccId,
+			To:      rd.Recipient,
+			Amount:  rd.Amount,
+		})
+	}
+	bundleWithoutSig := paySdk.GenBundle(items, time.Now().Unix()+100)
+	return s.Pay.SignBundleData(bundleWithoutSig)
 }
