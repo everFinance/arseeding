@@ -14,12 +14,11 @@ import (
 	"github.com/everFinance/arseeding/schema"
 	"github.com/everFinance/go-everpay/account"
 	"github.com/everFinance/go-everpay/config"
-	sdkSchema "github.com/everFinance/go-everpay/sdk/schema"
-	paySchema "github.com/everFinance/go-everpay/token/schema"
 	tokUtils "github.com/everFinance/go-everpay/token/utils"
 	"github.com/everFinance/goar"
 	"github.com/everFinance/goar/types"
 	"github.com/everFinance/goar/utils"
+	sdkSchema "github.com/everVision/everpay-kits/schema"
 	"github.com/google/uuid"
 	"github.com/panjf2000/ants/v2"
 	"github.com/shopspring/decimal"
@@ -204,7 +203,6 @@ func (s *Arseeding) watchEverReceiptTxs() {
 	subTx := s.everpaySdk.Cli.SubscribeTxs(sdkSchema.FilterQuery{
 		StartCursor: int64(startCursor),
 		Address:     s.bundler.Signer.Address,
-		Action:      paySchema.TxActionTransfer,
 	})
 	defer subTx.Unsubscribe()
 
@@ -219,6 +217,17 @@ func (s *Arseeding) watchEverReceiptTxs() {
 				log.Error("account.IDCheck(tt.From)", "err", err, "from", tt.From)
 				continue
 			}
+			// decode payment meta
+			paymentMeta := schema.PaymentMeta{}
+			if err = json.Unmarshal([]byte(tt.Data), &paymentMeta); err != nil {
+				log.Error("json.Unmarshal([]byte(tt.Data), &paymentMeta)", "err", err, "everTx", tt.EverHash)
+				continue
+			}
+			newData, err := json.Marshal(paymentMeta)
+			if err != nil {
+				log.Error("json.Marshal(paymentMeta)", "err", err, "paymentMeta", paymentMeta)
+				continue
+			}
 
 			res := schema.ReceiptEverTx{
 				RawId:    uint64(tt.RawId),
@@ -228,7 +237,7 @@ func (s *Arseeding) watchEverReceiptTxs() {
 				TokenTag: tokUtils.Tag(tt.ChainType, tt.TokenSymbol, tt.TokenID),
 				From:     from,
 				Amount:   tt.Amount,
-				Data:     tt.Data,
+				Data:     string(newData),
 				Sig:      tt.Sig,
 				Status:   schema.UnSpent,
 			}

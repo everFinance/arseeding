@@ -684,10 +684,10 @@ func (s *Arseeding) getSignData(c *gin.Context) {
 	}
 
 	if size > schema.AllowStreamMinItemSize { // the body size > schema.AllowStreamMinItemSize, need write to tmp file
-		item, err = s.bundlerItemSigner.CreateItemStream(dataFile, "", "", tags)
+		item, err = s.bundlerItemSigner.CreateAndSignItemStream(dataFile, "", "", tags)
 
 	} else {
-		item, err = s.bundlerItemSigner.CreateItem(dataBuf.Bytes(), "", "", tags)
+		item, err = s.bundlerItemSigner.CreateAndSignItem(dataBuf.Bytes(), "", "", tags)
 	}
 
 	if err != nil {

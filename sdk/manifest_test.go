@@ -38,7 +38,7 @@ func TestSDK_UploadFolder(t *testing.T) {
 	t.Log(len(orders))
 	t.Log("manifestId:", manifestId)
 	// pay fee
-	everTxs, err := sdk.BatchPayOrders(orders)
+	everTxs, err := sdk.BatchPayOrders(orders, nil)
 	t.Log("everTx:", everTxs[0].HexHash())
 }
 
