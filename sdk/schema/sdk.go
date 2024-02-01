@@ -7,3 +7,9 @@ type OptionItem struct {
 	Anchor string
 	Tags   []types.Tag
 }
+
+type Reward struct {
+	Tag       string // token tag
+	Recipient string
+	Amount    string
+}

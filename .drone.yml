@@ -10,7 +10,7 @@ platform:
 
 steps:
   - name: build
-    image: golang:1.17-buster
+    image: golang:1.21.6-bullseye
     environment:
       SSH_KEY:
         from_secret: ssh_key_github
