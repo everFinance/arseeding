@@ -91,19 +91,13 @@ func (w *Wdb) GetExpiredOrders() ([]schema.Order, error) {
 func (w *Wdb) ExistPaidOrd(itemId string) bool {
 	ord := &schema.Order{}
 	err := w.Db.Model(&schema.Order{}).Where("item_id = ? and payment_status = ?", itemId, schema.SuccPayment).First(ord).Error
-	if err == gorm.ErrRecordNotFound {
-		return false
-	}
-	return true
+	return err != gorm.ErrRecordNotFound
 }
 
 func (w *Wdb) IsLatestUnpaidOrd(itemId string, CurExpiredTime int64) bool {
 	ord := &schema.Order{}
 	err := w.Db.Model(&schema.Order{}).Where("item_id = ? and payment_status = ? and payment_expired_time > ?", itemId, schema.UnPayment, CurExpiredTime).First(ord).Error
-	if err == gorm.ErrRecordNotFound {
-		return true
-	}
-	return false
+	return err == gorm.ErrRecordNotFound
 }
 
 func (w *Wdb) UpdateOrdToExpiredStatus(id uint) error {
