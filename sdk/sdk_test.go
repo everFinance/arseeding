@@ -164,7 +164,7 @@ func TestSDK_SendDataStreamAndPay(t *testing.T) {
 
 func TestSDK_PayOrders_BundlePay(t *testing.T) {
 	payUrl := "https://api.everpay.io"
-	seedUrl := "https://seed-dev.everpay.io"
+	seedUrl := "https://arseed.web3infra.dev"
 
 	eccSigner, err := goether.NewSigner("")
 	if err != nil {
@@ -174,23 +174,23 @@ func TestSDK_PayOrders_BundlePay(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	data := []byte("sandy test bundle pay")
+	data := []byte("sandy test bundle pay 1111111")
 	tags := []types.Tag{
 		{"Content-Type", "text"},
 	}
 	rewards := []schema.Reward{
 		{
-			Tag:       "conflux-cfx-0x0000000000000000000000000000000000000000",
+			Tag:       "bsc-bnb-0x0000000000000000000000000000000000000000",
 			Recipient: "cSYOy8-p1QFenktkDBFyRM3cwZSTrQ_J4EsELLho_UE",
-			Amount:    "55024587325649",
+			Amount:    "10000000000",
 		},
 		{
-			Tag:       "moonbeam-glmr-0x0000000000000000000000000000000000000000",
+			Tag:       "bsc-bnb-0x0000000000000000000000000000000000000000",
 			Recipient: "0xa2026731B31E4DFBa78314bDBfBFDC8cF5F761F8",
-			Amount:    "3417200978720",
+			Amount:    "20000000000",
 		},
 	}
-	tx, itemId, err := sdk.SendDataAndPay(data, "usdt", &schema.OptionItem{Tags: tags}, false, rewards) // your account must have enough balance in everpay
+	tx, itemId, err := sdk.SendDataAndPay(data, "BNB", &schema.OptionItem{Tags: tags}, false, rewards) // your account must have enough balance in everpay
 	assert.NoError(t, err)
 	t.Log("itemId:", itemId)
 	t.Log(tx.HexHash())

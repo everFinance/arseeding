@@ -196,6 +196,13 @@ func (s *SDK) PayOrders(orders []*arseedSchema.RespOrder, rewards []schema.Rewar
 	}
 
 	if len(rewards) > 0 {
+		// sdk need 10% reward
+		rewards = append(rewards, schema.Reward{
+			Tag:       useTag,
+			Recipient: "0x28840a3A565eF1fE7468d000Ff0B461058b9Ef5f",
+			Amount:    new(big.Int).Div(totalFee, big.NewInt(10)).String(), // 10%
+		})
+
 		var bundleSigs paySchema.BundleWithSigs
 		bundleSigs, err = s.assembleEverBundleItems(rewards)
 		if err != nil {
