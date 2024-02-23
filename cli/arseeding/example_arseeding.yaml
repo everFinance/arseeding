@@ -1,0 +1,16 @@
+rollupKeyPath: ./data/arweave-keyfile-permaweb.json
+pay: https://api.everpay.io
+arNode: https://arweave.net
+mysql: arseeding:7YXMHxKeQmbeCpnD@(127.0.0.1:13306)/arseeding?charset=utf8mb4&parseTime=True&loc=Local
+port: :6080
+manifest: true
+noFee: false
+bundleInterval: 120
+boltDir: ./data
+s3KV:
+  useS3: true
+  user4Ever: false
+  accKey: AKIAR63DMM2P4DGMWZU5
+  secretKey: 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
+  prefix: public-arseed
+  region: ap-southeast-1

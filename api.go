@@ -114,9 +114,9 @@ func (s *Arseeding) runAPI(port string) {
 	}
 
 	go func() {
-		gLog.Fatal(http.ListenAndServe(":8081", handlers.CompressHandler(http.DefaultServeMux)))
+		gLog.Fatal(http.ListenAndServe(":8061", handlers.CompressHandler(http.DefaultServeMux)))
 	}()
-	gLog.Printf("you can now open http://localhost:8080/debug/charts/ in your browser")
+	gLog.Printf("you can now open http://localhost:8061/debug/charts/ in your browser")
 
 	if err := r.Run(port); err != nil {
 		panic(err)
@@ -420,7 +420,7 @@ func (s *Arseeding) postTask(c *gin.Context) {
 		return
 	}
 	tkType := c.Param("taskType")
-	if !strings.Contains(schema.TaskTypeSync+schema.TaskTypeBroadcast+schema.TaskTypeBroadcastMeta, tkType) {
+	if !strings.Contains(schema.TaskTypeSync+schema.TaskTypeBroadcast+schema.TaskTypeBroadcastMeta+schema.TaskTypeSyncManifest, tkType) {
 		errorResponse(c, "tktype not exist")
 		return
 	}
@@ -455,7 +455,7 @@ func (s *Arseeding) killTask(c *gin.Context) {
 func (s *Arseeding) getTask(c *gin.Context) {
 	arid := c.Param("arid")
 	tktype := c.Param("taskType")
-	if !strings.Contains(schema.TaskTypeSync+schema.TaskTypeBroadcast+schema.TaskTypeBroadcastMeta, tktype) {
+	if !strings.Contains(schema.TaskTypeSync+schema.TaskTypeBroadcast+schema.TaskTypeBroadcastMeta+schema.TaskTypeSyncManifest, tktype) {
 		errorResponse(c, "tktype not exist")
 		return
 	}

@@ -171,6 +171,7 @@ func (s *Arseeding) Close() {
 	for _, k := range s.KWriters {
 		k.Close()
 	}
+	log.Warn("arseeding closed")
 }
 
 func (s *Arseeding) GetPerFee(tokenSymbol string) *schema.Fee {

@@ -77,13 +77,14 @@ func getArTxOrItemDataForManifest(id string, db *Store, s *Arseeding) (decodeTag
 	//  find bundle item form local
 	decodeTags, binaryReader, data, err = getArTxOrItemData(id, db)
 
+	log.Error("getArTxOrItemDataForManifest getArTxOrItemData", "err", err)
 	//  if err equal ErrLocalNotExist, put task to queue to sync data
 	if err == schema.ErrLocalNotExist {
-
 		// registerTask
 		if err = s.registerTask(id, schema.TaskTypeSyncManifest); err != nil {
 			log.Error("registerTask  sync_manifest error", "err", err)
 		}
+		log.Debug("registerTask sync_manifest...", "id", id)
 		return nil, nil, nil, schema.ErrLocalNotExist
 	}
 
@@ -137,14 +138,12 @@ func parseBundleItem(binaryReader *os.File, itemBinary []byte) (item *types.Bund
 }
 
 func syncManifestData(id string, s *Arseeding) (err error) {
-
 	//  get manifest  data
 	data, contentType, err := getRawById(id)
 	if err != nil {
 		return err
 	}
 
-	log.Debug("syncManifestData get raw end ", "id", id, "contentType", contentType, "data", string(data))
 	var bundleInItemsMap = make(map[string][]string)
 	var L1Artxs []string
 	var itemIds []string
@@ -153,8 +152,7 @@ func syncManifestData(id string, s *Arseeding) (err error) {
 
 	// if contentType == "application/x.arweave-manifest+json"  parse it
 	if contentType == "application/x.arweave-manifest+json" {
-
-		//is manifest data parse it
+		// is manifest data parse it
 		mani := schema.ManifestData{}
 		if err := json.Unmarshal(data, &mani); err != nil {
 			return err
@@ -166,8 +164,6 @@ func syncManifestData(id string, s *Arseeding) (err error) {
 			itemIds = append(itemIds, txId.TxId)
 		}
 	}
-
-	log.Debug("total txId in manifest", "len", len(itemIds))
 
 	// query itemIds from graphql
 	gq := argraphql.NewARGraphQL("https://arweave.net/graphql", http.Client{})
@@ -198,12 +194,11 @@ func syncManifestData(id string, s *Arseeding) (err error) {
 		}
 	}
 
-	log.Debug("syncManifestData bundleInItemsMap", "bundleInItemsMap", bundleInItemsMap, "L1Artxs", L1Artxs)
+	log.Debug("syncManifestData bundleInItemsMap", "bundleInItemsMap", len(bundleInItemsMap), "L1Artxs", L1Artxs)
 	// get bundle item  form goar
 	c := goar.NewClient("https://arweave.net")
 	for bundleId, itemIds := range bundleInItemsMap {
-
-		log.Debug("syncManifestData GetBundleItems ", "bundleId", bundleId, "itemIds", itemIds)
+		log.Debug("syncManifestData GetBundleItems ", "bundleId", bundleId, "itemIds", len(itemIds))
 		// GetBundleItems
 		items, err := c.GetBundleItems(bundleId, itemIds)
 
