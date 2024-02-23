@@ -149,12 +149,14 @@ func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
 			"web3infura.io",
 			"arweave.world",
 			"arweave.asia",
+			"localhost",
+			"127.0.0.1",
 		}
 
 		log.Debug("middleware", "currentHost", currentHost)
 		for _, b := range apiHostList {
 
-			if currentHost == b {
+			if strings.Split(currentHost, ":")[0] == b {
 				// if current host in apiHostList, notApiHost is false
 				notApiHost = false
 				break
