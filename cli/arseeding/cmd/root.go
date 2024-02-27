@@ -20,7 +20,7 @@ var rootCmd = &cobra.Command{
 	Use:     "arseeding",
 	Short:   "arseeding",
 	Long:    `arseeding`,
-	Version: "v1.2.3",
+	Version: "v1.2.5",
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
