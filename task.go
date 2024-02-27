@@ -141,6 +141,7 @@ func (s *Arseeding) setProcessedTask(arId string, tktype string) error {
 	tk := s.taskMg.GetTask(arId, tktype)
 	if tk != nil {
 		if err := s.store.SaveTask(taskId, *tk); err != nil {
+			log.Error("s.store.SaveTask(taskId, *tk)", "err", err)
 			return err
 		}
 	}
@@ -158,7 +159,6 @@ func (s *Arseeding) syncManifestTask(arId string) (err error) {
 	}
 
 	err = syncManifestData(arId, s)
-
 	if err == nil {
 		s.taskMg.IncSuccessed(arId, schema.TaskTypeSyncManifest)
 		closeErr := s.taskMg.CloseTask(arId, schema.TaskTypeSyncManifest)
