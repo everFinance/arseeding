@@ -1,7 +1,7 @@
 package arseeding
 
 import (
-	"github.com/everFinance/goarns"
+	goarns "github.com/everFinance/goar/arns"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"

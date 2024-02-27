@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
+	goarns "github.com/everFinance/goar/arns"
 	"github.com/everFinance/goar/utils"
-	"github.com/everFinance/goarns"
 	"github.com/gin-gonic/gin"
 	"github.com/ulule/limiter/v3"
 	mgin "github.com/ulule/limiter/v3/drivers/middleware/gin"
@@ -81,6 +81,7 @@ func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		prefixUri := getRequestSandbox(c.Request.Host)
+		// https://{{arId}}.arseed.web3infra.dev
 		if len(prefixUri) > 0 && c.Request.Method == "GET" {
 			// compatible url https://xxxxxxx.arseed.web3infra.dev/{{arId}}
 			txId := getTxIdFromPath(c.Request.RequestURI)

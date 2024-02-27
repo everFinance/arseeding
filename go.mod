@@ -6,7 +6,7 @@ require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.6+incompatible
 	github.com/aws/aws-sdk-go v1.27.0
 	github.com/ethereum/go-ethereum v1.13.5
-	github.com/everFinance/goar v1.5.9
+	github.com/everFinance/goar v1.6.0
 	github.com/everFinance/goether v1.1.9
 	github.com/gin-gonic/gin v1.8.1
 	github.com/go-co-op/gocron v1.11.0
@@ -32,7 +32,6 @@ require (
 	github.com/Khan/genqlient v0.6.0
 	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/everFinance/go-everpay v0.2.0
-	github.com/everFinance/goarns v0.0.3
 	github.com/everVision/everpay-kits v0.0.6-0.20240201142725-21cc7715d94d
 	github.com/segmentio/kafka-go v0.4.40
 	github.com/spf13/cobra v1.5.0
