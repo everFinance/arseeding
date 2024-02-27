@@ -1,14 +1,14 @@
-FROM alpine:latest
+FROM golang:latest
 MAINTAINER sandy <sandy@ever.finance>
 
-ENV PATH /go/bin:/usr/local/go/bin:$PATH
-ENV GOPATH /go
 
-WORKDIR /arseeding
+WORKDIR /app
+COPY . .
 
-VOLUME ["/arseeding/data"]
+RUN go mod tidy
+RUN go build -o ./build/arseeding ./cmd
 
-COPY cmd/arseeding /arseeding/arseeding
 EXPOSE 8080
 
-ENTRYPOINT [ "/arseeding/arseeding" ]
+CMD [ "./build/arseeding" ]
+
