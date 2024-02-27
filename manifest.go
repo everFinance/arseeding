@@ -199,11 +199,21 @@ func syncManifestData(id string, s *Arseeding) (err error) {
 	c := goar.NewClient("https://arweave.net")
 	for bundleId, itemIds := range bundleInItemsMap {
 		log.Debug("syncManifestData GetBundleItems ", "bundleId", bundleId, "itemIds", len(itemIds))
-		// GetBundleItems
-		items, err := c.GetBundleItems(bundleId, itemIds)
-
-		if err != nil {
-			return errors.New("GetBundleItems error:" + err.Error())
+		var items []*types.BundleItem
+		// check bundleId is nestBundle
+		isNestBundle, dataSize, err := checkNestBundle(bundleId, gq)
+		if err != nil || !isNestBundle {
+			// GetBundleItems
+			items, err = c.GetBundleItems(bundleId, itemIds)
+			if err != nil {
+				return errors.New("GetBundleItems error:" + err.Error())
+			}
+		} else {
+			log.Debug("nestBundle dataSize...", "size", dataSize)
+			items, err = getNestBundle(bundleId, itemIds)
+			if err != nil {
+				return errors.New("getNestBundle error:" + err.Error())
+			}
 		}
 
 		//  for each item
@@ -223,7 +233,6 @@ func syncManifestData(id string, s *Arseeding) (err error) {
 }
 
 func getRawById(id string) (data []byte, contentType string, err error) {
-
 	var arGateway = "https://arweave.net"
 	client := gentleman.New().URL(arGateway)
 
@@ -240,5 +249,32 @@ func getRawById(id string) (data []byte, contentType string, err error) {
 	contentType = res.Header.Get("Content-Type")
 	data = res.Bytes()
 
+	return
+}
+
+func getNestBundle(nestBundle string, itemIds []string) (items []*types.BundleItem, err error) {
+	data, _, err := getRawById(nestBundle)
+	if err != nil {
+		return nil, err
+	}
+	bundle, err := utils.DecodeBundle(data)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range bundle.Items {
+		if utils.ContainsInSlice(itemIds, item.Id) {
+			items = append(items, &item)
+		}
+	}
+	return
+}
+
+func checkNestBundle(bundleId string, gq *argraphql.ARGraphQL) (isNestBundle bool, dataSize string, err error) {
+	res, err := gq.QueryTransaction(context.Background(), bundleId)
+	if err != nil {
+		return
+	}
+	isNestBundle = res.Transaction.BundledIn.Id != ""
+	dataSize = res.Transaction.Data.Size
 	return
 }
