@@ -29,8 +29,7 @@ func Test_getRawById(t *testing.T) {
 
 func TestNewS3Store(t *testing.T) {
 	err := syncManifestData("yy8F4i6jKVKtQuOw2q8RwxjQyUwJ4QtGRkdUXd8jbEw", nil)
-	// err := syncManifestData("WUg9McRBT1i_F6utVYjFYS_pP6dzKcrC1FRccjH6inE", nil)
-	t.Log(err)
+	assert.NoError(t, err)
 }
 
 func Test_getRawById1(t *testing.T) {
@@ -44,10 +43,11 @@ func Test_getRawById1(t *testing.T) {
 }
 
 func Test_getNestBundle(t *testing.T) {
-	itemIds := []string{"_5nCBFfMpHbpxRw6_hpoJyu8bV62S6flhUGrkdHbV8o"}
-	items, err := getNestBundle("AjV6oRKHh5PPI8Ehu9hIyWEz3oFAm5K0I0UYkxjwLdE", itemIds)
+	itemIds := []string{"lfjl4f5joOhNT_VNDb7aaOqbwafgdXYkqXtAN3u0SUM"}
+	items, err := getNestBundle("mKg9fvDQ_qFZE2sSPm3fG01jfV5HoA1YnauXwuAwmlw", itemIds)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(items))
+	t.Log(items[0].Id)
 }
 
 func TestNewCache(t *testing.T) {

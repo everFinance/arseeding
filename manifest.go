@@ -144,12 +144,7 @@ func syncManifestData(id string, s *Arseeding) (err error) {
 		return err
 	}
 
-	var bundleInItemsMap = make(map[string][]string)
-	var L1Artxs []string
-	var itemIds []string
-
-	itemIds = append(itemIds, id)
-
+	allItemIds := []string{id}
 	// if contentType == "application/x.arweave-manifest+json"  parse it
 	if contentType == "application/x.arweave-manifest+json" {
 		// is manifest data parse it
@@ -161,8 +156,20 @@ func syncManifestData(id string, s *Arseeding) (err error) {
 		log.Debug("total txId in manifest", "len", len(mani.Paths))
 		// for each path in manifest
 		for _, txId := range mani.Paths {
-			itemIds = append(itemIds, txId.TxId)
+			allItemIds = append(allItemIds, txId.TxId)
 		}
+	}
+
+	log.Debug("allItemIds", "ids", len(allItemIds))
+
+	// filter exist item
+	itemIds := make([]string, 0, 10)
+	for _, i := range allItemIds {
+		if s.store.IsExistItemBinary(i) {
+			log.Debug("syncManifestData existItem", "item", i)
+			continue
+		}
+		itemIds = append(itemIds, i)
 	}
 
 	// query itemIds from graphql
@@ -177,40 +184,47 @@ func syncManifestData(id string, s *Arseeding) (err error) {
 		if end > total {
 			end = total
 		}
-		log.Debug("BatchGetItemsBundleIn", "start", i, "end", end)
+		log.Debug("BatchGetItemsBundleIn", "start", i, "end", end, "itemIds[i:end]", len(itemIds[i:end]))
 		resp, err := gq.BatchGetItemsBundleIn(context.Background(), itemIds[i:end], 90, "")
 		if err != nil {
 			return errors.New("BatchGetItemsBundleIn error:" + err.Error())
 		}
 		txs = append(txs, resp.Transactions.Edges...)
 	}
+	log.Debug("txs", "txs", len(txs))
 
 	//  for each txs to   bundleInItemsMap
+	var (
+		bundleInItemsMap = make(map[string][]string)
+		L1Artxs          = make([]string, 0)
+	)
 	for _, tx := range txs {
 		if tx.Node.BundledIn.Id == "" {
 			L1Artxs = append(L1Artxs, tx.Node.Id)
 		} else {
+			if _, ok := bundleInItemsMap[tx.Node.BundledIn.Id]; !ok {
+				bundleInItemsMap[tx.Node.BundledIn.Id] = make([]string, 0)
+			}
 			bundleInItemsMap[tx.Node.BundledIn.Id] = append(bundleInItemsMap[tx.Node.BundledIn.Id], tx.Node.Id)
 		}
 	}
-
-	log.Debug("syncManifestData bundleInItemsMap", "bundleInItemsMap", len(bundleInItemsMap), "L1Artxs", L1Artxs)
+	log.Debug("syncManifestData bundleInItemsMap", "bundleInItemsMap", len(bundleInItemsMap), "L1Artxs", len(L1Artxs))
 	// get bundle item  form goar
 	c := goar.NewClient("https://arweave.net")
-	for bundleId, itemIds := range bundleInItemsMap {
-		log.Debug("syncManifestData GetBundleItems ", "bundleId", bundleId, "itemIds", len(itemIds))
+	for bundleId, itemIdss := range bundleInItemsMap {
+		log.Debug("syncManifestData GetBundleItems", "bundleId", bundleId, "itemIds", len(itemIdss))
 		var items []*types.BundleItem
 		// check bundleId is nestBundle
 		isNestBundle, dataSize, err := checkNestBundle(bundleId, gq)
 		if err != nil || !isNestBundle {
 			// GetBundleItems
-			items, err = c.GetBundleItems(bundleId, itemIds)
+			items, err = c.GetBundleItems(bundleId, itemIdss)
 			if err != nil {
 				return errors.New("GetBundleItems error:" + err.Error())
 			}
 		} else {
 			log.Debug("nestBundle dataSize...", "size", dataSize)
-			items, err = getNestBundle(bundleId, itemIds)
+			items, err = getNestBundle(bundleId, itemIdss)
 			if err != nil {
 				return errors.New("getNestBundle error:" + err.Error())
 			}
@@ -220,13 +234,10 @@ func syncManifestData(id string, s *Arseeding) (err error) {
 		for _, item := range items {
 			log.Debug("syncManifestData save ", "item id", item.Id)
 			// save item to store
-			err = s.saveItem(*item)
-
-			if err != nil {
-				return errors.New("saveItem error:" + err.Error())
+			if err := s.saveItem(*item); err != nil {
+				return fmt.Errorf("saveItem failed, err: %v", err)
 			}
 		}
-
 	}
 
 	return err
@@ -263,7 +274,11 @@ func getNestBundle(nestBundle string, itemIds []string) (items []*types.BundleIt
 	}
 	for _, item := range bundle.Items {
 		if utils.ContainsInSlice(itemIds, item.Id) {
-			items = append(items, &item)
+			itemBy, err := utils.DecodeBundleItem(item.ItemBinary)
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, itemBy)
 		}
 	}
 	return
