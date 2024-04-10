@@ -147,6 +147,7 @@ func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
 		apiHostList := []string{
 			"seed-dev.everpay.io",
 			"arseed.web3infra.dev",
+			"arseed-dev.web3infra.dev",
 			"web3infura.io",
 			"arweave.world",
 			"arweave.asia",
