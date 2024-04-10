@@ -113,10 +113,11 @@ func (s *Arseeding) runAPI(port string) {
 		v1.GET("/statistic/range", s.getOrderStatisticByDate)
 	}
 
+	mPort := ":" + "1" + strings.TrimPrefix(port, ":")
 	go func() {
-		gLog.Fatal(http.ListenAndServe(":8061", handlers.CompressHandler(http.DefaultServeMux)))
+		gLog.Fatal(http.ListenAndServe(mPort, handlers.CompressHandler(http.DefaultServeMux)))
 	}()
-	gLog.Printf("you can now open http://localhost:8061/debug/charts/ in your browser")
+	gLog.Printf("you can now open http://localhost:" + mPort + "/debug/charts/ in your browser")
 
 	if err := r.Run(port); err != nil {
 		panic(err)
