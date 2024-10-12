@@ -1,6 +1,7 @@
 rollupKeyPath: ./data/arweave-keyfile-permaweb.json
 pay: https://api.everpay.io
 arNode: https://arweave.net
+cuUrl: https://cu.ar-io.dev
 mysql: arseeding:7YXMHxKeQmbeCpnD@(127.0.0.1:13306)/arseeding?charset=utf8mb4&parseTime=True&loc=Local
 port: :6080
 manifest: true

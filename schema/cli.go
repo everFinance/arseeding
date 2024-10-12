@@ -4,6 +4,7 @@ type Config struct {
 	RollupKeyPath  string `yaml:"rollupKeyPath"`
 	Pay            string `yaml:"pay"`
 	ArNode         string `yaml:"arNode"`
+	CuUrl          string `yaml:"cuUrl"`
 	Mysql          string `yaml:"mysql"`
 	Port           string `yaml:"port"`
 	Manifest       bool   `yaml:"manifest"`

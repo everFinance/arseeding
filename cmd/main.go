@@ -25,6 +25,7 @@ func main() {
 
 			&cli.StringFlag{Name: "key_path", Value: "./data/bundler-keyfile.json", Usage: "ar keyfile path", EnvVars: []string{"KEY_PATH"}},
 			&cli.StringFlag{Name: "ar_node", Value: "https://arweave.net", EnvVars: []string{"AR_NODE"}},
+			&cli.StringFlag{Name: "cu_url", Value: "https://cu.ar-io.dev", Usage: "aos cu url", EnvVars: []string{"CU_URL"}},
 			&cli.StringFlag{Name: "pay", Value: "https://api-dev.everpay.io", Usage: "pay url", EnvVars: []string{"PAY"}},
 			&cli.BoolFlag{Name: "no_fee", Value: false, EnvVars: []string{"NO_FEE"}},
 			&cli.BoolFlag{Name: "manifest", Value: true, EnvVars: []string{"MANIFEST"}},
@@ -83,7 +84,7 @@ func run(c *cli.Context) error {
 
 	s := arseeding.New(
 		c.String("db_dir"), c.String("mysql"), c.String("sqlite_dir"), c.Bool("use_sqlite"),
-		c.String("key_path"), c.String("ar_node"), c.String("pay"), c.Bool("no_fee"), c.Bool("manifest"),
+		c.String("key_path"), c.String("ar_node"), c.String("cu_url"), c.String("pay"), c.Bool("no_fee"), c.Bool("manifest"),
 		c.Bool("use_s3"), c.String("s3_acc_key"), c.String("s3_secret_key"), c.String("s3_prefix"), c.String("s3_region"), c.String("s3_endpoint"),
 		c.Bool("use_4ever"), c.Bool("use_aliyun"), c.String("aliyun_endpoint"), c.String("aliyun_acc_key"), c.String("aliyun_secret_key"), c.String("aliyun_prefix"),
 		c.Bool("use_mongodb"), c.String("mongodb_uri"),

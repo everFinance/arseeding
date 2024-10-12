@@ -107,7 +107,7 @@ func runServer() {
 	}
 
 	m := arseeding.New(cfg.BoltDir, cfg.Mysql, sqliteDir, useSqlite,
-		cfg.RollupKeyPath, cfg.ArNode, cfg.Pay, cfg.NoFee, cfg.Manifest,
+		cfg.RollupKeyPath, cfg.ArNode, cfg.CuUrl, cfg.Pay, cfg.NoFee, cfg.Manifest,
 		cfg.S3KV.UseS3, cfg.S3KV.AccKey, cfg.S3KV.SecretKey, cfg.S3KV.Prefix, cfg.S3KV.Region, cfg.S3KV.Endpoint, cfg.S3KV.User4Ever,
 		cfg.AliyunKV.UseAliyun, cfg.AliyunKV.Endpoint, cfg.AliyunKV.AccKey, cfg.AliyunKV.SecretKey, cfg.AliyunKV.Prefix,
 		cfg.MongoDBKV.UseMongoDB, cfg.MongoDBKV.Uri,

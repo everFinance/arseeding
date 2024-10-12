@@ -30,6 +30,7 @@ type Arseeding struct {
 	arCli     *goar.Client
 	taskMg    *TaskManager
 	scheduler *gocron.Scheduler
+	arnsCli   *ArNs
 
 	cache    *Cache
 	config   *config.Config
@@ -53,7 +54,7 @@ type Arseeding struct {
 
 func New(
 	boltDirPath, mySqlDsn string, sqliteDir string, useSqlite bool,
-	arWalletKeyPath string, arNode, payUrl string, noFee bool, enableManifest bool,
+	arWalletKeyPath string, arNode, cuUrl, payUrl string, noFee bool, enableManifest bool,
 	useS3 bool, s3AccKey, s3SecretKey, s3BucketPrefix, s3Region, s3Endpoint string,
 	use4EVER bool, useAliyun bool, aliyunEndpoint, aliyunAccKey, aliyunSecretKey, aliyunPrefix string,
 	useMongoDb bool, mongodbUri string,
@@ -117,6 +118,7 @@ func New(
 		submitLocker:        sync.Mutex{},
 		endOffsetLocker:     sync.Mutex{},
 		arCli:               goar.NewClient(arNode),
+		arnsCli:             NewArNs(cuUrl, ""),
 		taskMg:              jobmg,
 		scheduler:           gocron.NewScheduler(time.UTC),
 		arseedCli:           sdk.New(localArseedUrl),

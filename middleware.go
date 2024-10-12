@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/everFinance/arseeding/schema"
-	goarns "github.com/everFinance/goar/arns"
 	"github.com/everFinance/goar/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/ulule/limiter/v3"
@@ -16,7 +15,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"time"
 )
 
 var (
@@ -186,15 +184,7 @@ func ManifestMiddleware(s *Arseeding) gin.HandlerFunc {
 
 			// if txId is empty, get txId by sdk
 			if txId == "" {
-
-				// todo config or variable
-				dreUrl := "https://dre-3.warp.cc"
-				arNSAddress := "bLAgYxAdX2Ry-nt6aH2ixgvJXbpsEYm28NgJgyqfs-U"
-				timeout := 10 * time.Second
-
-				a := goarns.NewArNS(dreUrl, arNSAddress, timeout)
-
-				txId, err = a.QueryLatestRecord(domain)
+				txId, err = s.arnsCli.QueryDomainTxId(domain)
 				if err != nil {
 					c.Abort()
 					internalErrorResponse(c, err.Error())
