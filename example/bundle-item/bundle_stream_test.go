@@ -50,7 +50,7 @@ func TestPostNativeDataStream(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	res, err := arseedSdk.SubmitNativeData("arseed-abc", data, "video/mp4", map[string]string{"Content-Type": "video/mp4", "Name": "test"})
+	res, err := arseedSdk.SubmitNativeData("arseed-abc", "usdd", data, "video/mp4", map[string]string{"Content-Type": "video/mp4", "Name": "test"})
 	if err != nil {
 		panic(err)
 	}

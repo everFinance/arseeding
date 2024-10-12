@@ -11,3 +11,10 @@ func TestNew2(t *testing.T) {
 	assert.NoError(t, err)
 	t.Log(bundler)
 }
+
+func TestNew(t *testing.T) {
+	cli := New("https://arseed.web3infra.dev")
+	ss, err := cli.ACli.GetTransactionDataByGateway("hHcZxYgurvoTN-KLylc0QulK9vyaUIHWfqvH7A9anmo")
+	assert.NoError(t, err)
+	t.Log(string(ss))
+}

@@ -653,7 +653,7 @@ func (s *Arseeding) onChainOrds(ords []schema.Order) (arTx types.Transaction, on
 			continue
 		}
 		itemIds = append(itemIds, ord.ItemId)
-		totalSize += od.Size
+		totalSize += ord.Size
 	}
 
 	// send arTx to arweave
